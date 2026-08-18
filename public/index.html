@@ -2687,7 +2687,7 @@
   }
   function rowToServicio(r) {
     return {
-      id: r.id, titulo: r.titulo||'', descripcion: r.descripcion||'',
+      id: r.id, organizationId: r.organization_id||null, titulo: r.titulo||'', descripcion: r.descripcion||'',
       frecuencia: r.frecuencia||'mensual',
       horasModulo: Number(r.horas_modulo||0), precioHora: Number(r.precio_hora||0),
       cupos: Number(r.cupos||1), cantidadPorPeriodo: Number(r.cantidad_por_periodo||1),
@@ -2704,7 +2704,7 @@
   }
   function postulacionToRow(p) {
     return {
-      id: p.id, servicio_id: p.servicioId, prestador_id: p.prestadorId,
+      id: p.id, organization_id: p.organizationId||null, servicio_id: p.servicioId, prestador_id: p.prestadorId,
       mensaje: p.mensaje||'', docs_confirmados: JSON.stringify(p.docsConfirmados||[]),
       estado: p.estado||'pendiente',
       created_at: p.createdAt||nowISO(), updated_at: nowISO(),
@@ -2712,7 +2712,7 @@
   }
   function rowToPostulacion(r) {
     return {
-      id: r.id, servicioId: r.servicio_id, prestadorId: r.prestador_id,
+      id: r.id, organizationId: r.organization_id||null, servicioId: r.servicio_id, prestadorId: r.prestador_id,
       mensaje: r.mensaje||'',
       docsConfirmados: (()=>{ try { return JSON.parse(r.docs_confirmados||'[]'); } catch(_){ return []; } })(),
       estado: r.estado||'pendiente',
@@ -2721,7 +2721,7 @@
   }
   function moduloAsignadoToRow(m) {
     return {
-      id: m.id, servicio_id: m.servicioId, postulacion_id: m.postulacionId||null,
+      id: m.id, organization_id: m.organizationId||null, servicio_id: m.servicioId, postulacion_id: m.postulacionId||null,
       prestador_id: m.prestadorId, protocolo: JSON.stringify(m.protocolo||[]),
       estado: m.estado||'en_progreso',
       remito_numero: m.remitoNumero||null, remito_fecha: m.remitoFecha||null,
@@ -2730,7 +2730,7 @@
   }
   function rowToModuloAsignado(r) {
     return {
-      id: r.id, servicioId: r.servicio_id, postulacionId: r.postulacion_id||null,
+      id: r.id, organizationId: r.organization_id||null, servicioId: r.servicio_id, postulacionId: r.postulacion_id||null,
       prestadorId: r.prestador_id,
       protocolo: (()=>{ try { return JSON.parse(r.protocolo||'[]'); } catch(_){ return []; } })(),
       estado: r.estado||'en_progreso',
@@ -2740,7 +2740,7 @@
   }
   function moduloItemToRow(it) {
     return {
-      id: it.id, modulo_asignado_id: it.moduloAsignadoId, ciclo_id: it.cicloId||null, item: it.item||'',
+      id: it.id, organization_id: it.organizationId||null, modulo_asignado_id: it.moduloAsignadoId, ciclo_id: it.cicloId||null, item: it.item||'',
       descripcion: it.descripcion||'', evidencia_url: it.evidenciaUrl||'',
       evidencia_nota: it.evidenciaNota||'', estado: it.estado||'pendiente',
       comentario_org: it.comentarioOrg||'',
@@ -2749,7 +2749,7 @@
   }
   function rowToModuloItem(r) {
     return {
-      id: r.id, moduloAsignadoId: r.modulo_asignado_id, cicloId: r.ciclo_id||null, item: r.item||'',
+      id: r.id, organizationId: r.organization_id||null, moduloAsignadoId: r.modulo_asignado_id, cicloId: r.ciclo_id||null, item: r.item||'',
       descripcion: r.descripcion||'', evidenciaUrl: r.evidencia_url||'',
       evidenciaNota: r.evidencia_nota||'', estado: r.estado||'pendiente',
       comentarioOrg: r.comentario_org||'',
@@ -2758,7 +2758,7 @@
   }
   function moduloCicloToRow(c) {
     return {
-      id: c.id, modulo_asignado_id: c.moduloAsignadoId, periodo: c.periodo||'',
+      id: c.id, organization_id: c.organizationId||null, modulo_asignado_id: c.moduloAsignadoId, periodo: c.periodo||'',
       estado: c.estado||'en_progreso',
       remito_numero: c.remitoNumero||null, remito_fecha: c.remitoFecha||null,
       created_at: c.createdAt||nowISO(), updated_at: nowISO(),
@@ -2766,7 +2766,7 @@
   }
   function rowToModuloCiclo(r) {
     return {
-      id: r.id, moduloAsignadoId: r.modulo_asignado_id, periodo: r.periodo||'',
+      id: r.id, organizationId: r.organization_id||null, moduloAsignadoId: r.modulo_asignado_id, periodo: r.periodo||'',
       estado: r.estado||'en_progreso',
       remitoNumero: r.remito_numero||'', remitoFecha: r.remito_fecha||'',
       createdAt: r.created_at||'', updatedAt: r.updated_at||'',
@@ -8024,13 +8024,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     if (!modulo) return null;
     const s = servicioById(modulo.servicioId);
     if (s?.fechaFin && s.fechaFin < periodo + '-01') return null; // ya terminó el período de trabajo
+    const organizationId = s?.organizationId || modulo.organizationId || null;
 
-    const ciclo = { id: uid(), moduloAsignadoId, periodo, estado: 'en_progreso', createdAt: nowISO() };
+    const ciclo = { id: uid(), organizationId, moduloAsignadoId, periodo, estado: 'en_progreso', createdAt: nowISO() };
     state.moduloCiclos.push(ciclo);
     await saveOne(DB.moduloCiclos, moduloCicloToRow(ciclo));
 
     for (const it of (modulo.protocolo||[])) {
-      const item = { id: uid(), moduloAsignadoId, cicloId: ciclo.id, item: it.item, descripcion: it.descripcion||'', estado: 'pendiente', createdAt: nowISO() };
+      const item = { id: uid(), organizationId, moduloAsignadoId, cicloId: ciclo.id, item: it.item, descripcion: it.descripcion||'', estado: 'pendiente', createdAt: nowISO() };
       state.moduloItems.push(item);
       await saveOne(DB.moduloItems, moduloItemToRow(item));
     }
@@ -8285,7 +8286,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     await saveOne(DB.postulaciones, postulacionToRow(p));
 
     const modulo = {
-      id: uid(), servicioId: s.id, postulacionId: p.id, prestadorId: p.prestadorId,
+      id: uid(), organizationId: s.organizationId, servicioId: s.id, postulacionId: p.id, prestadorId: p.prestadorId,
       protocolo: JSON.parse(JSON.stringify(s.protocolo||[])), estado: 'en_progreso', createdAt: nowISO(),
     };
     state.modulosAsignados.push(modulo);
@@ -8473,9 +8474,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           if (!url) throw new Error('No se pudo subir "' + docName + '". Probá de nuevo.');
           docsConfirmados.push({ doc: docName, url });
         }
-        const p = { id: uid(), servicioId, prestadorId, mensaje, docsConfirmados, estado: 'pendiente', createdAt: nowISO() };
+        const p = { id: uid(), organizationId: s.organizationId, servicioId, prestadorId, mensaje, docsConfirmados, estado: 'pendiente', createdAt: nowISO() };
+        const ok = await saveOne(DB.postulaciones, postulacionToRow(p));
+        if (!ok) throw new Error('No se pudo guardar la postulación. Probá de nuevo.');
         state.postulaciones.push(p);
-        await saveOne(DB.postulaciones, postulacionToRow(p));
         closeModal();
         alert('¡Postulación enviada!');
         renderPrestadorPublicView(prestadorId);
