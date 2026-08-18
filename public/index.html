@@ -1521,6 +1521,23 @@
         <div class="login-switch">¿Ya tenés cuenta? <a onclick="switchLoginTab('admin')">Iniciar sesión</a></div>
       </div>
 
+      <!-- Finish org setup panel (email confirmado, falta crear la organización) -->
+      <div class="login-panel" id="loginPanelFinishOrg">
+        <div style="margin-bottom:14px;color:rgba(255,255,255,0.55);font-size:13px;line-height:1.6">
+          Confirmaste tu email (<span id="finishOrgEmailHint" style="color:#fff;font-weight:600"></span>). Para terminar, completá los datos de tu organización.
+        </div>
+        <div class="login-field">
+          <label>Nombre de tu organización</label>
+          <input type="text" id="finishOrgNameInput" placeholder="Ej: Fundación Ejemplo">
+        </div>
+        <div class="login-field">
+          <label>Tu nombre</label>
+          <input type="text" id="finishAdminNameInput" placeholder="Nombre y apellido">
+        </div>
+        <button class="login-btn" id="finishOrgBtn" onclick="doFinishOrgSetup()">Crear organización →</button>
+        <div class="login-error" id="finishOrgError">No se pudo crear la organización.</div>
+      </div>
+
       <!-- Owner panel -->
       <div class="login-panel" id="loginPanelOwner">
         <div style="padding:8px 2px 4px;color:rgba(255,255,255,0.5);font-size:13px;line-height:1.7">
@@ -2347,6 +2364,7 @@
     document.getElementById('loginPanelOwner').classList.toggle('active', tab==='owner');
     document.getElementById('loginPanelPrestador').classList.toggle('active', tab==='prestador');
     document.getElementById('loginPanelSignup')?.classList.remove('active');
+    document.getElementById('loginPanelFinishOrg')?.classList.remove('active');
     document.getElementById('adminLoginError').style.display = 'none';
   }
 
@@ -2354,6 +2372,66 @@
     document.querySelectorAll('.login-tab').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
     document.getElementById('loginPanelSignup').classList.add('active');
+  }
+
+  function showFinishOrgPanel(email) {
+    document.querySelectorAll('.login-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('loginPanelFinishOrg').classList.add('active');
+    const hint = document.getElementById('finishOrgEmailHint');
+    if (hint && email) hint.textContent = email;
+  }
+
+  async function doFinishOrgSetup() {
+    const orgName = document.getElementById('finishOrgNameInput').value.trim();
+    const adminName = document.getElementById('finishAdminNameInput').value.trim();
+    const errEl = document.getElementById('finishOrgError');
+    const btn = document.getElementById('finishOrgBtn');
+    errEl.style.display = 'none';
+    if (!orgName || !adminName) { errEl.textContent = 'Completá los dos campos.'; errEl.style.display = 'block'; return; }
+    if (!authSession?.access_token) { errEl.textContent = 'Tu sesión expiró, iniciá sesión de nuevo.'; errEl.style.display = 'block'; return; }
+    btn.disabled = true; btn.textContent = 'Creando…';
+    try {
+      const rpc = await callRpc('create_organization_and_admin', { org_name: orgName, admin_name: adminName });
+      if (rpc.error) throw new Error(rpc.error);
+      const profile = await fetchMyProfile();
+      if (!profile) throw new Error('No se pudo crear la organización. Probá de nuevo.');
+      clearPendingOrgSignup();
+      sessionStorage.setItem('hh_role','admin');
+      currentRole = 'admin';
+      const remote = await loadStateFromSupabase();
+      if (remote) state = normalizeState(remote);
+      await showAdminAndRender();
+    } catch(e) {
+      errEl.textContent = e.message || 'No se pudo crear la organización.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Crear organización →';
+    }
+  }
+
+  // Cuando Supabase redirige después de confirmar el email, la sesión
+  // (access_token/refresh_token) viaja en el fragmento de la URL
+  // (#access_token=...), no en localStorage — esto pasa incluso si el
+  // link se abrió en un navegador distinto al del registro. La
+  // levantamos acá y limpiamos la URL.
+  async function consumeAuthHashSession() {
+    const hash = window.location.hash;
+    if (!hash || hash.indexOf('access_token=') === -1) return false;
+    const params = new URLSearchParams(hash.slice(1));
+    const access_token = params.get('access_token');
+    const refresh_token = params.get('refresh_token');
+    if (!access_token) return false;
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    try {
+      const res = await fetch(SB_URL + '/auth/v1/user', {
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + access_token }
+      });
+      const user = await res.json().catch(()=>null);
+      if (!res.ok || !user?.id) return false;
+      saveAuthSession({ access_token, refresh_token, user });
+      return true;
+    } catch(_) { return false; }
   }
 
   async function doAdminLogin() {
@@ -2368,7 +2446,12 @@
       await authSignIn(email, pw);
       let profile = await fetchMyProfile();
       if (!profile) profile = await finishPendingOrgSignup(email);
-      if (!profile) throw new Error('No se encontró una organización para esta cuenta.');
+      if (!profile) {
+        // Login válido (email/contraseña correctos) pero sin organización
+        // todavía: probablemente confirmó el mail en otro navegador.
+        showFinishOrgPanel(email);
+        return;
+      }
       if (profile.role !== 'admin') throw new Error('Esta cuenta no tiene permisos de administrador.');
       sessionStorage.setItem('hh_role','admin');
       currentRole = 'admin';
@@ -7539,10 +7622,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     // todavía no tienen su propio login — están marcados como "en
     // construcción" en la pantalla de login.
 
-    // Intentar retomar sesión guardada (Supabase Auth real, admin)
-    loadAuthSession();
+    // Intentar retomar sesión: primero la que viene en la URL (link de
+    // confirmación de email de Supabase), si no la que ya estaba guardada.
+    const cameFromEmailLink = await consumeAuthHashSession();
+    if (!cameFromEmailLink) loadAuthSession();
+
     if (authSession?.access_token) {
-      const profile = await fetchMyProfile().catch(()=>null);
+      let profile = await fetchMyProfile().catch(()=>null);
+      if (!profile) profile = await finishPendingOrgSignup(authSession.user?.email).catch(()=>null);
       if (profile && profile.role === 'admin') {
         sessionStorage.setItem('hh_role','admin');
         currentRole = 'admin';
@@ -7552,7 +7639,15 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         await renderAll();
         return;
       }
-      // Sesión inválida/expirada o perfil no encontrado: la limpiamos.
+      if (!profile) {
+        // Sesión válida (email confirmado) pero todavía sin organización
+        // creada — típico de confirmar el mail en otro navegador. Le
+        // pedimos acá los datos para terminar el alta, ya logueado.
+        document.getElementById('loginScreen').style.display = 'flex';
+        showFinishOrgPanel(authSession.user?.email);
+        return;
+      }
+      // Perfil existe pero no es admin: no debería pasar en este flujo.
       saveAuthSession(null);
     }
 
