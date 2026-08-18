@@ -4525,7 +4525,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='approve-modulo-item') await approveModuloItem(id);
     else if (action==='reject-modulo-item') await rejectModuloItem(id);
     else if (action==='generar-remito-asignado') await generarRemitoModuloAsignado(id);
-    else if (action==='postular-servicio') { const sid=btn.dataset.sid; await postularAServicio(sid, id); renderPrestadorPublicView(id); }
+    else if (action==='postular-servicio') { const sid=btn.dataset.sid; openPostularModal(sid, id); }
     else if (action==='subir-evidencia-item') { await subirEvidenciaItem(id); renderPrestadorPublicView(btn.dataset.pid); }
     else if (action==='delete-prestador') {
       if (!confirm('¿Eliminar este prestador?')) return;
@@ -8079,6 +8079,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
   function openServicioModal(existing=null) {
     let tempProtocolo = existing ? JSON.parse(JSON.stringify(existing.protocolo||[])) : [];
+    let tempDocsRequeridos = existing ? JSON.parse(JSON.stringify(existing.docsRequeridos||[])) : [];
 
     function renderProtocoloItems() {
       if (!tempProtocolo.length) return '<div style="font-size:13px;color:var(--muted);padding:10px;border:1px dashed var(--line);border-radius:8px;text-align:center">Sin ítems todavía.</div>';
@@ -8088,6 +8089,13 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '<button type="button" class="btn danger xs" onclick="removeProtocoloItem('+i+')">✕</button>' +
         '</div>'
       ).join('');
+    }
+
+    function renderDocsRequeridosList() {
+      if (!tempDocsRequeridos.length) return '<div style="font-size:13px;color:var(--muted);padding:10px;border:1px dashed var(--line);border-radius:8px;text-align:center">Sin documentos todavía.</div>';
+      return '<div style="display:flex;flex-wrap:wrap;gap:6px">' + tempDocsRequeridos.map((d,i) =>
+        '<span class="challenge-meta-tag" style="background:#fffbeb;color:#92400e;display:inline-flex;align-items:center;gap:6px">📄 '+d+' <button type="button" onclick="removeDocRequerido('+i+')" style="border:none;background:none;color:#92400e;cursor:pointer;font-weight:700">✕</button></span>'
+      ).join('') + '</div>';
     }
 
     openModal(
@@ -8107,7 +8115,15 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '<div class="field"><label>Ecosistema</label><select name="ecosistemaId"><option value="">Sin ecosistema</option>' + (state.ecosistemas||[]).map(e=>'<option value="'+e.id+'"'+(e.id===existing?.ecosistemaId?' selected':'')+'>'+e.nombre+'</option>').join('')+'</select></div>' +
         '<div class="field"><label>Horas por módulo</label><input type="number" min="0" step="0.5" name="horasModulo" value="'+(existing?.horasModulo??'')+'"></div>' +
         '<div class="field"><label>Precio por hora ($)</label><input type="number" min="0" step="1" name="precioHora" value="'+(existing?.precioHora??'')+'"></div>' +
-        '<div class="field full"><label>Documentos requeridos (separados por coma)</label><input name="docsRequeridos" placeholder="DNI, CUIL, Seguro" value="'+((existing?.docsRequeridos||[]).join(', '))+'"></div>' +
+        '<div class="field full" style="margin-top:4px">' +
+          '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">📄 Documentos que debe adjuntar el prestador</div>' +
+          '<div id="docsRequeridosList">'+renderDocsRequeridosList()+'</div>' +
+          '<div style="display:flex;gap:6px;margin-top:8px">' +
+            '<input id="docReqInput" placeholder="Ej: DNI, CUIL, Monotributo" style="flex:1">' +
+            '<button type="button" class="btn secondary small" onclick="confirmAddDocRequerido()">＋</button>' +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--muted);margin-top:4px">El prestador va a tener que subir un archivo por cada uno para poder postularse.</div>' +
+        '</div>' +
         '<div class="field full"><label>Tipo de contrato de la prestación</label><select name="tipoContrato"><option value="">Sin especificar</option>' +
           ['Monotributo','Relación de dependencia','Autónomo','Prestación de servicios','Otro'].map(t=>'<option value="'+t+'"'+(existing?.tipoContrato===t?' selected':'')+'>'+t+'</option>').join('') +
         '</select><div style="font-size:11px;color:var(--muted);margin-top:3px">Bajo qué figura se contrata a quien haga este módulo.</div></div>' +
@@ -8144,11 +8160,24 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       document.getElementById('protocoloItemsList').innerHTML = renderProtocoloItems();
     };
 
+    window.confirmAddDocRequerido = function() {
+      const nombre = document.getElementById('docReqInput').value.trim();
+      if (!nombre) { alert('Escribí el nombre del documento.'); return; }
+      if (tempDocsRequeridos.includes(nombre)) { alert('Ese documento ya está en la lista.'); return; }
+      tempDocsRequeridos.push(nombre);
+      document.getElementById('docsRequeridosList').innerHTML = renderDocsRequeridosList();
+      document.getElementById('docReqInput').value = '';
+    };
+    window.removeDocRequerido = function(idx) {
+      tempDocsRequeridos.splice(idx, 1);
+      document.getElementById('docsRequeridosList').innerHTML = renderDocsRequeridosList();
+    };
+
     document.getElementById('servicioForm').onsubmit = async e => {
       e.preventDefault();
       const submitBtn = e.target.querySelector('button[type="submit"]');
       const data = Object.fromEntries(new FormData(e.target).entries());
-      const docsRequeridos = (data.docsRequeridos||'').split(',').map(s=>s.trim()).filter(Boolean);
+      const docsRequeridos = tempDocsRequeridos;
       const servicioId = existing ? existing.id : uid();
 
       let docAdjuntoUrl = existing?.docAdjuntoUrl || '';
@@ -8225,7 +8254,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '<div><div style="font-weight:700">'+(prest?.nombre||'Prestador eliminado')+'</div>' +
           '<div style="font-size:13px;color:var(--muted)">postula a: '+(s?.titulo||'Módulo eliminado')+'</div>' +
           (p.mensaje?'<div style="font-size:13px;margin-top:6px">"'+p.mensaje+'"</div>':'') +
-          (p.docsConfirmados?.length?'<div style="font-size:12px;color:#166534;margin-top:6px">✓ Confirmó: '+p.docsConfirmados.join(', ')+'</div>':'') +
+          (p.docsConfirmados?.length?'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+p.docsConfirmados.map(d=>'<a href="'+d.url+'" target="_blank" style="font-size:11px;color:#1a73e8;background:#e8f0fe;padding:3px 8px;border-radius:6px;text-decoration:none">📎 '+d.doc+'</a>').join('')+'</div>':'') +
           '</div>' + estadoBadge +
         '</div>' +
         (p.estado==='pendiente' ? '<div style="display:flex;gap:8px;margin-top:10px">' +
@@ -8400,18 +8429,58 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   }
 
   /* ── Postulación y evidencia, del lado del prestador ── */
-  async function postularAServicio(servicioId, prestadorId) {
+  function openPostularModal(servicioId, prestadorId) {
     const ya = (state.postulaciones||[]).find(p => p.servicioId===servicioId && p.prestadorId===prestadorId);
     if (ya) { alert('Ya te postulaste a este módulo.'); return; }
     const s = servicioById(servicioId);
-    const docsConfirmados = (s?.docsRequeridos||[]).length
-      ? (confirm('Confirmás que tenés: '+s.docsRequeridos.join(', ')+'?') ? s.docsRequeridos : [])
-      : [];
-    const mensaje = prompt('¿Algo que quieras contarle a la organización? (opcional)') || '';
-    const p = { id: uid(), servicioId, prestadorId, mensaje, docsConfirmados, estado: 'pendiente', createdAt: nowISO() };
-    state.postulaciones.push(p);
-    await saveOne(DB.postulaciones, postulacionToRow(p));
-    alert('¡Postulación enviada!');
+    if (!s) return;
+    const docs = s.docsRequeridos || [];
+
+    openModal('Postularme a ' + s.titulo, docs.length ? 'Adjuntá cada documento pedido para poder enviar tu postulación.' : 'Confirmá tu postulación.', `
+      <form id="postularForm" class="form-grid">
+        ${docs.map((d,i) => `
+          <div class="field full">
+            <label>📄 ${d}</label>
+            <input type="file" name="doc_${i}" data-docname="${d}" accept="image/*,application/pdf" required>
+          </div>
+        `).join('')}
+        <div class="field full"><label>¿Algo que quieras contarle a la organización? (opcional)</label><textarea name="mensaje"></textarea></div>
+        <div class="field full"><button class="btn primary" type="submit">Enviar postulación</button></div>
+      </form>
+      <div id="postularError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>
+    `);
+
+    document.getElementById('postularForm').onsubmit = async e => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button[type="submit"]');
+      const errEl = document.getElementById('postularError');
+      errEl.style.display = 'none';
+      const mensaje = (new FormData(e.target).get('mensaje') || '').trim();
+      const fileInputs = Array.from(e.target.querySelectorAll('input[type="file"]'));
+      btn.disabled = true; btn.textContent = 'Subiendo documentos…';
+      try {
+        const docsConfirmados = [];
+        for (const input of fileInputs) {
+          const file = input.files?.[0];
+          const docName = input.dataset.docname;
+          if (!file) throw new Error('Falta adjuntar: ' + docName);
+          const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
+          const url = await sbUpload('prestador-docs', prestadorId + '/postulacion_' + servicioId + '/' + uid() + '.' + ext, file);
+          if (!url) throw new Error('No se pudo subir "' + docName + '". Probá de nuevo.');
+          docsConfirmados.push({ doc: docName, url });
+        }
+        const p = { id: uid(), servicioId, prestadorId, mensaje, docsConfirmados, estado: 'pendiente', createdAt: nowISO() };
+        state.postulaciones.push(p);
+        await saveOne(DB.postulaciones, postulacionToRow(p));
+        closeModal();
+        alert('¡Postulación enviada!');
+        renderPrestadorPublicView(prestadorId);
+      } catch(err) {
+        errEl.textContent = err.message || 'No se pudo enviar la postulación.';
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Enviar postulación';
+      }
+    };
   }
 
   async function subirEvidenciaItem(itemId) {
