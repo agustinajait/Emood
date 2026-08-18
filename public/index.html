@@ -291,6 +291,24 @@
       text-align: center;
       display: none;
     }
+    .login-success {
+      margin-top: 12px;
+      padding: 10px 13px;
+      background: rgba(26,122,69,0.18);
+      border: 1px solid rgba(26,122,69,0.35);
+      border-radius: 9px;
+      color: #86efac;
+      font-size: 13px;
+      text-align: center;
+      display: none;
+    }
+    .login-switch {
+      margin-top: 16px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.45);
+      text-align: center;
+    }
+    .login-switch a { color: #4ade80; font-weight: 700; cursor: pointer; }
     .login-panel { display: none; }
     .login-panel.active { display: block; }
 
@@ -1467,35 +1485,54 @@
       <!-- Admin panel -->
       <div class="login-panel active" id="loginPanelAdmin">
         <div class="login-field">
-          <label>Contraseña de admin</label>
+          <label>Email</label>
+          <input type="email" id="adminEmailInput" placeholder="vos@tuorganizacion.com" onkeydown="if(event.key==='Enter') doAdminLogin()">
+        </div>
+        <div class="login-field">
+          <label>Contraseña</label>
           <input type="password" id="adminPwInput" placeholder="••••••••" onkeydown="if(event.key==='Enter') doAdminLogin()">
         </div>
-        <button class="login-btn" onclick="doAdminLogin()">Ingresar como admin →</button>
-        <div class="login-error" id="adminLoginError">Contraseña incorrecta. Intentá de nuevo.</div>
+        <button class="login-btn" id="adminLoginBtn" onclick="doAdminLogin()">Ingresar →</button>
+        <div class="login-error" id="adminLoginError">Email o contraseña incorrectos.</div>
+        <div class="login-switch">¿Todavía no tenés una organización? <a onclick="showSignupPanel()">Creá tu cuenta</a></div>
+      </div>
+
+      <!-- Signup panel (alta de organización nueva) -->
+      <div class="login-panel" id="loginPanelSignup">
+        <div class="login-field">
+          <label>Nombre de tu organización</label>
+          <input type="text" id="signupOrgInput" placeholder="Ej: Fundación Ejemplo">
+        </div>
+        <div class="login-field">
+          <label>Tu nombre</label>
+          <input type="text" id="signupNameInput" placeholder="Nombre y apellido">
+        </div>
+        <div class="login-field">
+          <label>Email</label>
+          <input type="email" id="signupEmailInput" placeholder="vos@tuorganizacion.com">
+        </div>
+        <div class="login-field">
+          <label>Contraseña</label>
+          <input type="password" id="signupPwInput" placeholder="Mínimo 6 caracteres" onkeydown="if(event.key==='Enter') doOrgSignup()">
+        </div>
+        <button class="login-btn" id="signupBtn" onclick="doOrgSignup()">Crear organización →</button>
+        <div class="login-error" id="signupError">Revisá los datos e intentá de nuevo.</div>
+        <div class="login-success" id="signupSuccess">¡Organización creada! Ya podés usar tu email y contraseña para ingresar.</div>
+        <div class="login-switch">¿Ya tenés cuenta? <a onclick="switchLoginTab('admin')">Iniciar sesión</a></div>
       </div>
 
       <!-- Owner panel -->
       <div class="login-panel" id="loginPanelOwner">
-        <div class="login-field">
-          <label>Tu nombre (socio responsable)</label>
-          <select id="ownerLoginSelect">
-            <option value="">Seleccioná tu nombre…</option>
-          </select>
+        <div style="padding:8px 2px 4px;color:rgba(255,255,255,0.5);font-size:13px;line-height:1.7">
+          El acceso propio para socios responsables está en construcción (forma parte de la migración a organizaciones). Por ahora, pedile al administrador de tu organización que gestione tu agencia desde su panel.
         </div>
-        <button class="login-btn" style="background:#1d4ed8;box-shadow:0 8px 24px rgba(29,78,216,0.35)" onclick="doOwnerLogin()">Entrar a mi panel →</button>
-        <div class="login-error" id="ownerLoginError">Seleccioná tu nombre para continuar.</div>
       </div>
 
       <!-- Prestador panel -->
       <div class="login-panel" id="loginPanelPrestador">
-        <div class="login-field">
-          <label>Tu nombre</label>
-          <select id="prestadorLoginSelect">
-            <option value="">Seleccioná tu nombre…</option>
-          </select>
+        <div style="padding:8px 2px 4px;color:rgba(255,255,255,0.5);font-size:13px;line-height:1.7">
+          El acceso propio para prestadores está en construcción (forma parte de la migración a organizaciones). Por ahora, pedile al administrador de tu organización que gestione tus datos desde su panel.
         </div>
-        <button class="login-btn" style="background:#6d28d9;box-shadow:0 8px 24px rgba(109,40,217,0.35)" onclick="doPrestadorLogin()">Entrar a mi panel →</button>
-        <div class="login-error" id="prestadorLoginError">Seleccioná tu nombre para continuar.</div>
       </div>
     </div>
   </div>
@@ -1908,7 +1945,6 @@
   }
 
   /* ─── CONFIG ─────────────────────────────────────────── */
-  const ADMIN_PASSWORD = 'huehaci2024';
   const STORAGE_KEY    = 'e-mood-huehaci_planner_v2';
   const SUPABASE_URL   = 'https://bolggakejipenaaahrdh.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvbGdnYWtlamlwZW5hYWFocmRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMTg3ODAsImV4cCI6MjA4OTU5NDc4MH0.cjB2y1kJFyQi4WI7BIT8m-vNFtMBvXaeB2JZyMtSyVA';
@@ -1916,14 +1952,97 @@
   // ── Pure fetch Supabase client (no SDK — avoids DataCloneError) ──────────
   const SB_URL = 'https://bolggakejipenaaahrdh.supabase.co';
   const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvbGdnYWtlamlwZW5hYWFocmRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMTg3ODAsImV4cCI6MjA4OTU5NDc4MH0.cjB2y1kJFyQi4WI7BIT8m-vNFtMBvXaeB2JZyMtSyVA';
-  const SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
   const hasSupabase = true;
   const supabaseClient = null; // not used — all ops go through sbFetch
+
+  /* ─── AUTH (Supabase Auth — email + contraseña) ─────────
+     Desde la migración a multi-organización, las políticas RLS de la
+     base exigen un JWT de usuario real (no solo la anon key) para
+     poder leer/escribir cualquier tabla hh_*. authSession guarda ese
+     JWT y sbHeaders() lo usa automáticamente en cada request. ─────── */
+  const AUTH_STORAGE_KEY = 'e-mood-huehaci_auth_v1';
+  let authSession = null; // { access_token, refresh_token, user }
+  let myProfile   = null; // fila de public.profiles del usuario logueado
+
+  function sbHeaders() {
+    const token = (authSession && authSession.access_token) ? authSession.access_token : SB_KEY;
+    return { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+  }
+
+  function loadAuthSession() {
+    try {
+      const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+      authSession = raw ? JSON.parse(raw) : null;
+    } catch(_) { authSession = null; }
+    return authSession;
+  }
+  function saveAuthSession(session) {
+    authSession = session;
+    try {
+      if (session) localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+      else localStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch(_) {}
+  }
+
+  async function authRequest(path, body) {
+    const res = await fetch(SB_URL + path, {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json().catch(()=>({}));
+    if (!res.ok) {
+      const msg = data.error_description || data.msg || data.message || 'Error de autenticación';
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  async function authSignUp(email, password) {
+    const data = await authRequest('/auth/v1/signup', { email, password });
+    if (data.access_token) saveAuthSession({ access_token: data.access_token, refresh_token: data.refresh_token, user: data.user });
+    return data;
+  }
+
+  async function authSignIn(email, password) {
+    const data = await authRequest('/auth/v1/token?grant_type=password', { email, password });
+    saveAuthSession({ access_token: data.access_token, refresh_token: data.refresh_token, user: data.user });
+    return data;
+  }
+
+  async function authSignOut() {
+    if (authSession?.access_token) {
+      try {
+        await fetch(SB_URL + '/auth/v1/logout', {
+          method: 'POST',
+          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + authSession.access_token }
+        });
+      } catch(_) {}
+    }
+    saveAuthSession(null);
+    myProfile = null;
+  }
+
+  // Trae el perfil (organización + rol) del usuario logueado.
+  async function fetchMyProfile() {
+    if (!authSession?.access_token || !authSession?.user?.id) return null;
+    const r = await sbFetch('/rest/v1/profiles?select=*&id=eq.' + authSession.user.id, { method: 'GET' });
+    if (r.error || !r.data || !r.data.length) return null;
+    myProfile = r.data[0];
+    return myProfile;
+  }
+
+  async function callRpc(fnName, params) {
+    return sbFetch('/rest/v1/rpc/' + fnName, {
+      method: 'POST',
+      body: JSON.stringify(params || {})
+    });
+  }
 
   async function sbFetch(path, options) {
     try {
       // Always merge headers explicitly to avoid spread override issues
-      const mergedHeaders = Object.assign({}, SB_HEADERS, options?.headers || {});
+      const mergedHeaders = Object.assign({}, sbHeaders(), options?.headers || {});
       const fetchOptions = Object.assign({}, options, { headers: mergedHeaders });
       const res = await fetch(SB_URL + path, fetchOptions);
       const text = await res.text();
@@ -2205,34 +2324,86 @@
     document.getElementById('loginPanelAdmin').classList.toggle('active', tab==='admin');
     document.getElementById('loginPanelOwner').classList.toggle('active', tab==='owner');
     document.getElementById('loginPanelPrestador').classList.toggle('active', tab==='prestador');
-    if (tab==='prestador') {
-      const prestLoginSel = document.getElementById('prestadorLoginSelect');
-      if (prestLoginSel && (state.prestadores||[]).length) {
-        const activos = (state.prestadores||[]).filter(p => p.activo !== false);
-        prestLoginSel.innerHTML = '<option value="">Seleccioná tu nombre…</option>'+activos.map(p=>'<option value="'+p.id+'">'+p.nombre+(p.rol?' — '+p.rol:'')+' </option>').join('');
-      } else if (prestLoginSel && !prestLoginSel.options.length > 1) {
-        // State not loaded yet - load it
-        loadStateFromSupabase().then(s=>{ if(s){ state=normalizeState(s); const a=(state.prestadores||[]).filter(p=>p.activo!==false); prestLoginSel.innerHTML='<option value="">Seleccioná tu nombre…</option>'+a.map(p=>'<option value="'+p.id+'">'+p.nombre+(p.rol?' — '+p.rol:'')+' </option>').join(''); } }).catch(()=>{});
-      }
-    }
+    document.getElementById('loginPanelSignup')?.classList.remove('active');
     document.getElementById('adminLoginError').style.display = 'none';
-    document.getElementById('ownerLoginError').style.display = 'none';
   }
 
-  function doAdminLogin() {
+  function showSignupPanel() {
+    document.querySelectorAll('.login-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('loginPanelSignup').classList.add('active');
+  }
+
+  async function doAdminLogin() {
+    const email = document.getElementById('adminEmailInput').value.trim();
     const pw = document.getElementById('adminPwInput').value;
-    if (pw === ADMIN_PASSWORD) {
+    const errEl = document.getElementById('adminLoginError');
+    const btn = document.getElementById('adminLoginBtn');
+    errEl.style.display = 'none';
+    if (!email || !pw) { errEl.textContent = 'Completá email y contraseña.'; errEl.style.display = 'block'; return; }
+    btn.disabled = true; btn.textContent = 'Ingresando…';
+    try {
+      await authSignIn(email, pw);
+      const profile = await fetchMyProfile();
+      if (!profile) throw new Error('No se encontró una organización para esta cuenta.');
+      if (profile.role !== 'admin') throw new Error('Esta cuenta no tiene permisos de administrador.');
       sessionStorage.setItem('hh_role','admin');
       currentRole = 'admin';
-      showAdminAndRender().catch(e => console.error(e));
-    } else {
-      document.getElementById('adminLoginError').style.display = 'block';
+      const remote = await loadStateFromSupabase();
+      if (remote) state = normalizeState(remote);
+      await showAdminAndRender();
+    } catch(e) {
+      errEl.textContent = e.message || 'Email o contraseña incorrectos.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Ingresar →';
+    }
+  }
+
+  async function doOrgSignup() {
+    const orgName = document.getElementById('signupOrgInput').value.trim();
+    const adminName = document.getElementById('signupNameInput').value.trim();
+    const email = document.getElementById('signupEmailInput').value.trim();
+    const pw = document.getElementById('signupPwInput').value;
+    const errEl = document.getElementById('signupError');
+    const okEl = document.getElementById('signupSuccess');
+    const btn = document.getElementById('signupBtn');
+    errEl.style.display = 'none'; okEl.style.display = 'none';
+    if (!orgName || !adminName || !email || !pw) {
+      errEl.textContent = 'Completá todos los campos.'; errEl.style.display = 'block'; return;
+    }
+    if (pw.length < 6) {
+      errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.'; errEl.style.display = 'block'; return;
+    }
+    btn.disabled = true; btn.textContent = 'Creando…';
+    try {
+      const signupData = await authSignUp(email, pw);
+      if (!authSession?.access_token) {
+        // Confirmación de email requerida: no hay sesión todavía para crear la organización.
+        okEl.textContent = 'Te enviamos un correo para confirmar tu cuenta. Confirmalo y después iniciá sesión para terminar de crear tu organización.';
+        okEl.style.display = 'block';
+        return;
+      }
+      const rpc = await callRpc('create_organization_and_admin', { org_name: orgName, admin_name: adminName });
+      if (rpc.error) throw new Error(rpc.error);
+      const profile = await fetchMyProfile();
+      if (!profile) throw new Error('La organización se creó pero no se pudo cargar tu perfil. Recargá la página e iniciá sesión.');
+      sessionStorage.setItem('hh_role','admin');
+      currentRole = 'admin';
+      const remote = await loadStateFromSupabase();
+      if (remote) state = normalizeState(remote);
+      await showAdminAndRender();
+    } catch(e) {
+      errEl.textContent = e.message || 'No se pudo crear la organización.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Crear organización →';
     }
   }
 
   function doOwnerLogin() {
     const owner = document.getElementById('ownerLoginSelect').value;
-    if (!owner) { document.getElementById('ownerLoginError').style.display = 'block'; return; }
+    if (!owner) { return; }
     sessionStorage.setItem('hh_role','owner');
     sessionStorage.setItem('hh_owner', owner);
     currentRole = 'owner';
@@ -2240,16 +2411,16 @@
     showOwnerApp(owner);
   }
 
-  function doLogout() {
+  async function doLogout() {
     sessionStorage.removeItem('hh_role');
     sessionStorage.removeItem('hh_owner');
     currentRole = null; currentOwner = null;
-    // Reload state so login dropdowns are populated
-    loadStateFromSupabase().then(s=>{ if(s) { state=normalizeState(s); fillFilters(); } }).catch(()=>{});
+    await authSignOut();
     document.getElementById('loginScreen').style.display = 'flex';
     document.getElementById('adminApp').style.display = 'none';
     document.getElementById('ownerView').style.display = 'none';
     document.getElementById('adminPwInput').value = '';
+    document.getElementById('adminEmailInput').value = '';
   }
 
   function showAdminApp() {
@@ -7334,11 +7505,30 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
   /* ─── INIT ───────────────────────────────────────────── */
   async function initApp() {
-    const remote = await loadStateFromSupabase();
-    if (remote) state = normalizeState(remote);
-    else state = loadStateLocal();
+    state = loadStateLocal();
 
-    fillFilters(); // populate owner select before login screen
+    // Nota: Owner/Prestador (?owner=, ?mode=sub, ?prestador=) quedan
+    // temporalmente sin datos: desde la migración a multi-organización,
+    // RLS exige un usuario autenticado (ver AUTH arriba) y esos accesos
+    // todavía no tienen su propio login — están marcados como "en
+    // construcción" en la pantalla de login.
+
+    // Intentar retomar sesión guardada (Supabase Auth real, admin)
+    loadAuthSession();
+    if (authSession?.access_token) {
+      const profile = await fetchMyProfile().catch(()=>null);
+      if (profile && profile.role === 'admin') {
+        sessionStorage.setItem('hh_role','admin');
+        currentRole = 'admin';
+        const remote = await loadStateFromSupabase();
+        if (remote) state = normalizeState(remote);
+        showAdminApp();
+        await renderAll();
+        return;
+      }
+      // Sesión inválida/expirada o perfil no encontrado: la limpiamos.
+      saveAuthSession(null);
+    }
 
     // Check session
     const savedRole = sessionStorage.getItem('hh_role');
@@ -7394,11 +7584,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       return;
     }
 
-    if (savedRole==='admin') {
-      currentRole='admin';
-      showAdminApp();
-      await renderAll();
-    } else if (savedRole==='owner' && savedOwner) {
+    if (savedRole==='owner' && savedOwner) {
       currentRole='owner'; currentOwner=savedOwner;
       // Load state into owner view without touching admin DOM
       await loadStateFromSupabase().then(remote => {
@@ -7407,12 +7593,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       fillFilters(); // just populate owner login select
       showOwnerApp(savedOwner);
     } else {
-      // Show login screen - load state first so dropdowns are populated
-      try {
-        const loginState = await loadStateFromSupabase();
-        if (loginState) state = normalizeState(loginState);
-      } catch(e) {}
-      fillFilters();
+      // Sin sesión real de Supabase Auth: mostrar login (savedRole==='admin'
+      // sin authSession es un resabio de antes de la migración — no alcanza,
+      // RLS exige el token real).
+      sessionStorage.removeItem('hh_role');
       document.getElementById('loginScreen').style.display = 'flex';
     }
   }
