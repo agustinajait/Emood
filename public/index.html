@@ -8268,6 +8268,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       alert('No hay cupos disponibles para "'+s.titulo+'" ('+(s.cupos||1)+' cupo(s), ya cubiertos). Cerrá otra postulación o aumentá los cupos del módulo para aceptar esta.');
       return;
     }
+    if (!(s.protocolo||[]).length) {
+      alert('"'+s.titulo+'" no tiene ítems cargados en el Protocolo de entregables. Editá el módulo y agregá al menos uno antes de aceptar postulaciones — si no, el prestador no va a tener nada para subir.');
+      return;
+    }
     p.estado = 'aceptada';
     await saveOne(DB.postulaciones, postulacionToRow(p));
 
