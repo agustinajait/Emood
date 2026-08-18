@@ -2368,7 +2368,8 @@
       servicios: Array.isArray(data?.servicios) ? data.servicios : [],
       postulaciones: Array.isArray(data?.postulaciones) ? data.postulaciones : [],
       modulosAsignados: Array.isArray(data?.modulosAsignados) ? data.modulosAsignados : [],
-      moduloItems: Array.isArray(data?.moduloItems) ? data.moduloItems : []
+      moduloItems: Array.isArray(data?.moduloItems) ? data.moduloItems : [],
+      moduloCiclos: Array.isArray(data?.moduloCiclos) ? data.moduloCiclos : []
     };
   }
 
@@ -2655,6 +2656,7 @@
     postulaciones:    'hh_postulaciones',
     modulosAsignados: 'hh_modulos_asignados',
     moduloItems:      'hh_modulo_items',
+    moduloCiclos:     'hh_modulo_ciclos',
   };
 
   // ── Servicio → Postulación → Módulo asignado → Remito ──────
@@ -2726,7 +2728,7 @@
   }
   function moduloItemToRow(it) {
     return {
-      id: it.id, modulo_asignado_id: it.moduloAsignadoId, item: it.item||'',
+      id: it.id, modulo_asignado_id: it.moduloAsignadoId, ciclo_id: it.cicloId||null, item: it.item||'',
       descripcion: it.descripcion||'', evidencia_url: it.evidenciaUrl||'',
       evidencia_nota: it.evidenciaNota||'', estado: it.estado||'pendiente',
       comentario_org: it.comentarioOrg||'',
@@ -2735,10 +2737,26 @@
   }
   function rowToModuloItem(r) {
     return {
-      id: r.id, moduloAsignadoId: r.modulo_asignado_id, item: r.item||'',
+      id: r.id, moduloAsignadoId: r.modulo_asignado_id, cicloId: r.ciclo_id||null, item: r.item||'',
       descripcion: r.descripcion||'', evidenciaUrl: r.evidencia_url||'',
       evidenciaNota: r.evidencia_nota||'', estado: r.estado||'pendiente',
       comentarioOrg: r.comentario_org||'',
+      createdAt: r.created_at||'', updatedAt: r.updated_at||'',
+    };
+  }
+  function moduloCicloToRow(c) {
+    return {
+      id: c.id, modulo_asignado_id: c.moduloAsignadoId, periodo: c.periodo||'',
+      estado: c.estado||'en_progreso',
+      remito_numero: c.remitoNumero||null, remito_fecha: c.remitoFecha||null,
+      created_at: c.createdAt||nowISO(), updated_at: nowISO(),
+    };
+  }
+  function rowToModuloCiclo(r) {
+    return {
+      id: r.id, moduloAsignadoId: r.modulo_asignado_id, periodo: r.periodo||'',
+      estado: r.estado||'en_progreso',
+      remitoNumero: r.remito_numero||'', remitoFecha: r.remito_fecha||'',
       createdAt: r.created_at||'', updatedAt: r.updated_at||'',
     };
   }
@@ -2879,6 +2897,7 @@
       const post  = await sbSelect(DB.postulaciones, 'created_at.desc').catch(()=>({data:[],errMsg:null}));
       const masig = await sbSelect(DB.modulosAsignados, 'created_at.desc').catch(()=>({data:[],errMsg:null}));
       const mit   = await sbSelect(DB.moduloItems, 'created_at').catch(()=>({data:[],errMsg:null}));
+      const cic   = await sbSelect(DB.moduloCiclos, 'periodo.desc').catch(()=>({data:[],errMsg:null}));
       return {
         agencies:       ag.data.map(rowToAgency),
         challenges:     ch.data.map(rowToChallenge),
@@ -2897,6 +2916,7 @@
         postulaciones:    post.data.map(rowToPostulacion),
         modulosAsignados: masig.data.map(rowToModuloAsignado),
         moduloItems:      mit.data.map(rowToModuloItem),
+        moduloCiclos:     cic.data.map(rowToModuloCiclo),
       };
     } catch(e) {
       console.warn('Supabase unavailable:', e.message || e);
@@ -6866,6 +6886,19 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       return;
     }
 
+    // Abrir el ciclo del mes actual para cada módulo asignado vigente
+    // (si todavía no existe y el módulo no terminó su período).
+    const misModulosAsignados = (state.modulosAsignados||[]).filter(m => m.prestadorId === prestadorId);
+    let huboCicloNuevo = false;
+    for (const m of misModulosAsignados) {
+      const creado = await ensureCicloForPeriodo(m.id, periodoActual());
+      if (creado) huboCicloNuevo = true;
+    }
+    if (huboCicloNuevo) {
+      const refreshed = await loadStateFromSupabase();
+      if (refreshed) state = normalizeState(refreshed);
+    }
+
     const mods = modulosByPrestador(prestadorId);
     const periodo = new Date().toISOString().slice(0,7);
     const [yr, mo] = periodo.split('-');
@@ -7065,27 +7098,34 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         }).join('') + '</div>';
     }
 
-    // Mis módulos asignados (con evidencia por ítem)
+    // Mis módulos asignados (un bloque por mes/ciclo, con evidencia por ítem)
     if (misModulos.length) {
       html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px">📋 Mis módulos asignados</div>';
       html += misModulos.map(m => {
         const s = (state.servicios||[]).find(x=>x.id===m.servicioId);
-        const items = (state.moduloItems||[]).filter(it=>it.moduloAsignadoId===m.id);
+        const ciclos = ciclosByModuloAsignado(m.id);
         return '<div class="owner-card" style="margin-bottom:12px">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
-            '<strong>'+(s?.titulo||'—')+'</strong>' +
-            '<span class="badge '+(m.estado==='aprobado'?'green':m.estado==='completado'?'blue':'gray')+'">'+(MODASIG_ESTADO_LABEL[m.estado]||m.estado)+'</span>' +
-          '</div>' +
-          items.map(it => {
-            const badge = it.estado==='aprobado' ? '<span class="badge green">✓ Aprobado</span>' : it.estado==='rechazado' ? '<span class="badge red">✕ Rechazado — subí de nuevo</span>' : '<span class="badge gray">'+(it.evidenciaUrl||it.evidenciaNota?'En revisión':'Sin evidencia')+'</span>';
-            return '<div style="border-top:1px solid var(--line);padding:8px 0">' +
-              '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
-                '<span style="font-size:13px">'+it.item+'</span>' + badge +
+          '<div style="margin-bottom:10px"><strong>'+(s?.titulo||'—')+'</strong>' +
+          (s?.fechaFin?' <span style="font-size:12px;color:var(--muted)">· hasta '+s.fechaFin+'</span>':'') +'</div>' +
+          (ciclos.length ? ciclos.map(c => {
+            const items = itemsByCiclo(c.id);
+            return '<div style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+                '<strong style="font-size:13px;text-transform:capitalize">📅 '+periodoLabel(c.periodo)+'</strong>' +
+                '<span class="badge '+(c.estado==='aprobado'?'green':c.estado==='completado'?'blue':'gray')+'">'+(CICLO_ESTADO_LABEL[c.estado]||c.estado)+'</span>' +
               '</div>' +
-              (it.comentarioOrg?'<div style="font-size:12px;color:#dc2626;margin-top:4px">Motivo: '+it.comentarioOrg+'</div>':'') +
-              (it.estado!=='aprobado'?'<button class="btn secondary xs" style="margin-top:6px" data-action="subir-evidencia-item" data-id="'+it.id+'" data-pid="'+prest.id+'">'+(it.evidenciaUrl||it.evidenciaNota?'Actualizar evidencia':'Subir evidencia')+'</button>':'') +
+              items.map(it => {
+                const badge = it.estado==='aprobado' ? '<span class="badge green">✓ Aprobado</span>' : it.estado==='rechazado' ? '<span class="badge red">✕ Rechazado — subí de nuevo</span>' : '<span class="badge gray">'+(it.evidenciaUrl||it.evidenciaNota?'En revisión':'Sin evidencia')+'</span>';
+                return '<div style="border-top:1px solid var(--line);padding:8px 0">' +
+                  '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
+                    '<span style="font-size:13px">'+it.item+'</span>' + badge +
+                  '</div>' +
+                  (it.comentarioOrg?'<div style="font-size:12px;color:#dc2626;margin-top:4px">Motivo: '+it.comentarioOrg+'</div>':'') +
+                  (it.estado!=='aprobado'?'<button class="btn secondary xs" style="margin-top:6px" data-action="subir-evidencia-item" data-id="'+it.id+'" data-pid="'+prest.id+'">'+(it.evidenciaUrl||it.evidenciaNota?'Actualizar evidencia':'Subir evidencia')+'</button>':'') +
+                '</div>';
+              }).join('') +
             '</div>';
-          }).join('') +
+          }).join('') : '<div class="empty">Todavía no se abrió el primer ciclo.</div>') +
         '</div>';
       }).join('');
     }
@@ -7925,6 +7965,38 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function itemsByModuloAsignado(moduloAsignadoId) {
     return (state.moduloItems||[]).filter(it => it.moduloAsignadoId === moduloAsignadoId);
   }
+  function cicloById(id) { return (state.moduloCiclos||[]).find(c => c.id === id); }
+  function ciclosByModuloAsignado(moduloAsignadoId) {
+    return (state.moduloCiclos||[]).filter(c => c.moduloAsignadoId === moduloAsignadoId).sort((a,b)=>a.periodo.localeCompare(b.periodo));
+  }
+  function itemsByCiclo(cicloId) {
+    return (state.moduloItems||[]).filter(it => it.cicloId === cicloId);
+  }
+  function periodoActual() { return new Date().toISOString().slice(0,7); }
+
+  // Crea el ciclo (mes) actual de un módulo asignado si todavía no
+  // existe, con sus ítems copiados del protocolo. No crea nada si el
+  // módulo ya terminó (fecha_fin del servicio pasada) o si el ciclo
+  // de este mes ya fue creado.
+  async function ensureCicloForPeriodo(moduloAsignadoId, periodo) {
+    const existente = (state.moduloCiclos||[]).find(c => c.moduloAsignadoId === moduloAsignadoId && c.periodo === periodo);
+    if (existente) return existente;
+    const modulo = moduloAsignadoById(moduloAsignadoId);
+    if (!modulo) return null;
+    const s = servicioById(modulo.servicioId);
+    if (s?.fechaFin && s.fechaFin < periodo + '-01') return null; // ya terminó el período de trabajo
+
+    const ciclo = { id: uid(), moduloAsignadoId, periodo, estado: 'en_progreso', createdAt: nowISO() };
+    state.moduloCiclos.push(ciclo);
+    await saveOne(DB.moduloCiclos, moduloCicloToRow(ciclo));
+
+    for (const it of (modulo.protocolo||[])) {
+      const item = { id: uid(), moduloAsignadoId, cicloId: ciclo.id, item: it.item, descripcion: it.descripcion||'', estado: 'pendiente', createdAt: nowISO() };
+      state.moduloItems.push(item);
+      await saveOne(DB.moduloItems, moduloItemToRow(item));
+    }
+    return ciclo;
+  }
 
   const FRECUENCIA_LABEL = { diaria:'Diaria', semanal:'Semanal', mensual:'Mensual', unica:'Única' };
 
@@ -8134,11 +8206,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     state.modulosAsignados.push(modulo);
     await saveOne(DB.modulosAsignados, moduloAsignadoToRow(modulo));
 
-    for (const it of (modulo.protocolo||[])) {
-      const item = { id: uid(), moduloAsignadoId: modulo.id, item: it.item, descripcion: it.descripcion||'', estado: 'pendiente', createdAt: nowISO() };
-      state.moduloItems.push(item);
-      await saveOne(DB.moduloItems, moduloItemToRow(item));
-    }
+    // Primer ciclo (mes en curso) — los siguientes se abren solos
+    // cuando llegue el mes, mientras el módulo siga vigente.
+    await ensureCicloForPeriodo(modulo.id, periodoActual());
+
     renderPostulaciones();
     renderModulosAsignados();
   }
@@ -8151,8 +8222,15 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     renderPostulaciones();
   }
 
-  /* ── Módulos asignados (admin: aprobación por ítem + remito) ── */
-  const MODASIG_ESTADO_LABEL = { en_progreso:'En progreso', completado:'Completado — listo para remito', aprobado:'Aprobado (remito generado)' };
+  /* ── Módulos asignados (admin: un ciclo por mes, aprobación por
+        ítem dentro de cada ciclo, remito por ciclo) ── */
+  const CICLO_ESTADO_LABEL = { en_progreso:'En progreso', completado:'Completado — listo para remito', aprobado:'Aprobado (remito generado)' };
+
+  function periodoLabel(periodo) {
+    const [y,m] = (periodo||'').split('-');
+    if (!y||!m) return periodo||'';
+    return new Date(Number(y), Number(m)-1, 1).toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+  }
 
   function renderModulosAsignados() {
     const el = document.getElementById('modulosAsignadosListContent');
@@ -8165,45 +8243,49 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     el.innerHTML = modulos.map(m => {
       const s = servicioById(m.servicioId);
       const prest = prestadorById(m.prestadorId);
-      const items = itemsByModuloAsignado(m.id);
-      const aprobados = items.filter(it => it.estado === 'aprobado').length;
-      const estadoColor = m.estado==='aprobado' ? 'green' : m.estado==='completado' ? 'blue' : 'gray';
+      const ciclos = ciclosByModuloAsignado(m.id);
       return '<div class="card" style="margin-bottom:12px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">' +
-          '<div><div style="font-weight:700">'+(prest?.nombre||'—')+'</div>' +
-          '<div style="font-size:13px;color:var(--muted)">'+(s?.titulo||'—')+' · '+aprobados+'/'+items.length+' ítems aprobados</div></div>' +
-          '<span class="badge '+estadoColor+'">'+MODASIG_ESTADO_LABEL[m.estado]+'</span>' +
-        '</div>' +
-        '<div style="display:flex;flex-direction:column;gap:8px">' +
-          items.map(it => {
-            const badge = it.estado==='aprobado' ? '<span class="badge green">✓ Aprobado</span>' : it.estado==='rechazado' ? '<span class="badge red">✕ Rechazado</span>' : '<span class="badge gray">Pendiente</span>';
-            return '<div style="border:1px solid var(--line);border-radius:8px;padding:10px">' +
-              '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
-                '<div><strong style="font-size:13px">'+it.item+'</strong>'+(it.descripcion?' <span style="font-size:12px;color:var(--muted)">— '+it.descripcion+'</span>':'')+'</div>' +
-                badge +
-              '</div>' +
-              (it.evidenciaUrl ? '<div style="margin-top:6px"><a href="'+it.evidenciaUrl+'" target="_blank" style="font-size:12px;color:#1a73e8">🔗 Ver evidencia</a></div>' : '') +
-              (it.evidenciaNota ? '<div style="margin-top:4px;font-size:12px;color:var(--muted)">"'+it.evidenciaNota+'"</div>' : '') +
-              (it.estado==='pendiente' && (it.evidenciaUrl||it.evidenciaNota) ? '<div style="display:flex;gap:6px;margin-top:8px">' +
-                '<button class="btn primary xs" data-action="approve-modulo-item" data-id="'+it.id+'">✓ Aprobar</button>' +
-                '<button class="btn danger xs" data-action="reject-modulo-item" data-id="'+it.id+'">✕ Rechazar</button>' +
-              '</div>' : (it.estado==='pendiente' ? '<div style="font-size:11px;color:var(--muted);margin-top:6px">Esperando evidencia del prestador.</div>' : '')) +
-            '</div>';
-          }).join('') +
-        '</div>' +
-        (m.estado==='completado' ? '<div style="margin-top:12px"><button class="btn primary" data-action="generar-remito-asignado" data-id="'+m.id+'">📄 Generar remito</button></div>' : '') +
-        (m.estado==='aprobado' ? '<div style="margin-top:12px;font-size:12px;color:var(--muted)">Remito #'+m.remitoNumero+'</div>' : '') +
+        '<div style="margin-bottom:10px"><div style="font-weight:700">'+(prest?.nombre||'—')+'</div>' +
+        '<div style="font-size:13px;color:var(--muted)">'+(s?.titulo||'—')+(s?.fechaFin?' · hasta '+s.fechaFin:'')+'</div></div>' +
+        (ciclos.length ? ciclos.map(c => {
+          const items = itemsByCiclo(c.id);
+          const aprobados = items.filter(it => it.estado === 'aprobado').length;
+          const estadoColor = c.estado==='aprobado' ? 'green' : c.estado==='completado' ? 'blue' : 'gray';
+          return '<div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:#fafaf8">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+              '<strong style="font-size:13px;text-transform:capitalize">📅 '+periodoLabel(c.periodo)+'</strong>' +
+              '<span class="badge '+estadoColor+'">'+CICLO_ESTADO_LABEL[c.estado]+' · '+aprobados+'/'+items.length+'</span>' +
+            '</div>' +
+            items.map(it => {
+              const badge = it.estado==='aprobado' ? '<span class="badge green">✓ Aprobado</span>' : it.estado==='rechazado' ? '<span class="badge red">✕ Rechazado</span>' : '<span class="badge gray">Pendiente</span>';
+              return '<div style="border-top:1px solid var(--line);padding:8px 0">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
+                  '<div><strong style="font-size:13px">'+it.item+'</strong>'+(it.descripcion?' <span style="font-size:12px;color:var(--muted)">— '+it.descripcion+'</span>':'')+'</div>' +
+                  badge +
+                '</div>' +
+                (it.evidenciaUrl ? '<div style="margin-top:6px"><a href="'+it.evidenciaUrl+'" target="_blank" style="font-size:12px;color:#1a73e8">🔗 Ver evidencia</a></div>' : '') +
+                (it.evidenciaNota ? '<div style="margin-top:4px;font-size:12px;color:var(--muted)">"'+it.evidenciaNota+'"</div>' : '') +
+                (it.estado==='pendiente' && (it.evidenciaUrl||it.evidenciaNota) ? '<div style="display:flex;gap:6px;margin-top:8px">' +
+                  '<button class="btn primary xs" data-action="approve-modulo-item" data-id="'+it.id+'">✓ Aprobar</button>' +
+                  '<button class="btn danger xs" data-action="reject-modulo-item" data-id="'+it.id+'">✕ Rechazar</button>' +
+                '</div>' : (it.estado==='pendiente' ? '<div style="font-size:11px;color:var(--muted);margin-top:6px">Esperando evidencia del prestador.</div>' : '')) +
+              '</div>';
+            }).join('') +
+            (c.estado==='completado' ? '<div style="margin-top:10px"><button class="btn primary xs" data-action="generar-remito-asignado" data-id="'+c.id+'">📄 Generar remito de '+periodoLabel(c.periodo)+'</button></div>' : '') +
+            (c.estado==='aprobado' ? '<div style="margin-top:10px;font-size:12px;color:var(--muted)">Remito #'+c.remitoNumero+'</div>' : '') +
+          '</div>';
+        }).join('') : '<div class="empty">Todavía no se abrió el primer ciclo.</div>') +
       '</div>';
     }).join('');
   }
 
-  async function checkModuloCompletion(moduloAsignadoId) {
-    const modulo = moduloAsignadoById(moduloAsignadoId);
-    if (!modulo || modulo.estado !== 'en_progreso') return;
-    const items = itemsByModuloAsignado(moduloAsignadoId);
+  async function checkCicloCompletion(cicloId) {
+    const ciclo = cicloById(cicloId);
+    if (!ciclo || ciclo.estado !== 'en_progreso') return;
+    const items = itemsByCiclo(cicloId);
     if (items.length && items.every(it => it.estado === 'aprobado')) {
-      modulo.estado = 'completado';
-      await saveOne(DB.modulosAsignados, moduloAsignadoToRow(modulo));
+      ciclo.estado = 'completado';
+      await saveOne(DB.moduloCiclos, moduloCicloToRow(ciclo));
     }
   }
 
@@ -8212,7 +8294,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     if (!it) return;
     it.estado = 'aprobado';
     await saveOne(DB.moduloItems, moduloItemToRow(it));
-    await checkModuloCompletion(it.moduloAsignadoId);
+    await checkCicloCompletion(it.cicloId);
     renderModulosAsignados();
   }
   async function rejectModuloItem(itemId) {
@@ -8225,14 +8307,15 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     renderModulosAsignados();
   }
 
-  async function generarRemitoModuloAsignado(moduloAsignadoId) {
-    const modulo = moduloAsignadoById(moduloAsignadoId);
-    if (!modulo || modulo.estado !== 'completado') return;
-    const s = servicioById(modulo.servicioId);
-    const prest = prestadorById(modulo.prestadorId);
-    const items = itemsByModuloAsignado(moduloAsignadoId);
+  async function generarRemitoModuloAsignado(cicloId) {
+    const ciclo = cicloById(cicloId);
+    if (!ciclo || ciclo.estado !== 'completado') return;
+    const modulo = moduloAsignadoById(ciclo.moduloAsignadoId);
+    const s = modulo && servicioById(modulo.servicioId);
+    const prest = modulo && prestadorById(modulo.prestadorId);
+    const items = itemsByCiclo(cicloId);
     const hoy = new Date();
-    const remitoNum = hoy.getFullYear()+String(hoy.getMonth()+1).padStart(2,'0')+String(hoy.getDate()).padStart(2,'0')+'-'+modulo.id.slice(0,4).toUpperCase();
+    const remitoNum = hoy.getFullYear()+String(hoy.getMonth()+1).padStart(2,'0')+String(hoy.getDate()).padStart(2,'0')+'-'+ciclo.id.slice(0,4).toUpperCase();
     const monto = (s?.horasModulo||0) * (s?.precioHora||0) * (s?.cantidadPorPeriodo||1);
 
     const rows = items.map(it =>
@@ -8242,7 +8325,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     document.getElementById('remitoContent').innerHTML =
       '<div class="remito-header">' +
-        '<div><div class="remito-org">🌿 E-Mood</div><div class="remito-org-sub">Remito de módulo</div></div>' +
+        '<div><div class="remito-org">🌿 E-Mood</div><div class="remito-org-sub">Remito de módulo — '+periodoLabel(ciclo.periodo)+'</div></div>' +
         '<div class="remito-num"><div class="remito-num-label">Remito</div><div class="remito-num-val">#'+remitoNum+'</div></div>' +
       '</div>' +
       '<div class="remito-prest-section">' +
@@ -8257,10 +8340,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     document.getElementById('remitoModal').classList.add('open');
 
-    modulo.estado = 'aprobado';
-    modulo.remitoNumero = remitoNum;
-    modulo.remitoFecha = nowISO();
-    await saveOne(DB.modulosAsignados, moduloAsignadoToRow(modulo));
+    ciclo.estado = 'aprobado';
+    ciclo.remitoNumero = remitoNum;
+    ciclo.remitoFecha = nowISO();
+    await saveOne(DB.moduloCiclos, moduloCicloToRow(ciclo));
     renderModulosAsignados();
   }
 
