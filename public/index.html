@@ -6953,6 +6953,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         <div class="owner-topbar-user">
           <div class="owner-avatar">${initials(prest.nombre)}</div>
           <span class="owner-name">${prest.nombre}</span>
+          <button class="btn secondary small" onclick="openMisDatosModal('${prest.id}')">✏️ Mis datos</button>
           <button class="btn secondary small" onclick="doLogout()">Salir</button>
         </div>
       </div>
@@ -8401,6 +8402,56 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     it.estado = 'pendiente';
     await saveOne(DB.moduloItems, moduloItemToRow(it));
     alert('Evidencia enviada. La organización la va a revisar.');
+  }
+
+  function openMisDatosModal(prestadorId) {
+    const p = (state.prestadores||[]).find(x => x.id === prestadorId);
+    if (!p) return;
+    openModal('Mis datos', 'Tipo de contrato y documentación.', `
+      <form id="misDatosForm" class="form-grid">
+        <div class="field full"><label>Contacto (teléfono o email alternativo)</label><input name="contacto" value="${p.contacto||''}"></div>
+        <div class="field full"><label>Tipo de contrato</label><select name="tipoContrato">
+          <option value="">Sin especificar</option>
+          ${['Monotributo','Relación de dependencia','Autónomo','Prestación de servicios','Otro'].map(t=>'<option value="'+t+'"'+(p.tipoContrato===t?' selected':'')+'>'+t+'</option>').join('')}
+        </select></div>
+        <div class="field full">
+          <label>📎 Documento de contrato (ej: constancia de monotributo)</label>
+          <input type="file" name="docContrato" accept="image/*,application/pdf">
+          ${p.docContratoUrl ? '<div style="margin-top:6px"><a href="'+p.docContratoUrl+'" target="_blank" style="font-size:12px;color:#1a73e8">🔗 Ver documento actual</a></div>' : ''}
+        </div>
+        <div class="field full"><button class="btn primary" type="submit">Guardar</button></div>
+      </form>
+      <div id="misDatosError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>
+    `);
+    document.getElementById('misDatosForm').onsubmit = async e => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button[type="submit"]');
+      const errEl = document.getElementById('misDatosError');
+      errEl.style.display = 'none';
+      const data = Object.fromEntries(new FormData(e.target).entries());
+      const docFile = e.target.querySelector('[name="docContrato"]')?.files?.[0];
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      try {
+        let docContratoUrl = p.docContratoUrl || '';
+        if (docFile) {
+          const ext = (docFile.name.split('.').pop() || 'pdf').toLowerCase();
+          const uploaded = await sbUpload('prestador-docs', p.id + '/contrato_' + Date.now() + '.' + ext, docFile);
+          if (!uploaded) throw new Error('No se pudo subir el archivo. Probá de nuevo.');
+          docContratoUrl = uploaded;
+        }
+        p.contacto = (data.contacto||'').trim();
+        p.tipoContrato = data.tipoContrato||'';
+        p.docContratoUrl = docContratoUrl;
+        await saveOne(DB.prestadores, prestadorToRow(p));
+        closeModal();
+        renderPrestadorPublicView(p.id);
+      } catch(err) {
+        errEl.textContent = err.message || 'No se pudo guardar.';
+        errEl.style.display = 'block';
+      } finally {
+        btn.disabled = false; btn.textContent = 'Guardar';
+      }
+    };
   }
 
   /* ─── INIT ───────────────────────────────────────────── */
