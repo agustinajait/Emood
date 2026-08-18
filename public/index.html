@@ -2224,6 +2224,8 @@
       tiene_dni: !!p.tieneDni,
       concurso_emprendedores: !!p.concursoEmprendedores,
       drive_link: p.driveLink||'',
+      tipo_contrato: p.tipoContrato||'',
+      doc_contrato_url: p.docContratoUrl||'',
       created_at: p.createdAt||new Date().toISOString(),
     };
   }
@@ -2243,6 +2245,8 @@
       tieneDni: !!r.tiene_dni,
       concursoEmprendedores: !!r.concurso_emprendedores,
       driveLink: r.drive_link||'',
+      tipoContrato: r.tipo_contrato||'',
+      docContratoUrl: r.doc_contrato_url||'',
       createdAt: r.created_at||'',
     };
   }
@@ -4825,6 +4829,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         p.tieneCuil  ? '<span class="badge green" style="font-size:10px">✓ CUIL</span>'   : '<span class="badge gray" style="font-size:10px">✗ CUIL</span>',
         p.tieneDni   ? '<span class="badge green" style="font-size:10px">✓ DNI</span>'    : '<span class="badge gray" style="font-size:10px">✗ DNI</span>',
         p.concursoEmprendedores ? '<span class="badge blue" style="font-size:10px">🏆 Concurso</span>' : '',
+        p.tipoContrato ? '<span class="badge blue" style="font-size:10px">📄 '+p.tipoContrato+'</span>' : '',
       ].join(' ');
 
       return [
@@ -4915,8 +4920,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
               p.tieneCuil   ? '<span class="badge green">✓ CUIL</span>'   : '<span class="badge gray">✗ CUIL</span>',
               p.tieneDni    ? '<span class="badge green">✓ DNI</span>'    : '<span class="badge gray">✗ DNI</span>',
               p.concursoEmprendedores ? '<span class="badge blue">🏆 Concurso</span>' : '',
+              p.tipoContrato ? '<span class="badge blue">📄 '+p.tipoContrato+'</span>' : '',
               p.contacto ? '<span class="challenge-meta-tag">📱 '+p.contacto+'</span>' : '',
               p.driveLink ? '<a href="'+p.driveLink+'" target="_blank" class="challenge-meta-tag" style="background:#e8f0fe;color:#1a73e8;text-decoration:none">📁 Documentación</a>' : '',
+              p.docContratoUrl ? '<a href="'+p.docContratoUrl+'" target="_blank" class="challenge-meta-tag" style="background:#e8f0fe;color:#1a73e8;text-decoration:none">📎 Doc. de contrato</a>' : '',
             '</div>',
           '</div>',
           '<div style="display:flex;gap:8px;flex-shrink:0">',
@@ -5990,6 +5997,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       '<div class="field"><label>Ecosistema</label><select name="ecosistemaId"><option value="">Sin ecosistema</option>' + (state.ecosistemas||[]).map(e=>'<option value="'+e.id+'"' +(e.id===existing?.ecosistemaId?' selected':'')+'>'+e.nombre+'</option>').join('')+'</select></div>' +
       '<div class="field"><label>Agencia</label><select name="agencyId"><option value="">Sin agencia</option>' + state.agencies.map(a=>'<option value="'+a.id+'"' +(a.id===existing?.agencyId?' selected':'')+'>'+a.name+'</option>').join('')+'</select></div>' +
       '<div class="field"><label>Estado</label><select name="activo"><option value="true"' +(existing?.activo!==false?' selected':'')+'>Activo</option><option value="false"' +(existing?.activo===false?' selected':'')+'>Inactivo</option></select></div>' +
+      '<div class="field"><label>Tipo de contrato</label><select name="tipoContrato"><option value="">Sin especificar</option>' +
+        ['Monotributo','Relación de dependencia','Autónomo','Prestación de servicios','Otro'].map(t=>'<option value="'+t+'"'+(existing?.tipoContrato===t?' selected':'')+'>'+t+'</option>').join('') +
+      '</select></div>' +
       '<div class="field full"><label>Contacto (email o teléfono)</label><input name="contacto" value="' + (existing?.contacto||'')+'"></div>' +
       '<div class="field full"><label>📁 Carpeta Drive (documentación)</label><input type="url" name="driveLink" value="' + (existing?.driveLink||'') + '" placeholder="https://drive.google.com/…"><div style="font-size:11px;color:var(--muted);margin-top:4px">Pegá el link de la carpeta con DNI, CUIL, seguro y demás documentos.</div></div>' +
 
@@ -6005,7 +6015,13 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       '<input type="checkbox" name="tieneDni" value="true" ' +(existing?.tieneDni?'checked':'')+' style="width:16px;height:16px;accent-color:var(--primary)"> 🪪 DNI presentado</label>' +
       '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff">' +
       '<input type="checkbox" name="concursoEmprendedores" value="true" ' +(existing?.concursoEmprendedores?'checked':'')+' style="width:16px;height:16px;accent-color:var(--primary)"> 🏆 Concurso de emprendedores</label>' +
-      '</div></div>' +
+      '</div>' +
+      '<div style="margin-top:12px">' +
+        '<label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">📎 Adjuntar documento de contrato (ej: constancia de monotributo)</label>' +
+        '<input type="file" name="docContrato" accept="image/*,application/pdf" style="font-size:13px">' +
+        (existing?.docContratoUrl ? '<div style="margin-top:6px"><a href="'+existing.docContratoUrl+'" target="_blank" style="font-size:12px;color:#1a73e8">🔗 Ver documento actual</a></div>' : '') +
+      '</div>' +
+      '</div>' +
 
       // Módulos
       '<div class="field full" style="margin-top:4px">' +
@@ -6094,7 +6110,20 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     document.getElementById('prestadorForm').onsubmit = async e => {
       e.preventDefault();
+      const submitBtn = e.target.querySelector('button[type="submit"]');
       const data = Object.fromEntries(new FormData(e.target).entries());
+      const prestadorId = existing ? existing.id : uid();
+
+      let docContratoUrl = existing?.docContratoUrl || '';
+      const docFile = e.target.querySelector('[name="docContrato"]')?.files?.[0];
+      if (docFile) {
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Subiendo documento…'; }
+        const ext = (docFile.name.split('.').pop() || 'pdf').toLowerCase();
+        const uploaded = await sbUpload('prestador-docs', prestadorId + '/contrato_' + Date.now() + '.' + ext, docFile);
+        if (uploaded) docContratoUrl = uploaded;
+        if (submitBtn) submitBtn.textContent = existing ? 'Actualizar prestador' : 'Registrar prestador';
+      }
+
       const fields = {
         nombre: data.nombre.trim(),
         rol: (data.rol||'').trim(),
@@ -6108,18 +6137,17 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         tieneDni: !!data.tieneDni,
         concursoEmprendedores: !!data.concursoEmprendedores,
         driveLink: (data.driveLink||'').trim(),
+        tipoContrato: data.tipoContrato||'',
+        docContratoUrl,
       };
-      let prestadorId;
       if (existing) {
         Object.assign(existing, fields);
         await saveOne(DB.prestadores, prestadorToRow(existing));
-        prestadorId = existing.id;
       } else {
-        const p = { id:uid(), ...fields, createdAt:nowISO() };
+        const p = { id: prestadorId, ...fields, createdAt:nowISO() };
         if (!state.prestadores) state.prestadores = [];
         state.prestadores.push(p);
         await saveOne(DB.prestadores, prestadorToRow(p));
-        prestadorId = p.id;
       }
       // Save new modules (only for new prestador or added ones)
       const existingModIds = (existing ? modulosByPrestador(prestadorId).map(m=>m.id) : []);
