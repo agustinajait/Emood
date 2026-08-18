@@ -2039,6 +2039,28 @@
     });
   }
 
+  // Alta de organización pendiente de confirmar el email: se guarda al
+  // enviar el formulario de signup y se retoma en el primer login exitoso
+  // (cuando Supabase exige confirmar el email antes de dar una sesión).
+  const PENDING_ORG_KEY = 'e-mood-huehaci_pending_org_v1';
+  function savePendingOrgSignup(email, orgName, adminName) {
+    try { localStorage.setItem(PENDING_ORG_KEY, JSON.stringify({ email, orgName, adminName })); } catch(_) {}
+  }
+  function clearPendingOrgSignup() {
+    try { localStorage.removeItem(PENDING_ORG_KEY); } catch(_) {}
+  }
+  // Si hay una organización pendiente para este email, la crea ahora
+  // (requiere sesión activa) y devuelve el perfil resultante.
+  async function finishPendingOrgSignup(email) {
+    let pending = null;
+    try { pending = JSON.parse(localStorage.getItem(PENDING_ORG_KEY) || 'null'); } catch(_) {}
+    if (!pending || pending.email !== email) return null;
+    const rpc = await callRpc('create_organization_and_admin', { org_name: pending.orgName, admin_name: pending.adminName });
+    if (rpc.error) return null;
+    clearPendingOrgSignup();
+    return fetchMyProfile();
+  }
+
   async function sbFetch(path, options) {
     try {
       // Always merge headers explicitly to avoid spread override issues
@@ -2344,7 +2366,8 @@
     btn.disabled = true; btn.textContent = 'Ingresando…';
     try {
       await authSignIn(email, pw);
-      const profile = await fetchMyProfile();
+      let profile = await fetchMyProfile();
+      if (!profile) profile = await finishPendingOrgSignup(email);
       if (!profile) throw new Error('No se encontró una organización para esta cuenta.');
       if (profile.role !== 'admin') throw new Error('Esta cuenta no tiene permisos de administrador.');
       sessionStorage.setItem('hh_role','admin');
@@ -2377,16 +2400,19 @@
     }
     btn.disabled = true; btn.textContent = 'Creando…';
     try {
-      const signupData = await authSignUp(email, pw);
+      // Guardamos los datos de la organización ANTES de crear la cuenta:
+      // si Supabase exige confirmar el email, todavía no hay sesión para
+      // llamar al RPC, y este dato se retoma en el próximo login (ver
+      // finishPendingOrgSignup) para terminar de crear la organización.
+      savePendingOrgSignup(email, orgName, adminName);
+      await authSignUp(email, pw);
       if (!authSession?.access_token) {
         // Confirmación de email requerida: no hay sesión todavía para crear la organización.
-        okEl.textContent = 'Te enviamos un correo para confirmar tu cuenta. Confirmalo y después iniciá sesión para terminar de crear tu organización.';
+        okEl.textContent = 'Te enviamos un correo para confirmar tu cuenta. Confirmalo y después volvé acá e iniciá sesión — ahí terminamos de crear tu organización.';
         okEl.style.display = 'block';
         return;
       }
-      const rpc = await callRpc('create_organization_and_admin', { org_name: orgName, admin_name: adminName });
-      if (rpc.error) throw new Error(rpc.error);
-      const profile = await fetchMyProfile();
+      const profile = await finishPendingOrgSignup(email);
       if (!profile) throw new Error('La organización se creó pero no se pudo cargar tu perfil. Recargá la página e iniciá sesión.');
       sessionStorage.setItem('hh_role','admin');
       currentRole = 'admin';
