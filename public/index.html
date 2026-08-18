@@ -2675,6 +2675,8 @@
       deadline: s.deadline||null,
       protocolo: JSON.stringify(s.protocolo||[]),
       docs_requeridos: JSON.stringify(s.docsRequeridos||[]),
+      tipo_contrato: s.tipoContrato||'',
+      doc_adjunto_url: s.docAdjuntoUrl||'',
       estado: s.estado||'activo',
       created_at: s.createdAt||nowISO(),
     };
@@ -2690,6 +2692,8 @@
       deadline: r.deadline||'',
       protocolo: (()=>{ try { return JSON.parse(r.protocolo||'[]'); } catch(_){ return []; } })(),
       docsRequeridos: (()=>{ try { return JSON.parse(r.docs_requeridos||'[]'); } catch(_){ return []; } })(),
+      tipoContrato: r.tipo_contrato||'',
+      docAdjuntoUrl: r.doc_adjunto_url||'',
       estado: r.estado||'activo',
       createdAt: r.created_at||'',
     };
@@ -7109,7 +7113,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
               '<span class="challenge-meta-tag">'+(FRECUENCIA_LABEL[s.frecuencia]||s.frecuencia)+' × '+(s.cantidadPorPeriodo||1)+'</span>' +
               (s.fechaInicio?'<span class="challenge-meta-tag">📅 '+s.fechaInicio+(s.fechaFin?' a '+s.fechaFin:'')+'</span>':'') +
               (s.deadline?'<span class="challenge-meta-tag">⏱ vence '+s.deadline+'</span>':'') +
+              (s.tipoContrato?'<span class="challenge-meta-tag" style="background:#fffbeb;color:#92400e">📄 '+s.tipoContrato+'</span>':'') +
             '</div>' +
+            (s.docAdjuntoUrl?'<a href="'+s.docAdjuntoUrl+'" target="_blank" style="display:inline-block;margin-bottom:10px;font-size:12px;color:#1a73e8">📎 Ver documento del contrato</a><br>':'') +
             '<button class="btn primary small" data-action="postular-servicio" data-id="'+prest.id+'" data-sid="'+s.id+'">Postularme</button>' +
           '</div>';
         }).join('') + '</div>'
@@ -8059,6 +8065,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             (pagoMensual?'<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534">≈ $'+pagoMensual+'/mes c/u</span>':'') +
             '<span class="challenge-meta-tag">📋 '+(s.protocolo||[]).length+' ítems</span>' +
             (postCount?'<span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">👥 '+postCount+' postulantes</span>':'') +
+            (s.tipoContrato?'<span class="challenge-meta-tag" style="background:#fffbeb;color:#92400e">📄 '+s.tipoContrato+'</span>':'') +
+            (s.docAdjuntoUrl?'<a href="'+s.docAdjuntoUrl+'" target="_blank" class="challenge-meta-tag" style="background:#e8f0fe;color:#1a73e8;text-decoration:none">📎 Documento</a>':'') +
           '</div>' +
           '<div style="display:flex;gap:8px">' +
             '<button class="btn secondary small" data-action="edit-servicio" data-id="'+s.id+'">Editar</button>' +
@@ -8100,6 +8108,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '<div class="field"><label>Horas por módulo</label><input type="number" min="0" step="0.5" name="horasModulo" value="'+(existing?.horasModulo??'')+'"></div>' +
         '<div class="field"><label>Precio por hora ($)</label><input type="number" min="0" step="1" name="precioHora" value="'+(existing?.precioHora??'')+'"></div>' +
         '<div class="field full"><label>Documentos requeridos (separados por coma)</label><input name="docsRequeridos" placeholder="DNI, CUIL, Seguro" value="'+((existing?.docsRequeridos||[]).join(', '))+'"></div>' +
+        '<div class="field full"><label>Tipo de contrato de la prestación</label><select name="tipoContrato"><option value="">Sin especificar</option>' +
+          ['Monotributo','Relación de dependencia','Autónomo','Prestación de servicios','Otro'].map(t=>'<option value="'+t+'"'+(existing?.tipoContrato===t?' selected':'')+'>'+t+'</option>').join('') +
+        '</select><div style="font-size:11px;color:var(--muted);margin-top:3px">Bajo qué figura se contrata a quien haga este módulo.</div></div>' +
+        '<div class="field full">' +
+          '<label>📎 Documento adjunto (ej: modelo de contrato/monotributo)</label>' +
+          '<input type="file" name="docAdjunto" accept="image/*,application/pdf">' +
+          (existing?.docAdjuntoUrl ? '<div style="margin-top:6px"><a href="'+existing.docAdjuntoUrl+'" target="_blank" style="font-size:12px;color:#1a73e8">🔗 Ver documento actual</a></div>' : '') +
+        '</div>' +
         '<div class="field full" style="margin-top:4px">' +
           '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">📋 Protocolo de entregables</div>' +
           '<div id="protocoloItemsList">'+renderProtocoloItems()+'</div>' +
@@ -8130,29 +8146,36 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     document.getElementById('servicioForm').onsubmit = async e => {
       e.preventDefault();
+      const submitBtn = e.target.querySelector('button[type="submit"]');
       const data = Object.fromEntries(new FormData(e.target).entries());
       const docsRequeridos = (data.docsRequeridos||'').split(',').map(s=>s.trim()).filter(Boolean);
+      const servicioId = existing ? existing.id : uid();
+
+      let docAdjuntoUrl = existing?.docAdjuntoUrl || '';
+      const docFile = e.target.querySelector('[name="docAdjunto"]')?.files?.[0];
+      if (docFile) {
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Subiendo documento…'; }
+        const ext = (docFile.name.split('.').pop() || 'pdf').toLowerCase();
+        const uploaded = await sbUpload('modulo-docs', servicioId + '/adjunto_' + Date.now() + '.' + ext, docFile);
+        if (uploaded) docAdjuntoUrl = uploaded;
+        if (submitBtn) submitBtn.textContent = existing ? 'Actualizar módulo' : 'Publicar módulo';
+      }
+
+      const fields = {
+        titulo: data.titulo.trim(), descripcion: (data.descripcion||'').trim(),
+        frecuencia: data.frecuencia, deadline: data.deadline||'',
+        cupos: Math.max(1, Number(data.cupos||1)), cantidadPorPeriodo: Math.max(1, Number(data.cantidadPorPeriodo||1)),
+        fechaInicio: data.fechaInicio||'', fechaFin: data.fechaFin||'',
+        ecosistemaId: data.ecosistemaId||null,
+        horasModulo: Number(data.horasModulo||0), precioHora: Number(data.precioHora||0),
+        docsRequeridos, protocolo: tempProtocolo,
+        tipoContrato: data.tipoContrato||'', docAdjuntoUrl,
+      };
       if (existing) {
-        Object.assign(existing, {
-          titulo: data.titulo.trim(), descripcion: (data.descripcion||'').trim(),
-          frecuencia: data.frecuencia, deadline: data.deadline||'',
-          cupos: Math.max(1, Number(data.cupos||1)), cantidadPorPeriodo: Math.max(1, Number(data.cantidadPorPeriodo||1)),
-          fechaInicio: data.fechaInicio||'', fechaFin: data.fechaFin||'',
-          ecosistemaId: data.ecosistemaId||null,
-          horasModulo: Number(data.horasModulo||0), precioHora: Number(data.precioHora||0),
-          docsRequeridos, protocolo: tempProtocolo, estado: data.estado || existing.estado,
-        });
+        Object.assign(existing, fields, { estado: data.estado || existing.estado });
         await saveOne(DB.servicios, servicioToRow(existing));
       } else {
-        const s = {
-          id: uid(), titulo: data.titulo.trim(), descripcion: (data.descripcion||'').trim(),
-          frecuencia: data.frecuencia, deadline: data.deadline||'',
-          cupos: Math.max(1, Number(data.cupos||1)), cantidadPorPeriodo: Math.max(1, Number(data.cantidadPorPeriodo||1)),
-          fechaInicio: data.fechaInicio||'', fechaFin: data.fechaFin||'',
-          ecosistemaId: data.ecosistemaId||null,
-          horasModulo: Number(data.horasModulo||0), precioHora: Number(data.precioHora||0),
-          docsRequeridos, protocolo: tempProtocolo, estado: 'activo', createdAt: nowISO(),
-        };
+        const s = { id: servicioId, ...fields, estado: 'activo', createdAt: nowISO() };
         state.servicios.push(s);
         await saveOne(DB.servicios, servicioToRow(s));
       }
