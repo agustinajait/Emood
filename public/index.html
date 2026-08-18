@@ -8634,9 +8634,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function openMisDatosModal(prestadorId) {
     const p = (state.prestadores||[]).find(x => x.id === prestadorId);
     if (!p) return;
-    openModal('Mis datos', 'Tipo de contrato y documentación.', `
+    openModal('Mis datos', 'Contacto, perfil en OportunAI, tipo de contrato y documentación.', `
       <form id="misDatosForm" class="form-grid">
         <div class="field full"><label>Contacto (teléfono o email alternativo)</label><input name="contacto" value="${p.contacto||''}"></div>
+        <div class="field full"><label>🔗 Perfil en OportunAI</label><input type="url" name="oportunaiLink" value="${p.oportunaiLink||''}" placeholder="https://oportunai.com/…"></div>
         <div class="field full"><label>Tipo de contrato</label><select name="tipoContrato">
           <option value="">Sin especificar</option>
           ${['Monotributo','Relación de dependencia','Autónomo','Prestación de servicios','Otro'].map(t=>'<option value="'+t+'"'+(p.tipoContrato===t?' selected':'')+'>'+t+'</option>').join('')}
@@ -8667,6 +8668,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           docContratoUrl = uploaded;
         }
         p.contacto = (data.contacto||'').trim();
+        p.oportunaiLink = (data.oportunaiLink||'').trim();
         p.tipoContrato = data.tipoContrato||'';
         p.docContratoUrl = docContratoUrl;
         await saveOne(DB.prestadores, prestadorToRow(p));
