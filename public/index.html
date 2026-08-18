@@ -1623,8 +1623,6 @@
       <nav class="nav" id="navButtons">
         <div class="nav-section-label">General</div>
         <button class="active" data-page="dashboard"><span class="nav-icon">◉</span>Dashboard</button>
-        <button data-page="challenges"><span class="nav-icon">⚡</span>Challenges<span class="nav-badge" id="unreadBadge" style="display:none"></span></button>
-        <button data-page="checkins"><span class="nav-icon">✓</span>Check-ins</button>
 
         <div class="nav-section-label">Operaciones</div>
         <button data-page="agencies"><span class="nav-icon">⊞</span>Agencias</button>
@@ -1669,9 +1667,6 @@
           <h2>Dashboard general</h2>
           <p>Vista ejecutiva del estado del holding.</p>
         </div>
-        <div class="actions">
-          <button class="btn primary" id="openChallengeFromDashboard">＋ Nuevo challenge</button>
-        </div>
       </div>
       <div class="stats" id="dashboardStats"></div>
       <div class="grid-2">
@@ -1694,81 +1689,6 @@
           <div class="list" id="executiveSummary"></div>
         </div>
       </div>
-    </section>
-
-    <!-- CHALLENGES -->
-    <section class="page" id="page-challenges">
-      <div class="topbar">
-        <div class="topbar-left">
-          <h2>Challenges</h2>
-          <p>Gestión de challenges por agencia y socio responsable.</p>
-        </div>
-        <div class="actions">
-          <button class="btn primary" id="openChallengeBtn">＋ Nuevo challenge</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="search-bar">
-          <span class="search-icon">🔍</span>
-          <input type="text" id="challengeSearch" placeholder="Buscar challenge por título, agencia o socio…"
-            oninput="renderChallenges()">
-        </div>
-        <div class="toolbar">
-          <select id="challengeAgencyFilter"></select>
-          <select id="challengeOwnerFilter"><option value="all">Todos los socios</option></select>
-          <select id="challengeStatusFilter">
-            <option value="all">Todos los estados</option>
-            <option value="en curso">En curso</option>
-            <option value="riesgo">Riesgo</option>
-            <option value="bloqueado">Bloqueado</option>
-            <option value="logrado">Logrado</option>
-          </select>
-          <select id="challengeValidationFilter">
-            <option value="all">Toda validación</option>
-            <option value="validado">Validados</option>
-            <option value="pendiente">Pendientes</option>
-            <option value="rechazado">Rechazados</option>
-          </select>
-          <select id="challengePeriodFilter">
-            <option value="all">Todos los niveles</option>
-            <option value="diario">Diario</option>
-            <option value="semanal">Semanal</option>
-            <option value="mensual">Mensual</option>
-            <option value="trimestral">Trimestral</option>
-            <option value="anual">Anual</option>
-            <option value="unico">Único</option>
-          </select>
-        </div>
-        <div id="challengesTable"></div>
-      </div>
-    </section>
-
-    <!-- CHALLENGE DETAIL -->
-    <section class="page" id="page-challenge-detail">
-      <div class="topbar">
-        <div class="topbar-left">
-          <h2>Detalle del challenge</h2>
-          <p>Seguimiento, check-ins y certificación.</p>
-        </div>
-        <div class="actions">
-          <button class="btn secondary" id="backToChallengesBtn">← Volver</button>
-        </div>
-      </div>
-      <div id="challengeDetailContent"></div>
-    </section>
-
-    <!-- CHECK-INS -->
-    <section class="page" id="page-checkins">
-      <div class="topbar">
-        <div class="topbar-left">
-          <h2>Check-ins</h2>
-          <p>Registro semanal de avances, bloqueos y próximos pasos.</p>
-        </div>
-        <div class="actions">
-          <button class="btn primary" id="openCheckinBtn">＋ Nuevo check-in</button>
-        </div>
-      </div>
-      <div class="card"><div class="table-wrap" id="checkinsTable"></div></div>
     </section>
 
     <!-- IMPACTO -->
@@ -1834,6 +1754,11 @@
           <div class="search-bar">
             <span class="search-icon">🔍</span>
             <input type="text" id="prestadorSearch" placeholder="Buscar por nombre, rol o agencia…" oninput="renderPrestadores()">
+          </div>
+          <div class="toolbar">
+            <select id="prestadorEcosistemaFilter" onchange="renderPrestadores()">
+              <option value="all">Todos los ecosistemas</option>
+            </select>
           </div>
           <div id="prestadoresTable"></div>
         </div>
@@ -2266,6 +2191,7 @@
       nombre: p.nombre||'',
       rol: p.rol||'',
       agency_id: p.agencyId||null,
+      ecosistema_id: p.ecosistemaId||null,
       activo: p.activo !== false,
       contacto: p.contacto||'',
       notas: p.notas||'',
@@ -2284,6 +2210,7 @@
       nombre: r.nombre||'',
       rol: r.rol||'',
       agencyId: r.agency_id||null,
+      ecosistemaId: r.ecosistema_id||null,
       activo: r.activo !== false,
       contacto: r.contacto||'',
       notas: r.notas||'',
@@ -3949,8 +3876,6 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     fillFilters();
     fillMesFilters();
     renderDashboard();
-    renderChallenges();
-    renderCheckins();
     renderProducts();
     renderCertifications();
     renderAgencies();
@@ -4699,18 +4624,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   document.getElementById('exportLiquidacionBtn')?.addEventListener('click', ()=>exportLiquidacionCSV());
   document.getElementById('seguimientoMesFilter')?.addEventListener('change', ()=>renderSeguimiento());
   document.getElementById('liquidacionMesFilter')?.addEventListener('change', ()=>renderLiquidacion());
-  document.getElementById('openChallengeBtn').onclick = ()=>openChallengeModal();
-  document.getElementById('openChallengeFromDashboard').onclick = ()=>openChallengeModal();
-  document.getElementById('openCheckinBtn').onclick = ()=>openCheckinModal();
   document.getElementById('openProductBtn').onclick = ()=>openProductModal();
   document.getElementById('openCertificationBtn').onclick = ()=>openCertificationModal();
   document.getElementById('printBtn').onclick = ()=>window.print();
-  document.getElementById('backToChallengesBtn').onclick = ()=>{ currentChallengeId=null; showPage('challenges'); };
-  document.getElementById('challengeAgencyFilter').onchange = ()=>renderChallenges();
-  document.getElementById('challengeOwnerFilter').onchange = ()=>renderChallenges();
-  document.getElementById('challengeStatusFilter').onchange = ()=>renderChallenges();
-  document.getElementById('challengePeriodFilter').onchange = ()=>renderChallenges();
-  document.getElementById('challengeValidationFilter')?.addEventListener('change', ()=>renderChallenges());
   document.getElementById('ownerPreviewBtn').onclick = ()=>{
     const owner = document.getElementById('ownerPreviewSelect').value||'';
     if (!owner) return;
@@ -4783,9 +4699,16 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const el = document.getElementById('prestadoresTable');
     if (!el) return;
     const q = (document.getElementById('prestadorSearch')?.value||'').toLowerCase().trim();
+    const ecoFilter = document.getElementById('prestadorEcosistemaFilter');
+    if (ecoFilter && ecoFilter.options.length <= 1) {
+      ecoFilter.innerHTML = '<option value="all">Todos los ecosistemas</option>' +
+        (state.ecosistemas||[]).map(e => '<option value="'+e.id+'">'+e.nombre+'</option>').join('');
+    }
+    const ecoVal = ecoFilter?.value || 'all';
     const mes = new Date().toISOString().slice(0,7);
 
     const list = (state.prestadores||[]).filter(p => {
+      if (ecoVal !== 'all' && p.ecosistemaId !== ecoVal) return false;
       if (!q) return true;
       const ag = state.agencies.find(a => a.id === p.agencyId)?.name||'';
       return [p.nombre, p.rol||'', ag, p.contacto||''].some(v => v.toLowerCase().includes(q));
@@ -4798,6 +4721,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     el.innerHTML = list.map(p => {
       const ag = state.agencies.find(a => a.id === p.agencyId);
+      const eco = (state.ecosistemas||[]).find(e => e.id === p.ecosistemaId);
       const mods = modulosByPrestador(p.id);
       const modsValidados = mods.filter(m => (state.modEvidencias||[]).some(e => e.moduloId===m.id && e.periodo===mes && (e.estado==='cumplido'||e.estado==='certificado'))).length;
       const totalModulos = mods.reduce((s,m) => s+(m.cantidad||1), 0);
@@ -4819,7 +4743,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
                 '<strong style="font-size:16px">'+p.nombre+'</strong>',
                 p.activo !== false ? '<span class="badge green">● Activo</span>' : '<span class="badge gray">– Inactivo</span>',
               '</div>',
-              '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+( p.rol||'Sin rol')+(ag?' · 🏢 '+ag.name:'')+'</div>',
+              '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+( p.rol||'Sin rol')+(eco?' · 🌿 '+eco.nombre:'')+(ag?' · 🏢 '+ag.name:'')+'</div>',
               // Módulos fijos summary
               mods.length ? [
                 '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">',
@@ -4873,6 +4797,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const p = (state.prestadores||[]).find(pr => pr.id === prestadorId);
     if (!p) return;
     const ag = state.agencies.find(a => a.id === p.agencyId);
+    const eco = (state.ecosistemas||[]).find(e => e.id === p.ecosistemaId);
     const mods = modulosByPrestador(prestadorId);
     const mes = new Date().toISOString().slice(0,7);
     const mesLabel = new Date().toLocaleDateString('es-AR',{month:'long',year:'numeric'});
@@ -4892,7 +4817,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">',
           '<div>',
             '<h2 style="margin:0 0 4px;font-family:var(--font-display)">'+p.nombre+'</h2>',
-            '<div style="font-size:14px;color:var(--muted);margin-bottom:10px">'+(p.rol||'Sin rol')+(ag?' · 🏢 '+ag.name:'')+'</div>',
+            '<div style="font-size:14px;color:var(--muted);margin-bottom:10px">'+(p.rol||'Sin rol')+(eco?' · 🌿 '+eco.nombre:'')+(ag?' · 🏢 '+ag.name:'')+'</div>',
             '<div style="display:flex;flex-wrap:wrap;gap:6px">',
               p.tieneSeguro ? '<span class="badge green">✓ Seguro</span>' : '<span class="badge gray">✗ Seguro</span>',
               p.tieneCuil   ? '<span class="badge green">✓ CUIL</span>'   : '<span class="badge gray">✗ CUIL</span>',
@@ -5970,6 +5895,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       return '<form id="prestadorForm" class="form-grid">' +
       '<div class="field"><label>Nombre completo</label><input name="nombre" required value="' + (existing?.nombre||'')+'"></div>' +
       '<div class="field"><label>Rol / Servicio</label><input name="rol" placeholder="ej: Coach, Lider pedagógico" value="' + (existing?.rol||'')+'"></div>' +
+      '<div class="field"><label>Ecosistema</label><select name="ecosistemaId"><option value="">Sin ecosistema</option>' + (state.ecosistemas||[]).map(e=>'<option value="'+e.id+'"' +(e.id===existing?.ecosistemaId?' selected':'')+'>'+e.nombre+'</option>').join('')+'</select></div>' +
       '<div class="field"><label>Agencia</label><select name="agencyId"><option value="">Sin agencia</option>' + state.agencies.map(a=>'<option value="'+a.id+'"' +(a.id===existing?.agencyId?' selected':'')+'>'+a.name+'</option>').join('')+'</select></div>' +
       '<div class="field"><label>Estado</label><select name="activo"><option value="true"' +(existing?.activo!==false?' selected':'')+'>Activo</option><option value="false"' +(existing?.activo===false?' selected':'')+'>Inactivo</option></select></div>' +
       '<div class="field full"><label>Contacto (email o teléfono)</label><input name="contacto" value="' + (existing?.contacto||'')+'"></div>' +
@@ -6081,6 +6007,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         nombre: data.nombre.trim(),
         rol: (data.rol||'').trim(),
         agencyId: data.agencyId||null,
+        ecosistemaId: data.ecosistemaId||null,
         activo: data.activo==='true',
         contacto: (data.contacto||'').trim(),
         notas: (data.notas||'').trim(),
