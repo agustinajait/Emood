@@ -1478,7 +1478,6 @@
 
       <div class="login-tabs">
         <button class="login-tab active" onclick="switchLoginTab('admin')">Administrador</button>
-        <button class="login-tab" onclick="switchLoginTab('owner')">Socio<br>responsable</button>
         <button class="login-tab" onclick="switchLoginTab('prestador')">Prestador</button>
       </div>
 
@@ -1538,18 +1537,19 @@
         <div class="login-error" id="finishOrgError">No se pudo crear la organización.</div>
       </div>
 
-      <!-- Owner panel -->
-      <div class="login-panel" id="loginPanelOwner">
-        <div style="padding:8px 2px 4px;color:rgba(255,255,255,0.5);font-size:13px;line-height:1.7">
-          El acceso propio para socios responsables está en construcción (forma parte de la migración a organizaciones). Por ahora, pedile al administrador de tu organización que gestione tu agencia desde su panel.
-        </div>
-      </div>
-
       <!-- Prestador panel -->
       <div class="login-panel" id="loginPanelPrestador">
-        <div style="padding:8px 2px 4px;color:rgba(255,255,255,0.5);font-size:13px;line-height:1.7">
-          El acceso propio para prestadores está en construcción (forma parte de la migración a organizaciones). Por ahora, pedile al administrador de tu organización que gestione tus datos desde su panel.
+        <div class="login-field">
+          <label>Email</label>
+          <input type="email" id="prestadorEmailInput" placeholder="vos@email.com" onkeydown="if(event.key==='Enter') doPrestadorLogin()">
         </div>
+        <div class="login-field">
+          <label>Contraseña</label>
+          <input type="password" id="prestadorPwInput" placeholder="••••••••" onkeydown="if(event.key==='Enter') doPrestadorLogin()">
+        </div>
+        <button class="login-btn" id="prestadorLoginBtn" style="background:#6d28d9;box-shadow:0 8px 24px rgba(109,40,217,0.35)" onclick="doPrestadorLogin()">Entrar a mi panel →</button>
+        <div class="login-error" id="prestadorLoginError">Email o contraseña incorrectos.</div>
+        <div class="login-switch">¿Todavía no tenés acceso? Pedile a tu organización que te lo cree.</div>
       </div>
     </div>
   </div>
@@ -2078,6 +2078,14 @@
     return fetchMyProfile();
   }
 
+  // El admin crea la cuenta de Auth de OTRA persona (prestador/socio) sin
+  // pisar su propia sesión — por eso NO usamos authSignUp (que guarda la
+  // sesión global), sino authRequest directo, descartando el resultado.
+  async function adminCreateLoginForUser(email, password) {
+    const data = await authRequest('/auth/v1/signup', { email, password });
+    return data?.user?.id || data?.id || null;
+  }
+
   async function sbFetch(path, options) {
     try {
       // Always merge headers explicitly to avoid spread override issues
@@ -2111,8 +2119,14 @@
   }
 
   async function sbUpsert(table, rows) {
-    const payload = Array.isArray(rows) ? rows : [rows];
+    let payload = Array.isArray(rows) ? rows : [rows];
     if (!payload.length) return { errMsg: null };
+    // Toda fila que se guarda queda pegada a la organización del usuario
+    // logueado — sin esto, la política RLS de la migración multi-org
+    // rechaza el insert/update (organization_id nunca coincide).
+    if (myProfile?.organization_id) {
+      payload = payload.map(r => Object.assign({}, r, { organization_id: myProfile.organization_id }));
+    }
     // Debug: log photo fields if present
     if (payload[0] && (payload[0].photo_start_url !== undefined)) {
       console.log('sbUpsert ' + table + ' photo_start_url:', payload[0].photo_start_url?.slice(0,60));
@@ -2359,9 +2373,8 @@
 
   /* ─── LOGIN LOGIC ────────────────────────────────────── */
   function switchLoginTab(tab) {
-    document.querySelectorAll('.login-tab').forEach((b,i) => b.classList.toggle('active', (i===0&&tab==='admin')||(i===1&&tab==='owner')||(i===2&&tab==='prestador')));
+    document.querySelectorAll('.login-tab').forEach((b,i) => b.classList.toggle('active', (i===0&&tab==='admin')||(i===1&&tab==='prestador')));
     document.getElementById('loginPanelAdmin').classList.toggle('active', tab==='admin');
-    document.getElementById('loginPanelOwner').classList.toggle('active', tab==='owner');
     document.getElementById('loginPanelPrestador').classList.toggle('active', tab==='prestador');
     document.getElementById('loginPanelSignup')?.classList.remove('active');
     document.getElementById('loginPanelFinishOrg')?.classList.remove('active');
@@ -4311,6 +4324,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='toggle-agency') await toggleAgency(id);
     else if (action==='share-prestador') sharePrestadorLink(id);
     else if (action==='edit-prestador') { const p=prestadorById(id); if(p) openPrestadorModal(p); }
+    else if (action==='grant-prestador-access') { const p=prestadorById(id); if(p) openGrantAccessModal(p); }
     else if (action==='delete-prestador') {
       if (!confirm('¿Eliminar este prestador?')) return;
       await deleteOne(DB.prestadores, id);
@@ -4714,6 +4728,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '<div style="display:flex;gap:8px;flex-shrink:0">',
             '<button class="btn secondary small" data-action="edit-prestador" data-id="'+p.id+'">Editar</button>',
             '<button class="btn secondary small" data-action="share-prestador" data-id="'+p.id+'">🔗 Link</button>',
+            '<button class="btn secondary small" data-action="grant-prestador-access" data-id="'+p.id+'">🔑 Dar acceso</button>',
             '<button class="btn primary small" data-action="edit-prestador" data-id="'+p.id+'">＋ Módulo</button>',
           '</div>',
         '</div>',
@@ -5732,6 +5747,41 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     return state.protocolos.map(p =>
       '<option value="' + p.id + '"' + (p.id===sel?' selected':'') + '>' + p.nombre + '</option>'
     ).join('');
+  }
+
+  function openGrantAccessModal(p) {
+    openModal('Acceso al panel', 'Creá un login para que ' + p.nombre + ' entre a su propio panel de prestador.', `
+      <form id="grantAccessForm" class="form-grid">
+        <div class="field full"><label>Email</label><input type="email" name="email" required placeholder="${p.nombre.toLowerCase().replace(/\s+/g,'.')}@email.com"></div>
+        <div class="field full"><label>Contraseña inicial</label><input type="text" name="password" required minlength="6" placeholder="Mínimo 6 caracteres"></div>
+        <div class="field full" style="font-size:12px;color:var(--muted)">Compartile este email y esta contraseña por fuera de la plataforma (WhatsApp, en persona). Va a poder cambiarla después.</div>
+        <div class="field full"><button class="btn primary" type="submit">Crear acceso</button></div>
+      </form>
+      <div id="grantAccessError" class="login-error" style="display:none;color:#dc2626;background:none;border:none;padding:8px 0 0;text-align:left"></div>
+    `);
+    document.getElementById('grantAccessForm').onsubmit = async e => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target).entries());
+      const errEl = document.getElementById('grantAccessError');
+      const btn = e.target.querySelector('button[type="submit"]');
+      errEl.style.display = 'none';
+      btn.disabled = true; btn.textContent = 'Creando…';
+      try {
+        const newUserId = await adminCreateLoginForUser(data.email.trim(), data.password);
+        if (!newUserId) throw new Error('No se pudo crear la cuenta (¿el email ya está en uso?).');
+        const rpc = await callRpc('admin_create_member_profile', {
+          new_user_id: newUserId, member_role: 'prestador', full_name: p.nombre, prestador_id: p.id, agency_id: null
+        });
+        if (rpc.error) throw new Error(rpc.error);
+        closeModal();
+        alert('Acceso creado para ' + p.nombre + '. Compartile el email y la contraseña.');
+      } catch(err) {
+        errEl.textContent = err.message || 'No se pudo crear el acceso.';
+        errEl.style.display = 'block';
+      } finally {
+        btn.disabled = false; btn.textContent = 'Crear acceso';
+      }
+    };
   }
 
   function openPrestadorModal(existing=null) {
@@ -7639,6 +7689,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         await renderAll();
         return;
       }
+      if (profile && profile.role === 'prestador' && profile.prestador_id) {
+        sessionStorage.setItem('hh_role', 'prestador');
+        sessionStorage.setItem('hh_prestador_id', profile.prestador_id);
+        currentRole = 'prestador';
+        document.getElementById('loginScreen').style.display = 'none';
+        await renderPrestadorPublicView(profile.prestador_id);
+        return;
+      }
       if (!profile) {
         // Sesión válida (email confirmado) pero todavía sin organización
         // creada — típico de confirmar el mail en otro navegador. Le
@@ -7851,19 +7909,30 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     await submitOwnerReply(challengeId, parentId, text, currentOwner);
   }
 
-  function doPrestadorLogin() {
-    const sel = document.getElementById('prestadorLoginSelect');
-    const prestadorId = sel ? sel.value : '';
-    if (!prestadorId) {
-      const err = document.getElementById('prestadorLoginError');
-      if (err) err.style.display = 'block';
-      return;
+  async function doPrestadorLogin() {
+    const email = document.getElementById('prestadorEmailInput').value.trim();
+    const pw = document.getElementById('prestadorPwInput').value;
+    const errEl = document.getElementById('prestadorLoginError');
+    const btn = document.getElementById('prestadorLoginBtn');
+    errEl.style.display = 'none';
+    if (!email || !pw) { errEl.textContent = 'Completá email y contraseña.'; errEl.style.display = 'block'; return; }
+    btn.disabled = true; btn.textContent = 'Ingresando…';
+    try {
+      await authSignIn(email, pw);
+      const profile = await fetchMyProfile();
+      if (!profile) throw new Error('No se encontró un acceso para esta cuenta. Pedile a tu organización que te lo cree.');
+      if (profile.role !== 'prestador' || !profile.prestador_id) throw new Error('Esta cuenta no tiene un panel de prestador asignado.');
+      sessionStorage.setItem('hh_role', 'prestador');
+      sessionStorage.setItem('hh_prestador_id', profile.prestador_id);
+      currentRole = 'prestador';
+      document.getElementById('loginScreen').style.display = 'none';
+      renderPrestadorPublicView(profile.prestador_id);
+    } catch(e) {
+      errEl.textContent = e.message || 'Email o contraseña incorrectos.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Entrar a mi panel →';
     }
-    sessionStorage.setItem('hh_role', 'prestador');
-    sessionStorage.setItem('hh_prestador_id', prestadorId);
-    currentRole = 'prestador';
-    document.getElementById('loginScreen').style.display = 'none';
-    renderPrestadorPublicView(prestadorId);
   }
 
   initApp().catch(err => { console.error(err); setSyncStatus('Error al iniciar','error'); });
