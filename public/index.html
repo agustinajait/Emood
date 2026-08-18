@@ -1648,9 +1648,6 @@
         <div class="nav-section-label">General</div>
         <button class="active" data-page="dashboard"><span class="nav-icon">◉</span>Dashboard</button>
 
-        <div class="nav-section-label">Operaciones</div>
-        <button data-page="agencies"><span class="nav-icon">⊞</span>Agencias</button>
-
         <div class="nav-section-label">Evaluación</div>
         <button data-page="impacto"><span class="nav-icon">◈</span>Análisis de impacto</button>
         <button data-page="pagos"><span class="nav-icon">◎</span>Certificación técnica</button>
@@ -1669,13 +1666,6 @@
     </div>
 
     <div class="sidebar-bottom">
-      <div class="sidebar-owner-tool">
-        <label>Vista de socio responsable</label>
-        <select id="ownerPreviewSelect">
-          <option value="">Elegir socio…</option>
-        </select>
-        <button id="ownerPreviewBtn">Abrir vista del socio →</button>
-      </div>
       <div id="syncStatus" class="sync-status">Sincronización pendiente</div>
       <button class="sidebar-logout" onclick="doLogout()">⏻ Cerrar sesión</button>
     </div>
@@ -1687,25 +1677,25 @@
     <section class="page active" id="page-dashboard">
       <div class="topbar">
         <div class="topbar-left">
-          <h2>Dashboard general</h2>
-          <p>Vista ejecutiva del estado del holding.</p>
+          <h2 id="dashboardOrgName">Dashboard</h2>
+          <p>Vista ejecutiva de la organización.</p>
         </div>
       </div>
       <div class="stats" id="dashboardStats"></div>
       <div class="grid-2">
         <div class="card">
-          <div class="card-header"><h3>Challenges críticos</h3><span class="card-sub">Por prioridad</span></div>
-          <div id="criticalChallenges"></div>
+          <div class="card-header"><h3>Estado por ecosistema</h3><span class="card-sub">Módulos y avance</span></div>
+          <div class="list" id="ecosistemaStatusList"></div>
         </div>
         <div class="card">
-          <div class="card-header"><h3>Estado por agencia</h3><span class="card-sub">Semáforo</span></div>
-          <div class="list" id="agencyStatusList"></div>
+          <div class="card-header"><h3>Postulaciones pendientes</h3><span class="card-sub">Necesitan revisión</span></div>
+          <div id="pendingPostulacionesList"></div>
         </div>
       </div>
       <div class="grid-2">
         <div class="card">
-          <div class="card-header"><h3>Últimos check-ins</h3><span class="card-sub">Bitácora semanal</span></div>
-          <div id="latestCheckins"></div>
+          <div class="card-header"><h3>Últimos remitos</h3><span class="card-sub">Generados recientemente</span></div>
+          <div id="latestRemitosList"></div>
         </div>
         <div class="card">
           <div class="card-header"><h3>Resumen ejecutivo</h3><span class="card-sub">Para dirección</span></div>
@@ -1740,27 +1730,6 @@
         </div>
       </div>
       <div class="card"><div class="table-wrap" id="certificationsTable"></div></div>
-    </section>
-
-    <!-- AGENCIAS -->
-    <section class="page" id="page-agencies">
-      <div class="topbar">
-        <div class="topbar-left">
-          <h2>Agencias</h2>
-          <p>Crear, editar y gestionar las agencias del holding.</p>
-        </div>
-        <div class="actions">
-          <button class="btn primary" id="openAgencyBtn">＋ Nueva agencia</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="search-bar">
-          <span class="search-icon">🔍</span>
-          <input type="text" id="agencySearch" placeholder="Buscar agencia por nombre, socio o prestador…"
-            oninput="renderAgencies()">
-        </div>
-        <div class="table-wrap" id="agenciesTable"></div>
-      </div>
     </section>
 
 
@@ -2393,6 +2362,13 @@
   let currentChallengeId = null;
   let currentPrestadorId = null;
   let currentRole = null; // 'admin' | 'owner'
+  let currentOrgName = '';
+  async function loadOrgName() {
+    try {
+      const r = await sbSelect('organizations');
+      if (r.data?.[0]?.name) currentOrgName = r.data[0].name;
+    } catch(_) {}
+  }
   let currentOwner = null;
 
   /* ─── URL PARAMS (backward compat) ──────────────────── */
@@ -2628,6 +2604,7 @@
 
   async function showAdminAndRender() {
     showAdminApp();
+    await loadOrgName();
     await renderAll();
   }
 
@@ -3070,70 +3047,86 @@
   }
 
   /* ─── RENDER DASHBOARD ───────────────────────────────── */
+  function montoCiclo(ciclo) {
+    const m = moduloAsignadoById(ciclo.moduloAsignadoId);
+    const s = m && servicioById(m.servicioId);
+    return (s?.horasModulo||0) * (s?.precioHora||0) * (s?.cantidadPorPeriodo||1);
+  }
+
   function renderDashboard() {
-    const total = state.challenges.length;
-    const risky = state.challenges.filter(c=>c.status==='riesgo'||c.status==='bloqueado').length;
-    const certified = state.certifications.length;
-    const avg = total ? Math.round(state.challenges.reduce((s,c)=>s+Number(c.progress||0),0)/total) : 0;
+    const orgNameEl = document.getElementById('dashboardOrgName');
+    if (orgNameEl) orgNameEl.textContent = currentOrgName || 'Dashboard';
+
+    const ecosistemas = state.ecosistemas || [];
+    const modulos = state.servicios || [];
+    const modulosActivos = modulos.filter(s => s.estado === 'activo').length;
+    const ciclos = state.moduloCiclos || [];
+
+    let totalItems = 0, aprobados = 0;
+    ciclos.forEach(c => {
+      const items = itemsByCiclo(c.id);
+      totalItems += items.length;
+      aprobados += items.filter(it => it.estado === 'aprobado').length;
+    });
+    const avgProgress = totalItems ? Math.round(aprobados/totalItems*100) : 0;
+
+    const remitosAprobados = ciclos.filter(c => c.estado === 'aprobado');
+    const montoTotalPagado = remitosAprobados.reduce((s,c) => s + montoCiclo(c), 0);
 
     document.getElementById('dashboardStats').innerHTML = `
-      <div class="stat-card"><div class="stat-label">Challenges activos</div><div class="stat-value">${total}</div><div class="stat-foot">Totales cargados</div></div>
-      <div class="stat-card accent-top"><div class="stat-label">Avance promedio</div><div class="stat-value">${avg}%</div><div class="stat-foot">Promedio general</div></div>
-      <div class="stat-card warning-top"><div class="stat-label">En riesgo</div><div class="stat-value">${risky}</div><div class="stat-foot">Riesgo o bloqueo</div></div>
-      <div class="stat-card"><div class="stat-label">Certificados</div><div class="stat-value">${certified}</div><div class="stat-foot">Entregables certificados</div></div>
+      <div class="stat-card"><div class="stat-label">Ecosistemas</div><div class="stat-value">${ecosistemas.length}</div><div class="stat-foot">Programas activos</div></div>
+      <div class="stat-card accent-top"><div class="stat-label">Módulos</div><div class="stat-value">${modulos.length}</div><div class="stat-foot">${modulosActivos} activos</div></div>
+      <div class="stat-card"><div class="stat-label">Avance promedio</div><div class="stat-value">${avgProgress}%</div><div class="stat-foot">Ítems aprobados / total</div></div>
+      <div class="stat-card warning-top"><div class="stat-label">Remitos generados</div><div class="stat-value">${remitosAprobados.length}</div><div class="stat-foot">$${montoTotalPagado} pagados</div></div>
     `;
 
-    const critical = [...state.challenges].sort((a,b)=>{
-      const s=x=>x.status==='bloqueado'?0:x.status==='riesgo'?1:x.status==='en curso'?2:3;
-      return s(a)-s(b);
-    }).slice(0,5);
-
-    document.getElementById('criticalChallenges').innerHTML = critical.length ? `
-      <div class="table-wrap"><table>
-        <thead><tr><th>Agencia</th><th>Challenge</th><th>Nivel</th><th>Deadline</th><th>Estado</th></tr></thead>
-        <tbody>${critical.map(c=>`
-          <tr>
-            <td><span style="font-size:12px;font-weight:600;color:var(--primary)">${agencyName(c.agencyId)}</span></td>
-            <td><strong>${c.title}</strong></td>
-            <td><span class="challenge-meta-tag">${c.period}</span></td>
-            <td>${formatDate(c.dueDate)}</td>
-            <td>${statusBadge(c.status)}</td>
-          </tr>
-        `).join('')}</tbody>
-      </table></div>
-    ` : '<div class="empty">No hay challenges cargados.</div>';
-
-    document.getElementById('agencyStatusList').innerHTML = state.agencies.map(agency => {
-      const list = state.challenges.filter(c=>c.agencyId===agency.id);
-      const localAvg = list.length ? Math.round(list.reduce((s,c)=>s+Number(c.progress||0),0)/list.length) : 0;
-      const riskCount = list.filter(c=>c.status==='riesgo'||c.status==='bloqueado').length;
+    document.getElementById('ecosistemaStatusList').innerHTML = ecosistemas.length ? ecosistemas.map(eco => {
+      const mods = modulos.filter(s => s.ecosistemaId === eco.id);
+      let ti=0, ap=0;
+      mods.forEach(s => {
+        ciclos.filter(c => { const m=moduloAsignadoById(c.moduloAsignadoId); return m && m.servicioId===s.id; })
+          .forEach(c => { const items=itemsByCiclo(c.id); ti+=items.length; ap+=items.filter(it=>it.estado==='aprobado').length; });
+      });
+      const pct = ti ? Math.round(ap/ti*100) : 0;
       return `
         <div class="item">
-          <div class="item-top"><strong>${agency.name}</strong>${statusBadge(agency.active?(riskCount?'riesgo':'en curso'):'inactiva')}</div>
+          <div class="item-top"><strong>${eco.nombre}</strong>${statusBadge(eco.estado==='activo'?'en curso':'inactiva')}</div>
           <div class="progress-wrap">
-            <div class="progress-label"><span>${list.length} challenges</span><span>${localAvg}%</span></div>
-            <div class="progress"><div class="${progressColor(localAvg)}" style="width:${localAvg}%"></div></div>
+            <div class="progress-label"><span>${mods.length} módulo${mods.length===1?'':'s'}</span><span>${pct}%</span></div>
+            <div class="progress"><div class="${progressColor(pct)}" style="width:${pct}%"></div></div>
           </div>
-          <div class="meta"><span>${riskCount} alertas</span></div>
         </div>
       `;
-    }).join('');
+    }).join('') : '<div class="empty">Todavía no hay ecosistemas cargados.</div>';
 
-    const latest = [...state.checkins].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,5);
-    document.getElementById('latestCheckins').innerHTML = latest.length ? `
-      <div class="list">${latest.map(item=>`
-        <div class="item">
-          <div class="item-top"><strong>${challengeById(item.challengeId)?.title||'Challenge'}</strong>${statusBadge(item.status)}</div>
-          <p>${item.achieved||'Sin detalle.'}</p>
-          <div class="meta"><span>${agencyName(item.agencyId)}</span><span>${formatDate(item.createdAt)}</span><span>${item.progress}%</span></div>
-        </div>
-      `).join('')}</div>
-    ` : '<div class="empty">Todavía no hay check-ins.</div>';
+    const pendientes = (state.postulaciones||[]).filter(p => p.estado === 'pendiente').slice(0,5);
+    document.getElementById('pendingPostulacionesList').innerHTML = pendientes.length ? `
+      <div class="list">${pendientes.map(p => {
+        const s = servicioById(p.servicioId); const prest = prestadorById(p.prestadorId);
+        return `<div class="item"><div class="item-top"><strong>${prest?.nombre||'—'}</strong><span class="badge blue">Pendiente</span></div>
+          <p>Postulación a: ${s?.titulo||'—'}</p></div>`;
+      }).join('')}</div>
+    ` : '<div class="empty">No hay postulaciones pendientes.</div>';
 
+    const remitos = [...remitosAprobados].sort((a,b)=>new Date(b.remitoFecha)-new Date(a.remitoFecha)).slice(0,5);
+    document.getElementById('latestRemitosList').innerHTML = remitos.length ? `
+      <div class="list">${remitos.map(c => {
+        const m = moduloAsignadoById(c.moduloAsignadoId);
+        const s = m && servicioById(m.servicioId);
+        const prest = m && prestadorById(m.prestadorId);
+        return `<div class="item"><div class="item-top"><strong>${prest?.nombre||'—'}</strong><span class="pill">$${montoCiclo(c)}</span></div>
+          <p>${s?.titulo||'—'} · ${periodoLabel(c.periodo)} · Remito #${c.remitoNumero}</p></div>`;
+      }).join('')}</div>
+    ` : '<div class="empty">Todavía no se generó ningún remito.</div>';
+
+    const prestadoresActivos = (state.prestadores||[]).filter(p=>p.activo!==false).length;
+    const cuposTotales = modulos.reduce((s,x)=>s+(x.cupos||1),0);
+    const cuposOcupadosTotal = modulos.reduce((s,x)=>s+cuposOcupados(x.id),0);
     document.getElementById('executiveSummary').innerHTML = `
-      <div class="item"><div class="item-top"><strong>Productos registrados</strong><span class="pill">${state.products.length}</span></div><p>Entregables con trazabilidad documentada.</p></div>
-      <div class="item"><div class="item-top"><strong>Pagos pendientes</strong><span class="pill">${state.certifications.filter(c=>c.paymentStatus==='pendiente').length}</span></div><p>Certificaciones listas para liquidación.</p></div>
-      <div class="item"><div class="item-top"><strong>Con retorno</strong><span class="pill">${state.products.filter(p=>p.economicResult&&p.economicResult!=='-').length}</span></div><p>Productos con resultado económico o institucional cargado.</p></div>
+      <div class="item"><div class="item-top"><strong>Prestadores activos</strong><span class="pill">${prestadoresActivos}</span></div><p>Con legajo cargado en la plataforma.</p></div>
+      <div class="item"><div class="item-top"><strong>Cupos ocupados</strong><span class="pill">${cuposOcupadosTotal}/${cuposTotales}</span></div><p>Vacantes cubiertas sobre el total publicado.</p></div>
+      <div class="item"><div class="item-top"><strong>Postulaciones pendientes</strong><span class="pill">${pendientes.length}</span></div><p>Esperando revisión del admin.</p></div>
+      <div class="item"><div class="item-top"><strong>Pagado (remitos aprobados)</strong><span class="pill">$${montoTotalPagado}</span></div><p>Suma de todos los remitos generados.</p></div>
     `;
   }
 
@@ -4721,7 +4714,6 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     }
   });
 
-  document.getElementById('openAgencyBtn').onclick = ()=>openAgencyModal();
   document.getElementById('openPrestadorBtn')?.addEventListener('click', ()=>openPrestadorModal());
   document.getElementById('openProtocoloBtn')?.addEventListener('click', ()=>openProtocoloModal());
   document.getElementById('openItemGlobalBtn')?.addEventListener('click', ()=>openItemGlobalModal());
@@ -4731,12 +4723,6 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   document.getElementById('openProductBtn').onclick = ()=>openProductModal();
   document.getElementById('openCertificationBtn').onclick = ()=>openCertificationModal();
   document.getElementById('printBtn').onclick = ()=>window.print();
-  document.getElementById('ownerPreviewBtn').onclick = ()=>{
-    const owner = document.getElementById('ownerPreviewSelect').value||'';
-    if (!owner) return;
-    currentRole='owner'; currentOwner=owner;
-    showOwnerApp(owner);
-  };
 
 
   /* ═══════════════════════════════════════════════════════
@@ -8577,6 +8563,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         const remote = await loadStateFromSupabase();
         if (remote) state = normalizeState(remote);
         showAdminApp();
+        await loadOrgName();
         await renderAll();
         return;
       }
