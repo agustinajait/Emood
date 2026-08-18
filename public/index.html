@@ -1658,8 +1658,7 @@
         <div class="nav-section-label">Prestadores</div>
         <button data-page="ecosistemas"><span class="nav-icon">🌿</span>Ecosistemas</button>
         <button data-page="prestadores"><span class="nav-icon">👥</span>Prestadores</button>
-        <button data-page="modulos"><span class="nav-icon">📦</span>Módulos</button>
-        <button data-page="servicios"><span class="nav-icon">🧩</span>Servicios<span class="nav-badge" id="postulacionesBadge" style="display:none"></span></button>
+        <button data-page="servicios"><span class="nav-icon">📦</span>Módulos<span class="nav-badge" id="postulacionesBadge" style="display:none"></span></button>
 
         <button data-page="seguimiento"><span class="nav-icon">✅</span>Seguimiento mensual</button>
         <button data-page="liquidacion"><span class="nav-icon">💰</span>Liquidación</button>
@@ -1797,38 +1796,20 @@
     </section>
 
 
-    <!-- MÓDULOS DE PRESTADORES -->
-    <section class="page" id="page-modulos">
-      <div class="topbar">
-        <div class="topbar-left">
-          <h2>Módulos</h2>
-          <p>Gestión de módulos y evidencias por prestador.</p>
-        </div>
-        <div class="actions">
-          <input type="text" id="modulosSearchFilter" placeholder="🔍 Buscar módulo…" oninput="renderModulos()" style="border-radius:9px;padding:8px 14px;border:1.5px solid var(--line);font-size:13px;min-width:180px">
-          <button class="btn secondary" onclick="openModuloModal('__libre__')" style="background:#fffbeb;color:#92400e;border-color:#fde68a;font-weight:600">⬡ Nuevo módulo libre</button>
-          <select id="modulosPrestadorFilter" style="border-radius:9px;padding:8px 12px;border:1px solid var(--line);font-size:13px">
-            <option value="">Todos los prestadores</option>
-          </select>
-          <select id="modulosPeriodoFilter" style="border-radius:9px;padding:8px 12px;border:1px solid var(--line);font-size:13px"></select>
-        </div>
-      </div>
-      <div id="modulosContent"></div>
-    </section>
 
     <!-- SERVICIOS (Servicio → Postulación → Módulo asignado → Remito) -->
     <section class="page" id="page-servicios">
       <div class="topbar">
         <div class="topbar-left">
-          <h2>Servicios</h2>
-          <p>Publicá servicios, revisá postulaciones y seguí los módulos asignados.</p>
+          <h2>Módulos</h2>
+          <p>Publicá módulos, revisá postulaciones y seguí los módulos asignados.</p>
         </div>
         <div class="actions">
-          <button class="btn primary" id="openServicioBtn" onclick="openServicioModal()">＋ Nuevo servicio</button>
+          <button class="btn primary" id="openServicioBtn" onclick="openServicioModal()">＋ Nuevo módulo</button>
         </div>
       </div>
       <div class="sv-tabs">
-        <button class="sv-tab active" data-svtab="servicios" onclick="switchServiciosTab('servicios')">Servicios</button>
+        <button class="sv-tab active" data-svtab="servicios" onclick="switchServiciosTab('servicios')">Módulos</button>
         <button class="sv-tab" data-svtab="postulaciones" onclick="switchServiciosTab('postulaciones')">Postulaciones <span id="postulacionesTabCount" class="sv-tab-count" style="display:none">0</span></button>
         <button class="sv-tab" data-svtab="asignados" onclick="switchServiciosTab('asignados')">Módulos asignados</button>
       </div>
@@ -7049,8 +7030,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     let html = '';
 
-    // Servicios disponibles
-    html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px;margin-top:24px">🧩 Servicios disponibles</div>';
+    // Módulos disponibles
+    html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px;margin-top:24px">🧩 Módulos disponibles</div>';
     html += disponibles.length
       ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:24px">' +
         disponibles.map(s => {
@@ -7070,7 +7051,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '<button class="btn primary small" data-action="postular-servicio" data-id="'+prest.id+'" data-sid="'+s.id+'">Postularme</button>' +
           '</div>';
         }).join('') + '</div>'
-      : '<div class="empty" style="margin-bottom:24px">No hay servicios abiertos por ahora.</div>';
+      : '<div class="empty" style="margin-bottom:24px">No hay módulos abiertos por ahora.</div>';
 
     // Mis postulaciones
     if (misPostulaciones.length) {
@@ -7080,7 +7061,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           const s = (state.servicios||[]).find(x=>x.id===p.servicioId);
           const badge = p.estado==='pendiente' ? '<span class="badge blue">Pendiente</span>' : p.estado==='aceptada' ? '<span class="badge green">Aceptada</span>' : '<span class="badge gray">Rechazada</span>';
           return '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center">' +
-            '<span style="font-size:13px;font-weight:600">'+(s?.titulo||'Servicio eliminado')+'</span>' + badge + '</div>';
+            '<span style="font-size:13px;font-weight:600">'+(s?.titulo||'Módulo eliminado')+'</span>' + badge + '</div>';
         }).join('') + '</div>';
     }
 
@@ -7953,7 +7934,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     if (!el) return;
     const servicios = state.servicios || [];
     if (!servicios.length) {
-      el.innerHTML = '<div class="empty">Todavía no creaste ningún servicio. Usá "＋ Nuevo servicio".</div>';
+      el.innerHTML = '<div class="empty">Todavía no creaste ningún módulo. Usá "＋ Nuevo módulo".</div>';
       return;
     }
     el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px">' +
@@ -8001,8 +7982,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     }
 
     openModal(
-      existing ? 'Editar servicio' : 'Nuevo servicio',
-      'Definí el servicio: horas, pago, deadline y el protocolo de entregables.',
+      existing ? 'Editar módulo' : 'Nuevo módulo',
+      'Definí el módulo: horas, pago, deadline y el protocolo de entregables.',
       '<form id="servicioForm" class="form-grid">' +
         '<div class="field full"><label>Título</label><input name="titulo" required value="'+(existing?.titulo||'')+'"></div>' +
         '<div class="field full"><label>Descripción</label><textarea name="descripcion">'+(existing?.descripcion||'')+'</textarea></div>' +
@@ -8028,7 +8009,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '</div>' +
         '</div>' +
         (existing ? '<div class="field"><label>Estado</label><select name="estado"><option value="activo"'+(existing.estado==='activo'?' selected':'')+'>Activo</option><option value="cerrado"'+(existing.estado==='cerrado'?' selected':'')+'>Cerrado</option></select></div>' : '') +
-        '<div class="field full"><button class="btn primary" type="submit">'+(existing?'Actualizar':'Publicar')+' servicio</button></div>' +
+        '<div class="field full"><button class="btn primary" type="submit">'+(existing?'Actualizar':'Publicar')+' módulo</button></div>' +
       '</form>'
     );
 
@@ -8087,7 +8068,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     renderServicios();
   }
   async function deleteServicio(id) {
-    if (!confirm('¿Eliminar este servicio? Las postulaciones asociadas quedan huérfanas.')) return;
+    if (!confirm('¿Eliminar este módulo? Las postulaciones asociadas quedan huérfanas.')) return;
     await deleteOne(DB.servicios, id);
     state.servicios = state.servicios.filter(s => s.id !== id);
     renderServicios();
@@ -8118,7 +8099,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       return '<div class="card" style="margin-bottom:10px">' +
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
           '<div><div style="font-weight:700">'+(prest?.nombre||'Prestador eliminado')+'</div>' +
-          '<div style="font-size:13px;color:var(--muted)">postula a: '+(s?.titulo||'Servicio eliminado')+'</div>' +
+          '<div style="font-size:13px;color:var(--muted)">postula a: '+(s?.titulo||'Módulo eliminado')+'</div>' +
           (p.mensaje?'<div style="font-size:13px;margin-top:6px">"'+p.mensaje+'"</div>':'') +
           (p.docsConfirmados?.length?'<div style="font-size:12px;color:#166534;margin-top:6px">✓ Confirmó: '+p.docsConfirmados.join(', ')+'</div>':'') +
           '</div>' + estadoBadge +
@@ -8140,7 +8121,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const s = p && servicioById(p.servicioId);
     if (!p || !s) return;
     if (cuposOcupados(s.id) >= (s.cupos||1)) {
-      alert('No hay cupos disponibles para "'+s.titulo+'" ('+(s.cupos||1)+' cupo(s), ya cubiertos). Cerrá otra postulación o aumentá los cupos del servicio para aceptar esta.');
+      alert('No hay cupos disponibles para "'+s.titulo+'" ('+(s.cupos||1)+' cupo(s), ya cubiertos). Cerrá otra postulación o aumentá los cupos del módulo para aceptar esta.');
       return;
     }
     p.estado = 'aceptada';
@@ -8261,12 +8242,12 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     document.getElementById('remitoContent').innerHTML =
       '<div class="remito-header">' +
-        '<div><div class="remito-org">🌿 E-Mood</div><div class="remito-org-sub">Remito de servicio</div></div>' +
+        '<div><div class="remito-org">🌿 E-Mood</div><div class="remito-org-sub">Remito de módulo</div></div>' +
         '<div class="remito-num"><div class="remito-num-label">Remito</div><div class="remito-num-val">#'+remitoNum+'</div></div>' +
       '</div>' +
       '<div class="remito-prest-section">' +
         '<div><div class="remito-field-label">Prestador</div><div class="remito-field-val" style="font-size:18px">'+(prest?.nombre||'')+'</div></div>' +
-        '<div><div class="remito-field-label">Servicio</div><div class="remito-field-val">'+(s?.titulo||'')+'</div></div>' +
+        '<div><div class="remito-field-label">Módulo</div><div class="remito-field-val">'+(s?.titulo||'')+'</div></div>' +
       '</div>' +
       '<table class="remito-table"><thead><tr><th>Ítem</th><th style="text-align:center">Estado</th></tr></thead><tbody>'+rows+'</tbody>' +
       '<tr class="remito-total-row"><td>Total a pagar</td><td style="text-align:center">$'+monto+'</td></tr></table>' +
@@ -8286,7 +8267,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   /* ── Postulación y evidencia, del lado del prestador ── */
   async function postularAServicio(servicioId, prestadorId) {
     const ya = (state.postulaciones||[]).find(p => p.servicioId===servicioId && p.prestadorId===prestadorId);
-    if (ya) { alert('Ya te postulaste a este servicio.'); return; }
+    if (ya) { alert('Ya te postulaste a este módulo.'); return; }
     const s = servicioById(servicioId);
     const docsConfirmados = (s?.docsRequeridos||[]).length
       ? (confirm('Confirmás que tenés: '+s.docsRequeridos.join(', ')+'?') ? s.docsRequeridos : [])
