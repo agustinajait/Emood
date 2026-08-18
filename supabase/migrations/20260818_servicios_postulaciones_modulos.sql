@@ -23,7 +23,6 @@ create table if not exists public.hh_servicios (
   precio_hora numeric not null default 0,
   deadline date,
   protocolo text not null default '[]',       -- JSON.stringify [{item, descripcion}]
-  capacitacion_id text,                        -- texto libre por ahora (no hay tabla de capacitaciones todavía)
   docs_requeridos text not null default '[]',  -- JSON.stringify ["DNI","CUIL",...]
   estado text not null default 'activo' check (estado in ('activo','cerrado')),
   created_at timestamptz not null default now()
