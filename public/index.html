@@ -1594,7 +1594,31 @@
         </div>
         <button class="login-btn" id="prestadorLoginBtn" style="background:#6d28d9;box-shadow:0 8px 24px rgba(109,40,217,0.35)" onclick="doPrestadorLogin()">Entrar a mi panel →</button>
         <div class="login-error" id="prestadorLoginError">Email o contraseña incorrectos.</div>
-        <div class="login-switch">¿Todavía no tenés acceso? Pedile a tu organización que te lo cree.</div>
+        <div class="login-switch">¿Todavía no te registraste? <a onclick="showPrestadorSignupPanel()">Creá tu cuenta de prestador</a></div>
+      </div>
+
+      <!-- Prestador signup panel (autoregistro) -->
+      <div class="login-panel" id="loginPanelPrestadorSignup">
+        <div class="login-field">
+          <label>Nombre completo</label>
+          <input type="text" id="prestSignupNombreInput" placeholder="Nombre y apellido">
+        </div>
+        <div class="login-field">
+          <label>Contacto (teléfono o email alternativo)</label>
+          <input type="text" id="prestSignupContactoInput" placeholder="Opcional">
+        </div>
+        <div class="login-field">
+          <label>Email</label>
+          <input type="email" id="prestSignupEmailInput" placeholder="vos@email.com">
+        </div>
+        <div class="login-field">
+          <label>Contraseña</label>
+          <input type="password" id="prestSignupPwInput" placeholder="Mínimo 6 caracteres" onkeydown="if(event.key==='Enter') doPrestadorSignup()">
+        </div>
+        <button class="login-btn" id="prestSignupBtn" style="background:#6d28d9;box-shadow:0 8px 24px rgba(109,40,217,0.35)" onclick="doPrestadorSignup()">Crear mi cuenta →</button>
+        <div class="login-error" id="prestSignupError">No se pudo crear la cuenta.</div>
+        <div class="login-success" id="prestSignupSuccess">¡Cuenta creada! Ya podés usar tu email y contraseña para ingresar.</div>
+        <div class="login-switch">¿Ya tenés cuenta? <a onclick="switchLoginTab('prestador')">Iniciar sesión</a></div>
       </div>
     </div>
   </div>
@@ -2070,6 +2094,25 @@
     return fetchMyProfile();
   }
 
+  // Alta de prestador pendiente de confirmar el email: mismo patrón que
+  // el de organización, pero para el autoregistro de prestadores.
+  const PENDING_PRESTADOR_KEY = 'e-mood-huehaci_pending_prestador_v1';
+  function savePendingPrestadorSignup(email, nombre, contacto, driveLink) {
+    try { localStorage.setItem(PENDING_PRESTADOR_KEY, JSON.stringify({ email, nombre, contacto, driveLink })); } catch(_) {}
+  }
+  function clearPendingPrestadorSignup() {
+    try { localStorage.removeItem(PENDING_PRESTADOR_KEY); } catch(_) {}
+  }
+  async function finishPendingPrestadorSignup(email) {
+    let pending = null;
+    try { pending = JSON.parse(localStorage.getItem(PENDING_PRESTADOR_KEY) || 'null'); } catch(_) {}
+    if (!pending || pending.email !== email) return null;
+    const rpc = await callRpc('create_prestador_account', { nombre: pending.nombre, contacto: pending.contacto||'', drive_link: pending.driveLink||'' });
+    if (rpc.error) return null;
+    clearPendingPrestadorSignup();
+    return fetchMyProfile();
+  }
+
   // El admin crea la cuenta de Auth de OTRA persona (prestador/socio) sin
   // pisar su propia sesión — por eso NO usamos authSignUp (que guarda la
   // sesión global), sino authRequest directo, descartando el resultado.
@@ -2377,7 +2420,49 @@
     document.getElementById('loginPanelPrestador').classList.toggle('active', tab==='prestador');
     document.getElementById('loginPanelSignup')?.classList.remove('active');
     document.getElementById('loginPanelFinishOrg')?.classList.remove('active');
+    document.getElementById('loginPanelPrestadorSignup')?.classList.remove('active');
     document.getElementById('adminLoginError').style.display = 'none';
+  }
+
+  function showPrestadorSignupPanel() {
+    document.querySelectorAll('.login-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('loginPanelPrestadorSignup').classList.add('active');
+  }
+
+  async function doPrestadorSignup() {
+    const nombre = document.getElementById('prestSignupNombreInput').value.trim();
+    const contacto = document.getElementById('prestSignupContactoInput').value.trim();
+    const email = document.getElementById('prestSignupEmailInput').value.trim();
+    const pw = document.getElementById('prestSignupPwInput').value;
+    const errEl = document.getElementById('prestSignupError');
+    const okEl = document.getElementById('prestSignupSuccess');
+    const btn = document.getElementById('prestSignupBtn');
+    errEl.style.display = 'none'; okEl.style.display = 'none';
+    if (!nombre || !email || !pw) { errEl.textContent = 'Completá nombre, email y contraseña.'; errEl.style.display = 'block'; return; }
+    if (pw.length < 6) { errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.'; errEl.style.display = 'block'; return; }
+    btn.disabled = true; btn.textContent = 'Creando…';
+    try {
+      savePendingPrestadorSignup(email, nombre, contacto, '');
+      await authSignUp(email, pw);
+      if (!authSession?.access_token) {
+        okEl.textContent = 'Te enviamos un correo para confirmar tu cuenta. Confirmalo y después volvé acá e iniciá sesión — ahí termina tu registro.';
+        okEl.style.display = 'block';
+        return;
+      }
+      const profile = await finishPendingPrestadorSignup(email);
+      if (!profile) throw new Error('La cuenta se creó pero no se pudo cargar tu perfil. Recargá la página e iniciá sesión.');
+      sessionStorage.setItem('hh_role', 'prestador');
+      sessionStorage.setItem('hh_prestador_id', profile.prestador_id);
+      currentRole = 'prestador';
+      document.getElementById('loginScreen').style.display = 'none';
+      await renderPrestadorPublicView(profile.prestador_id);
+    } catch(e) {
+      errEl.textContent = e.message || 'No se pudo crear la cuenta.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Crear mi cuenta →';
+    }
   }
 
   function showSignupPanel() {
@@ -2597,6 +2682,9 @@
       id: s.id, titulo: s.titulo||'', descripcion: s.descripcion||'',
       frecuencia: s.frecuencia||'mensual',
       horas_modulo: Number(s.horasModulo||0), precio_hora: Number(s.precioHora||0),
+      cupos: Number(s.cupos||1), cantidad_por_periodo: Number(s.cantidadPorPeriodo||1),
+      fecha_inicio: s.fechaInicio||null, fecha_fin: s.fechaFin||null,
+      ecosistema_id: s.ecosistemaId||null,
       deadline: s.deadline||null,
       protocolo: JSON.stringify(s.protocolo||[]),
       docs_requeridos: JSON.stringify(s.docsRequeridos||[]),
@@ -2609,6 +2697,9 @@
       id: r.id, titulo: r.titulo||'', descripcion: r.descripcion||'',
       frecuencia: r.frecuencia||'mensual',
       horasModulo: Number(r.horas_modulo||0), precioHora: Number(r.precio_hora||0),
+      cupos: Number(r.cupos||1), cantidadPorPeriodo: Number(r.cantidad_por_periodo||1),
+      fechaInicio: r.fecha_inicio||'', fechaFin: r.fecha_fin||'',
+      ecosistemaId: r.ecosistema_id||null,
       deadline: r.deadline||'',
       protocolo: (()=>{ try { return JSON.parse(r.protocolo||'[]'); } catch(_){ return []; } })(),
       docsRequeridos: (()=>{ try { return JSON.parse(r.docs_requeridos||'[]'); } catch(_){ return []; } })(),
@@ -6953,7 +7044,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function buildPrestServiciosSection(prest) {
     const misPostulaciones = (state.postulaciones||[]).filter(p => p.prestadorId === prest.id);
     const postuladoA = new Set(misPostulaciones.map(p => p.servicioId));
-    const disponibles = (state.servicios||[]).filter(s => s.estado === 'activo' && !postuladoA.has(s.id));
+    const disponibles = (state.servicios||[]).filter(s => s.estado === 'activo' && !postuladoA.has(s.id) && cuposOcupados(s.id) < (s.cupos||1));
     const misModulos = (state.modulosAsignados||[]).filter(m => m.prestadorId === prest.id);
 
     let html = '';
@@ -6963,14 +7054,17 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     html += disponibles.length
       ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:24px">' +
         disponibles.map(s => {
-          const pago = (s.horasModulo||0)*(s.precioHora||0);
+          const pagoMensual = (s.horasModulo||0)*(s.precioHora||0)*(s.cantidadPorPeriodo||1);
+          const libres = (s.cupos||1) - cuposOcupados(s.id);
           return '<div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafaf8">' +
             '<div style="font-size:14px;font-weight:700;margin-bottom:6px">'+s.titulo+'</div>' +
             (s.descripcion?'<div style="font-size:12px;color:var(--muted);margin-bottom:8px">'+s.descripcion+'</div>':'') +
             '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">' +
-              '<span class="challenge-meta-tag">📦 '+s.horasModulo+' hs</span>' +
-              (pago?'<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534">≈ $'+pago+'</span>':'') +
-              '<span class="challenge-meta-tag">'+(FRECUENCIA_LABEL[s.frecuencia]||s.frecuencia)+'</span>' +
+              '<span class="challenge-meta-tag" style="background:#eff6ff;color:#1d4ed8">👤 '+libres+' cupo(s) libre(s)</span>' +
+              '<span class="challenge-meta-tag">📦 '+s.horasModulo+' hs/módulo</span>' +
+              (pagoMensual?'<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534">≈ $'+pagoMensual+'/mes</span>':'') +
+              '<span class="challenge-meta-tag">'+(FRECUENCIA_LABEL[s.frecuencia]||s.frecuencia)+' × '+(s.cantidadPorPeriodo||1)+'</span>' +
+              (s.fechaInicio?'<span class="challenge-meta-tag">📅 '+s.fechaInicio+(s.fechaFin?' a '+s.fechaFin:'')+'</span>':'') +
               (s.deadline?'<span class="challenge-meta-tag">⏱ vence '+s.deadline+'</span>':'') +
             '</div>' +
             '<button class="btn primary small" data-action="postular-servicio" data-id="'+prest.id+'" data-sid="'+s.id+'">Postularme</button>' +
@@ -7865,18 +7959,22 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px">' +
       servicios.map(s => {
         const postCount = (state.postulaciones||[]).filter(p => p.servicioId === s.id).length;
-        const pago = s.horasModulo && s.precioHora ? (s.horasModulo * s.precioHora) : 0;
+        const ocupados = cuposOcupados(s.id);
+        const cupos = s.cupos||1;
+        const pagoMensual = (s.horasModulo||0) * (s.precioHora||0) * (s.cantidadPorPeriodo||1);
+        const eco = (state.ecosistemas||[]).find(e => e.id === s.ecosistemaId);
         return '<div class="card">' +
           '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">' +
             '<div><div style="font-weight:700;font-size:15px">'+s.titulo+'</div>' +
-            '<div style="font-size:12px;color:var(--muted)">'+FRECUENCIA_LABEL[s.frecuencia]+(s.deadline?' · vence '+s.deadline:'')+'</div></div>' +
+            '<div style="font-size:12px;color:var(--muted)">'+FRECUENCIA_LABEL[s.frecuencia]+' × '+(s.cantidadPorPeriodo||1)+(eco?' · 🌿 '+eco.nombre:'')+(s.deadline?' · vence '+s.deadline:'')+'</div></div>' +
             '<span class="badge '+(s.estado==='activo'?'green':'gray')+'">'+s.estado+'</span>' +
           '</div>' +
           (s.descripcion?'<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+s.descripcion.slice(0,120)+'</div>':'') +
           '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">' +
-            '<span class="challenge-meta-tag">📦 '+s.horasModulo+' hs</span>' +
+            '<span class="challenge-meta-tag" style="background:'+(ocupados>=cupos?'#fef2f2':'#eff6ff')+';color:'+(ocupados>=cupos?'#dc2626':'#1d4ed8')+'">👤 '+ocupados+'/'+cupos+' cupos</span>' +
+            '<span class="challenge-meta-tag">📦 '+s.horasModulo+' hs/módulo</span>' +
             '<span class="challenge-meta-tag">💵 $'+s.precioHora+'/h</span>' +
-            (pago?'<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534">≈ $'+pago+'</span>':'') +
+            (pagoMensual?'<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534">≈ $'+pagoMensual+'/mes c/u</span>':'') +
             '<span class="challenge-meta-tag">📋 '+(s.protocolo||[]).length+' ítems</span>' +
             (postCount?'<span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">👥 '+postCount+' postulantes</span>':'') +
           '</div>' +
@@ -7911,7 +8009,12 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '<div class="field"><label>Frecuencia</label><select name="frecuencia">' +
           Object.keys(FRECUENCIA_LABEL).map(k=>'<option value="'+k+'"'+(existing?.frecuencia===k?' selected':'')+'>'+FRECUENCIA_LABEL[k]+'</option>').join('') +
         '</select></div>' +
-        '<div class="field"><label>Deadline</label><input type="date" name="deadline" value="'+(existing?.deadline||'')+'"></div>' +
+        '<div class="field"><label>Cupos (vacantes)</label><input type="number" min="1" step="1" name="cupos" value="'+(existing?.cupos??1)+'"></div>' +
+        '<div class="field"><label>Veces por período</label><input type="number" min="1" step="1" name="cantidadPorPeriodo" value="'+(existing?.cantidadPorPeriodo??1)+'"><div style="font-size:11px;color:var(--muted);margin-top:3px">Ej: diario × 22 veces al mes = 22.</div></div>' +
+        '<div class="field"><label>Fecha de inicio</label><input type="date" name="fechaInicio" value="'+(existing?.fechaInicio||'')+'"></div>' +
+        '<div class="field"><label>Fecha de fin</label><input type="date" name="fechaFin" value="'+(existing?.fechaFin||'')+'"></div>' +
+        '<div class="field"><label>Deadline para postularse</label><input type="date" name="deadline" value="'+(existing?.deadline||'')+'"></div>' +
+        '<div class="field"><label>Ecosistema</label><select name="ecosistemaId"><option value="">Sin ecosistema</option>' + (state.ecosistemas||[]).map(e=>'<option value="'+e.id+'"'+(e.id===existing?.ecosistemaId?' selected':'')+'>'+e.nombre+'</option>').join('')+'</select></div>' +
         '<div class="field"><label>Horas por módulo</label><input type="number" min="0" step="0.5" name="horasModulo" value="'+(existing?.horasModulo??'')+'"></div>' +
         '<div class="field"><label>Precio por hora ($)</label><input type="number" min="0" step="1" name="precioHora" value="'+(existing?.precioHora??'')+'"></div>' +
         '<div class="field full"><label>Documentos requeridos (separados por coma)</label><input name="docsRequeridos" placeholder="DNI, CUIL, Seguro" value="'+((existing?.docsRequeridos||[]).join(', '))+'"></div>' +
@@ -7951,6 +8054,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         Object.assign(existing, {
           titulo: data.titulo.trim(), descripcion: (data.descripcion||'').trim(),
           frecuencia: data.frecuencia, deadline: data.deadline||'',
+          cupos: Math.max(1, Number(data.cupos||1)), cantidadPorPeriodo: Math.max(1, Number(data.cantidadPorPeriodo||1)),
+          fechaInicio: data.fechaInicio||'', fechaFin: data.fechaFin||'',
+          ecosistemaId: data.ecosistemaId||null,
           horasModulo: Number(data.horasModulo||0), precioHora: Number(data.precioHora||0),
           docsRequeridos, protocolo: tempProtocolo, estado: data.estado || existing.estado,
         });
@@ -7959,6 +8065,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         const s = {
           id: uid(), titulo: data.titulo.trim(), descripcion: (data.descripcion||'').trim(),
           frecuencia: data.frecuencia, deadline: data.deadline||'',
+          cupos: Math.max(1, Number(data.cupos||1)), cantidadPorPeriodo: Math.max(1, Number(data.cantidadPorPeriodo||1)),
+          fechaInicio: data.fechaInicio||'', fechaFin: data.fechaFin||'',
+          ecosistemaId: data.ecosistemaId||null,
           horasModulo: Number(data.horasModulo||0), precioHora: Number(data.precioHora||0),
           docsRequeridos, protocolo: tempProtocolo, estado: 'activo', createdAt: nowISO(),
         };
@@ -8022,10 +8131,18 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     }).join('');
   }
 
+  function cuposOcupados(servicioId) {
+    return (state.postulaciones||[]).filter(p => p.servicioId === servicioId && p.estado === 'aceptada').length;
+  }
+
   async function acceptPostulacion(id) {
     const p = postulacionById(id);
     const s = p && servicioById(p.servicioId);
     if (!p || !s) return;
+    if (cuposOcupados(s.id) >= (s.cupos||1)) {
+      alert('No hay cupos disponibles para "'+s.titulo+'" ('+(s.cupos||1)+' cupo(s), ya cubiertos). Cerrá otra postulación o aumentá los cupos del servicio para aceptar esta.');
+      return;
+    }
     p.estado = 'aceptada';
     await saveOne(DB.postulaciones, postulacionToRow(p));
 
@@ -8135,7 +8252,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const items = itemsByModuloAsignado(moduloAsignadoId);
     const hoy = new Date();
     const remitoNum = hoy.getFullYear()+String(hoy.getMonth()+1).padStart(2,'0')+String(hoy.getDate()).padStart(2,'0')+'-'+modulo.id.slice(0,4).toUpperCase();
-    const monto = (s?.horasModulo||0) * (s?.precioHora||0);
+    const monto = (s?.horasModulo||0) * (s?.precioHora||0) * (s?.cantidadPorPeriodo||1);
 
     const rows = items.map(it =>
       '<tr class="cumplido"><td>'+it.item+(it.descripcion?'<br><span style="font-weight:400;font-size:11px;color:#6b7280">'+it.descripcion+'</span>':'')+'</td>' +
@@ -8212,6 +8329,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     if (authSession?.access_token) {
       let profile = await fetchMyProfile().catch(()=>null);
       if (!profile) profile = await finishPendingOrgSignup(authSession.user?.email).catch(()=>null);
+      if (!profile) profile = await finishPendingPrestadorSignup(authSession.user?.email).catch(()=>null);
       if (profile && profile.role === 'admin') {
         sessionStorage.setItem('hh_role','admin');
         currentRole = 'admin';
@@ -8451,8 +8569,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     btn.disabled = true; btn.textContent = 'Ingresando…';
     try {
       await authSignIn(email, pw);
-      const profile = await fetchMyProfile();
-      if (!profile) throw new Error('No se encontró un acceso para esta cuenta. Pedile a tu organización que te lo cree.');
+      let profile = await fetchMyProfile();
+      if (!profile) profile = await finishPendingPrestadorSignup(email);
+      if (!profile) throw new Error('No se encontró un acceso para esta cuenta.');
       if (profile.role !== 'prestador' || !profile.prestador_id) throw new Error('Esta cuenta no tiene un panel de prestador asignado.');
       sessionStorage.setItem('hh_role', 'prestador');
       sessionStorage.setItem('hh_prestador_id', profile.prestador_id);
