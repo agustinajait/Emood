@@ -2169,11 +2169,15 @@
 
   async function sbUpload(bucket, path, file) {
     try {
+      // Bug: esto mandaba siempre la anon key, nunca el token del
+      // usuario logueado — Postgres veía el pedido como 'anon', no
+      // 'authenticated', y las políticas de storage lo rechazaban.
+      const token = (authSession && authSession.access_token) ? authSession.access_token : SB_KEY;
       const res = await fetch(SB_URL + '/storage/v1/object/' + bucket + '/' + path, {
         method: 'POST',
         headers: {
           'apikey': SB_KEY,
-          'Authorization': 'Bearer ' + SB_KEY,
+          'Authorization': 'Bearer ' + token,
           'Content-Type': file.type || 'image/jpeg',
           'x-upsert': 'true',
           'cache-control': '3600'
@@ -2964,12 +2968,12 @@
         if (state.products.length) await sbUpsert(DB.products, state.products.map(productToRow));
         if (state.certifications.length) await sbUpsert(DB.certifications, state.certifications.map(certToRow));
         if (state.comments.length) await sbUpsert(DB.comments, state.comments.map(commentToRow));
-        if (state.prestadores.length) await sbUpsert(DB.prestadores, state.prestadores);
+        if (state.prestadores.length) await sbUpsert(DB.prestadores, state.prestadores.map(prestadorToRow));
         if (state.protocolos.length) await sbUpsert(DB.protocolos, state.protocolos);
         if (state.itemsGlobales.length) await sbUpsert(DB.itemsGlobales, state.itemsGlobales);
         if (state.seguimientos.length) await sbUpsert(DB.seguimientos, state.seguimientos);
-        if (state.modulos.length) await sbUpsert(DB.modulos, state.modulos);
-        if (state.modEvidencias.length) await sbUpsert(DB.modEvidencias, state.modEvidencias);
+        if (state.modulos.length) await sbUpsert(DB.modulos, state.modulos.map(moduloToRow));
+        if (state.modEvidencias.length) await sbUpsert(DB.modEvidencias, state.modEvidencias.map(modEvidenciaToRow));
         setSyncStatus('Guardado en Supabase', 'ok');
         return true;
       } catch(e) {
