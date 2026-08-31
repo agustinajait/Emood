@@ -1951,6 +1951,12 @@
     if (isNaN(d)) return '-';
     return d.toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'});
   }
+  function formatFechaHora(v) {
+    if (!v) return '-';
+    const d = new Date(v);
+    if (isNaN(d)) return '-';
+    return d.toLocaleDateString('es-AR',{day:'2-digit',month:'short'}) + ' ' + d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  }
   function statusBadge(status) {
     const map = { 'en curso':'green','riesgo':'yellow','bloqueado':'red','logrado':'violet','pendiente':'yellow','pagado':'green','inactiva':'gray' };
     const icons = { 'en curso':'●','riesgo':'▲','bloqueado':'✕','logrado':'✓','pendiente':'○','pagado':'✓','inactiva':'–' };
@@ -2860,6 +2866,7 @@
       descripcion: it.descripcion||'', evidencia_url: it.evidenciaUrl||'',
       evidencia_nota: it.evidenciaNota||'', estado: it.estado||'pendiente',
       comentario_org: it.comentarioOrg||'',
+      tipo: it.tipo||'tarea', hora_inicio: it.horaInicio||null, hora_cierre: it.horaCierre||null,
       created_at: it.createdAt||nowISO(), updated_at: nowISO(),
     };
   }
@@ -2869,6 +2876,7 @@
       descripcion: r.descripcion||'', evidenciaUrl: r.evidencia_url||'',
       evidenciaNota: r.evidencia_nota||'', estado: r.estado||'pendiente',
       comentarioOrg: r.comentario_org||'',
+      tipo: r.tipo||'tarea', horaInicio: r.hora_inicio||'', horaCierre: r.hora_cierre||'',
       createdAt: r.created_at||'', updatedAt: r.updated_at||'',
     };
   }
@@ -4665,6 +4673,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='admin-cargar-evidencia') openAdminEvidenciaModal(id);
     else if (action==='postular-servicio') { const sid=btn.dataset.sid; openPostularModal(sid, id); }
     else if (action==='subir-evidencia-item') { openSubirEvidenciaModal(id, btn.dataset.pid); }
+    else if (action==='marcar-inicio-jornada') await marcarInicioJornada(id, btn.dataset.pid);
     else if (action==='delete-prestador') {
       if (!confirm('¿Eliminar este prestador?')) return;
       await deleteOne(DB.prestadores, id);
@@ -7285,13 +7294,25 @@ ${renderBeforeAfterOwner(c, state.checkins)}
                 '<span class="badge '+(c.estado==='aprobado'?'green':c.estado==='completado'?'blue':'gray')+'">'+(CICLO_ESTADO_LABEL[c.estado]||c.estado)+'</span>' +
               '</div>' +
               items.map(it => {
-                const badge = it.estado==='aprobado' ? '<span class="badge green">✓ Aprobado</span>' : it.estado==='rechazado' ? '<span class="badge red">✕ Rechazado — subí de nuevo</span>' : '<span class="badge gray">'+(it.evidenciaUrl||it.evidenciaNota?'En revisión':'Sin evidencia')+'</span>';
+                const esJornada = it.tipo === 'jornada';
+                const badge = it.estado==='aprobado' ? '<span class="badge green">✓ Aprobado</span>' : it.estado==='rechazado' ? '<span class="badge red">✕ Rechazado — subí de nuevo</span>' : '<span class="badge gray">'+(it.evidenciaUrl||it.evidenciaNota?'En revisión':(esJornada && it.horaInicio ? 'Jornada abierta' : 'Sin evidencia'))+'</span>';
+                let accion = '';
+                if (it.estado !== 'aprobado') {
+                  if (esJornada && !it.horaInicio) {
+                    accion = '<button class="btn primary xs" style="margin-top:6px" data-action="marcar-inicio-jornada" data-id="'+it.id+'" data-pid="'+prest.id+'">▶️ Marcar inicio de jornada</button>';
+                  } else if (esJornada && !it.horaCierre) {
+                    accion = '<button class="btn primary xs" style="margin-top:6px" data-action="subir-evidencia-item" data-id="'+it.id+'" data-pid="'+prest.id+'">⏹ Marcar cierre y subir evidencia</button>';
+                  } else {
+                    accion = '<button class="btn secondary xs" style="margin-top:6px" data-action="subir-evidencia-item" data-id="'+it.id+'" data-pid="'+prest.id+'">'+(it.evidenciaUrl||it.evidenciaNota?'Actualizar evidencia':'Subir evidencia')+'</button>';
+                  }
+                }
                 return '<div style="border-top:1px solid var(--line);padding:8px 0">' +
                   '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
                     '<span style="font-size:13px">'+it.item+'</span>' + badge +
                   '</div>' +
+                  (esJornada && (it.horaInicio||it.horaCierre) ? '<div style="font-size:11px;color:var(--muted);margin-top:4px">'+(it.horaInicio?'Inicio: '+formatFechaHora(it.horaInicio):'')+(it.horaCierre?' · Cierre: '+formatFechaHora(it.horaCierre):'')+'</div>' : '') +
                   (it.comentarioOrg?'<div style="font-size:12px;color:#dc2626;margin-top:4px">Motivo: '+it.comentarioOrg+'</div>':'') +
-                  (it.estado!=='aprobado'?'<button class="btn secondary xs" style="margin-top:6px" data-action="subir-evidencia-item" data-id="'+it.id+'" data-pid="'+prest.id+'">'+(it.evidenciaUrl||it.evidenciaNota?'Actualizar evidencia':'Subir evidencia')+'</button>':'') +
+                  accion +
                 '</div>';
               }).join('') +
             '</div>';
@@ -8144,6 +8165,34 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   }
   function periodoActual() { return new Date().toISOString().slice(0,7); }
 
+  // Crea, en un ciclo, los ítems correspondientes al protocolo del
+  // módulo. Los ítems tipo "tarea" generan un único ítem (como
+  // siempre); los tipo "jornada" (ej: Censo Flash) se expanden en una
+  // instancia por cada vez esperada en el período (cantidadPorPeriodo
+  // del servicio) — una por día trabajado, cada una con su propio
+  // inicio/cierre/evidencia. Compartida por ensureCicloForPeriodo y
+  // resyncCicloItems para no duplicar esta lógica.
+  async function crearItemsDeCiclo(ciclo, modulo, s) {
+    const organizationId = s?.organizationId || modulo.organizationId || null;
+    for (const it of (modulo.protocolo||[])) {
+      if (it.tipo === 'jornada') {
+        const n = Math.max(1, Number(s?.cantidadPorPeriodo) || 1);
+        for (let i = 1; i <= n; i++) {
+          const item = { id: uid(), organizationId, moduloAsignadoId: modulo.id, cicloId: ciclo.id,
+            item: it.item + ' — Jornada ' + i + ' de ' + n, descripcion: it.descripcion||'',
+            tipo: 'jornada', estado: 'pendiente', createdAt: nowISO() };
+          state.moduloItems.push(item);
+          await saveOne(DB.moduloItems, moduloItemToRow(item));
+        }
+      } else {
+        const item = { id: uid(), organizationId, moduloAsignadoId: modulo.id, cicloId: ciclo.id,
+          item: it.item, descripcion: it.descripcion||'', tipo: 'tarea', estado: 'pendiente', createdAt: nowISO() };
+        state.moduloItems.push(item);
+        await saveOne(DB.moduloItems, moduloItemToRow(item));
+      }
+    }
+  }
+
   // Crea el ciclo (mes) actual de un módulo asignado si todavía no
   // existe, con sus ítems copiados del protocolo. No crea nada si el
   // módulo ya terminó (fecha_fin del servicio pasada) o si el ciclo
@@ -8161,11 +8210,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     state.moduloCiclos.push(ciclo);
     await saveOne(DB.moduloCiclos, moduloCicloToRow(ciclo));
 
-    for (const it of (modulo.protocolo||[])) {
-      const item = { id: uid(), organizationId, moduloAsignadoId, cicloId: ciclo.id, item: it.item, descripcion: it.descripcion||'', estado: 'pendiente', createdAt: nowISO() };
-      state.moduloItems.push(item);
-      await saveOne(DB.moduloItems, moduloItemToRow(item));
-    }
+    await crearItemsDeCiclo(ciclo, modulo, s);
     return ciclo;
   }
 
@@ -8180,14 +8225,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const modulo = moduloAsignadoById(ciclo.moduloAsignadoId);
     const s = modulo && servicioById(modulo.servicioId);
     if (!s || !(s.protocolo||[]).length) { alert('El módulo todavía no tiene ítems en el Protocolo de entregables. Editalo primero y agregá al menos uno.'); return; }
-    const organizationId = s.organizationId || modulo.organizationId || null;
-    for (const it of s.protocolo) {
-      const item = { id: uid(), organizationId, moduloAsignadoId: modulo.id, cicloId: ciclo.id, item: it.item, descripcion: it.descripcion||'', estado: 'pendiente', createdAt: nowISO() };
-      state.moduloItems.push(item);
-      await saveOne(DB.moduloItems, moduloItemToRow(item));
-    }
+    await crearItemsDeCiclo(ciclo, modulo, s);
     renderModulosAsignados();
-    alert('Listo — se cargaron '+s.protocolo.length+' ítem(s) en el ciclo. El prestador ya puede subir evidencia.');
+    alert('Listo — se cargaron los ítem(s) en el ciclo. El prestador ya puede subir evidencia.');
   }
 
   const FRECUENCIA_LABEL = { diaria:'Diaria', semanal:'Semanal', mensual:'Mensual', unica:'Única' };
@@ -8242,7 +8282,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       if (!tempProtocolo.length) return '<div style="font-size:13px;color:var(--muted);padding:10px;border:1px dashed var(--line);border-radius:8px;text-align:center">Sin ítems todavía.</div>';
       return tempProtocolo.map((it,i) =>
         '<div style="display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:6px;background:#fafaf8">' +
-        '<div><strong style="font-size:13px">'+it.item+'</strong>'+(it.descripcion?'<div style="font-size:12px;color:var(--muted)">'+it.descripcion+'</div>':'')+'</div>' +
+        '<div><strong style="font-size:13px">'+it.item+'</strong>' +
+          (it.tipo==='jornada' ? ' <span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">🕒 Jornada de trabajo</span>' : '') +
+          (it.descripcion?'<div style="font-size:12px;color:var(--muted)">'+it.descripcion+'</div>':'')+'</div>' +
         '<button type="button" class="btn danger xs" onclick="removeProtocoloItem('+i+')">✕</button>' +
         '</div>'
       ).join('');
@@ -8292,11 +8334,16 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '<div class="field full" style="margin-top:4px">' +
           '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">📋 Protocolo de entregables</div>' +
           '<div id="protocoloItemsList">'+renderProtocoloItems()+'</div>' +
-          '<div style="display:flex;gap:6px;margin-top:8px">' +
-            '<input id="protoItemInput" placeholder="Ítem (ej: Ficha de seguimiento)" style="flex:1">' +
-            '<input id="protoDescInput" placeholder="Descripción (opcional)" style="flex:1">' +
+          '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">' +
+            '<input id="protoItemInput" placeholder="Ítem (ej: Ficha de seguimiento)" style="flex:2;min-width:160px">' +
+            '<input id="protoDescInput" placeholder="Descripción (opcional)" style="flex:2;min-width:160px">' +
+            '<select id="protoTipoInput" style="flex:1;min-width:150px">' +
+              '<option value="tarea">📋 Tarea / entregable</option>' +
+              '<option value="jornada">🕒 Jornada de trabajo</option>' +
+            '</select>' +
             '<button type="button" class="btn secondary small" onclick="confirmAddProtocoloItem()">＋</button>' +
           '</div>' +
+          '<div style="font-size:11px;color:var(--muted);margin-top:4px">"Jornada de trabajo" es para tareas de campo con inicio/cierre diario (ej: Censo Flash) — se repite automáticamente "Veces por período" veces en cada ciclo, y el prestador marca inicio, marca cierre y adjunta una evidencia por jornada.</div>' +
         '</div>' +
         (existing ? '<div class="field"><label>Estado</label><select name="estado"><option value="activo"'+(existing.estado==='activo'?' selected':'')+'>Activo</option><option value="cerrado"'+(existing.estado==='cerrado'?' selected':'')+'>Cerrado</option></select></div>' : '') +
         '<div class="field full"><button class="btn primary" type="submit">'+(existing?'Actualizar':'Publicar')+' módulo</button></div>' +
@@ -8306,11 +8353,13 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     window.confirmAddProtocoloItem = function() {
       const item = document.getElementById('protoItemInput').value.trim();
       const descripcion = document.getElementById('protoDescInput').value.trim();
+      const tipo = document.getElementById('protoTipoInput').value || 'tarea';
       if (!item) { alert('El nombre del ítem es obligatorio.'); return; }
-      tempProtocolo.push({ item, descripcion });
+      tempProtocolo.push({ item, descripcion, tipo });
       document.getElementById('protocoloItemsList').innerHTML = renderProtocoloItems();
       document.getElementById('protoItemInput').value = '';
       document.getElementById('protoDescInput').value = '';
+      document.getElementById('protoTipoInput').value = 'tarea';
     };
     window.removeProtocoloItem = function(idx) {
       tempProtocolo.splice(idx, 1);
@@ -8564,6 +8613,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
                   '<div><strong style="font-size:13px">'+it.item+'</strong>'+(it.descripcion?' <span style="font-size:12px;color:var(--muted)">— '+it.descripcion+'</span>':'')+'</div>' +
                   badge +
                 '</div>' +
+                (it.tipo==='jornada' && (it.horaInicio||it.horaCierre) ? '<div style="font-size:11px;color:var(--muted);margin-top:4px">🕒 '+(it.horaInicio?'Inicio: '+formatFechaHora(it.horaInicio):'sin inicio')+(it.horaCierre?' · Cierre: '+formatFechaHora(it.horaCierre):' · sin cierre')+'</div>' : '') +
                 (it.evidenciaUrl ? '<div style="margin-top:6px"><a href="'+it.evidenciaUrl+'" target="_blank" style="font-size:12px;color:#1a73e8">🔗 Ver evidencia</a></div>' : '') +
                 (it.evidenciaNota ? '<div style="margin-top:4px;font-size:12px;color:var(--muted)">"'+it.evidenciaNota+'"</div>' : '') +
                 (it.estado!=='aprobado' ? '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">' +
@@ -8706,18 +8756,31 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     };
   }
 
+  // Marca el inicio de una jornada (ítem tipo 'jornada'). El cierre se
+  // marca junto con la evidencia, en openSubirEvidenciaModal.
+  async function marcarInicioJornada(itemId, prestadorId) {
+    const it = (state.moduloItems||[]).find(x => x.id === itemId);
+    if (!it || it.horaInicio) return;
+    it.horaInicio = nowISO();
+    const ok = await saveOne(DB.moduloItems, moduloItemToRow(it));
+    if (!ok) { it.horaInicio = ''; alert('No se pudo registrar el inicio de la jornada. Probá de nuevo.'); return; }
+    renderPrestadorPublicView(prestadorId);
+  }
+
   function openSubirEvidenciaModal(itemId, prestadorId) {
     const it = (state.moduloItems||[]).find(x => x.id === itemId);
     if (!it) return;
-    openModal('Subir evidencia', it.item + (it.descripcion ? ' — ' + it.descripcion : ''), `
+    const esJornada = it.tipo === 'jornada';
+    openModal(esJornada ? 'Cerrar jornada y subir evidencia' : 'Subir evidencia', it.item + (it.descripcion ? ' — ' + it.descripcion : ''), `
+      ${esJornada ? '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Inicio registrado: '+formatFechaHora(it.horaInicio)+'. Al enviar, se registra el cierre con la hora de ahora.</div>' : ''}
       <form id="evidenciaItemForm" class="form-grid">
         <div class="field full">
-          <label>📎 Foto o documento</label>
-          <input type="file" name="evidenciaArchivo" accept="image/*,application/pdf">
+          <label>📎 ${esJornada ? 'Evidencia de la jornada (obligatoria)' : 'Foto o documento'}</label>
+          <input type="file" name="evidenciaArchivo" accept="image/*,application/pdf" ${esJornada ? 'required' : ''}>
           ${it.evidenciaUrl ? '<div style="margin-top:6px"><a href="'+it.evidenciaUrl+'" target="_blank" style="font-size:12px;color:#1a73e8">🔗 Ver evidencia actual</a></div>' : ''}
         </div>
         <div class="field full"><label>Notas sobre lo que hiciste (opcional)</label><textarea name="nota">${it.evidenciaNota||''}</textarea></div>
-        <div class="field full"><button class="btn primary" type="submit">Enviar evidencia</button></div>
+        <div class="field full"><button class="btn primary" type="submit">${esJornada ? 'Marcar cierre y enviar' : 'Enviar evidencia'}</button></div>
       </form>
       <div id="evidenciaItemError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>
     `);
@@ -8728,7 +8791,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       errEl.style.display = 'none';
       const nota = (new FormData(e.target).get('nota') || '').trim();
       const file = e.target.querySelector('[name="evidenciaArchivo"]')?.files?.[0];
-      if (!file && !nota && !it.evidenciaUrl) { errEl.textContent = 'Adjuntá un archivo o dejá una nota.'; errEl.style.display = 'block'; return; }
+      if (esJornada && !file && !it.evidenciaUrl) { errEl.textContent = 'Adjuntá la evidencia de la jornada.'; errEl.style.display = 'block'; return; }
+      if (!esJornada && !file && !nota && !it.evidenciaUrl) { errEl.textContent = 'Adjuntá un archivo o dejá una nota.'; errEl.style.display = 'block'; return; }
       btn.disabled = true; btn.textContent = 'Subiendo…';
       try {
         let evidenciaUrl = it.evidenciaUrl || '';
@@ -8742,15 +8806,16 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         it.evidenciaNota = nota;
         it.estado = 'pendiente';
         it.comentarioOrg = '';
+        if (esJornada && !it.horaCierre) it.horaCierre = nowISO();
         const ok = await saveOne(DB.moduloItems, moduloItemToRow(it));
         if (!ok) throw new Error('No se pudo guardar la evidencia. Probá de nuevo.');
         closeModal();
-        alert('Evidencia enviada. La organización la va a revisar.');
+        alert(esJornada ? 'Jornada cerrada y evidencia enviada. La organización la va a revisar.' : 'Evidencia enviada. La organización la va a revisar.');
         renderPrestadorPublicView(prestadorId);
       } catch(err) {
         errEl.textContent = err.message || 'No se pudo enviar la evidencia.';
         errEl.style.display = 'block';
-        btn.disabled = false; btn.textContent = 'Enviar evidencia';
+        btn.disabled = false; btn.textContent = esJornada ? 'Marcar cierre y enviar' : 'Enviar evidencia';
       }
     };
   }
@@ -8759,14 +8824,28 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   // para los casos en que la validación se hace fuera de E-Mood (una
   // plataforma externa a la que solo la organización tiene acceso) y
   // por lo tanto solo la organización tiene forma de dejar constancia.
+  // 'YYYY-MM-DDTHH:mm' (formato que pide <input type="datetime-local">) <-> ISO.
+  function isoToDatetimeLocal(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    const pad = n => String(n).padStart(2,'0');
+    return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+  }
+
   function openAdminEvidenciaModal(itemId) {
     const it = (state.moduloItems||[]).find(x => x.id === itemId);
     if (!it) return;
     const modulo = moduloAsignadoById(it.moduloAsignadoId);
     const prest = modulo && prestadorById(modulo.prestadorId);
+    const esJornada = it.tipo === 'jornada';
     openModal('Cargar evidencia (administrador)', it.item + (it.descripcion ? ' — ' + it.descripcion : '') + (prest ? ' · '+prest.nombre : ''), `
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Usá esto cuando el cumplimiento se valida por fuera de E-Mood (por ejemplo, en otra plataforma) y solo la organización tiene esa información.</div>
       <form id="adminEvidenciaForm" class="form-grid">
+        ${esJornada ? `
+        <div class="field"><label>Inicio de la jornada</label><input type="datetime-local" name="horaInicio" value="${isoToDatetimeLocal(it.horaInicio)}"></div>
+        <div class="field"><label>Cierre de la jornada</label><input type="datetime-local" name="horaCierre" value="${isoToDatetimeLocal(it.horaCierre)}"></div>
+        ` : ''}
         <div class="field full">
           <label>📎 Foto, documento o captura (opcional)</label>
           <input type="file" name="evidenciaArchivo" accept="image/*,application/pdf">
@@ -8786,6 +8865,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const fd = new FormData(e.target);
       const nota = (fd.get('nota') || '').trim();
       const aprobarYa = !!fd.get('aprobarYa');
+      const horaInicioInput = (fd.get('horaInicio') || '').trim();
+      const horaCierreInput = (fd.get('horaCierre') || '').trim();
       const file = e.target.querySelector('[name="evidenciaArchivo"]')?.files?.[0];
       if (!file && !nota && !it.evidenciaUrl) { errEl.textContent = 'Adjuntá un archivo o dejá una nota explicando la validación.'; errEl.style.display = 'block'; return; }
       btn.disabled = true; btn.textContent = 'Guardando…';
@@ -8801,6 +8882,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         it.evidenciaNota = nota;
         it.estado = aprobarYa ? 'aprobado' : 'pendiente';
         it.comentarioOrg = '';
+        if (esJornada) {
+          if (horaInicioInput) it.horaInicio = new Date(horaInicioInput).toISOString();
+          if (horaCierreInput) it.horaCierre = new Date(horaCierreInput).toISOString();
+        }
         const ok = await saveOne(DB.moduloItems, moduloItemToRow(it));
         if (!ok) throw new Error('No se pudo guardar. Probá de nuevo.');
         if (aprobarYa) await checkCicloCompletion(it.cicloId);
