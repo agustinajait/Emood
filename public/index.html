@@ -8437,6 +8437,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const p = postulacionById(id);
     const s = p && servicioById(p.servicioId);
     if (!p || !s) return;
+    // Evita duplicar el módulo asignado si se hace doble clic en "Aceptar"
+    // (o el evento se dispara dos veces): esta postulación ya fue procesada.
+    if (p.estado !== 'pendiente') return;
+    if ((state.modulosAsignados||[]).some(m => m.postulacionId === p.id)) return;
     if (cuposOcupados(s.id) >= (s.cupos||1)) {
       alert('No hay cupos disponibles para "'+s.titulo+'" ('+(s.cupos||1)+' cupo(s), ya cubiertos). Cerrá otra postulación o aumentá los cupos del módulo para aceptar esta.');
       return;
