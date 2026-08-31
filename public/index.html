@@ -1539,6 +1539,7 @@
         <button class="login-btn" id="adminLoginBtn" onclick="doAdminLogin()">Ingresar →</button>
         <div class="login-error" id="adminLoginError">Email o contraseña incorrectos.</div>
         <div class="login-switch">¿Todavía no tenés una organización? <a onclick="showSignupPanel()">Creá tu cuenta</a></div>
+        <div class="login-switch"><a onclick="showRecoverPanel()">¿Olvidaste tu contraseña?</a></div>
       </div>
 
       <!-- Signup panel (alta de organización nueva) -->
@@ -1595,6 +1596,7 @@
         <button class="login-btn" id="prestadorLoginBtn" style="background:#6d28d9;box-shadow:0 8px 24px rgba(109,40,217,0.35)" onclick="doPrestadorLogin()">Entrar a mi panel →</button>
         <div class="login-error" id="prestadorLoginError">Email o contraseña incorrectos.</div>
         <div class="login-switch">¿Todavía no te registraste? <a onclick="showPrestadorSignupPanel()">Creá tu cuenta de prestador</a></div>
+        <div class="login-switch"><a onclick="showRecoverPanel()">¿Olvidaste tu contraseña?</a></div>
       </div>
 
       <!-- Prestador signup panel (autoregistro) -->
@@ -1619,6 +1621,38 @@
         <div class="login-error" id="prestSignupError">No se pudo crear la cuenta.</div>
         <div class="login-success" id="prestSignupSuccess">¡Cuenta creada! Ya podés usar tu email y contraseña para ingresar.</div>
         <div class="login-switch">¿Ya tenés cuenta? <a onclick="switchLoginTab('prestador')">Iniciar sesión</a></div>
+      </div>
+
+      <!-- Recuperar contraseña: pedir email -->
+      <div class="login-panel" id="loginPanelRecover">
+        <div style="margin-bottom:14px;color:rgba(255,255,255,0.55);font-size:13px;line-height:1.6">
+          Ingresá el email con el que te registraste (como administrador o como prestador) y te mandamos un link para elegir una contraseña nueva.
+        </div>
+        <div class="login-field">
+          <label>Email</label>
+          <input type="email" id="recoverEmailInput" placeholder="vos@email.com" onkeydown="if(event.key==='Enter') doRecoverRequest()">
+        </div>
+        <button class="login-btn" id="recoverBtn" onclick="doRecoverRequest()">Enviar link →</button>
+        <div class="login-error" id="recoverError">No se pudo enviar el email.</div>
+        <div class="login-success" id="recoverSuccess">Listo — revisá tu correo (y la carpeta de spam) y seguí el link para elegir tu nueva contraseña.</div>
+        <div class="login-switch"><a onclick="switchLoginTab('admin')">Volver a iniciar sesión</a></div>
+      </div>
+
+      <!-- Recuperar contraseña: elegir la nueva (se llega acá desde el link del mail) -->
+      <div class="login-panel" id="loginPanelNewPassword">
+        <div style="margin-bottom:14px;color:rgba(255,255,255,0.55);font-size:13px;line-height:1.6">
+          Elegí tu nueva contraseña para entrar a E-Mood.
+        </div>
+        <div class="login-field">
+          <label>Nueva contraseña</label>
+          <input type="password" id="newPwInput" placeholder="Mínimo 6 caracteres" onkeydown="if(event.key==='Enter') doSetNewPassword()">
+        </div>
+        <div class="login-field">
+          <label>Repetí la contraseña</label>
+          <input type="password" id="newPwConfirmInput" placeholder="Mínimo 6 caracteres" onkeydown="if(event.key==='Enter') doSetNewPassword()">
+        </div>
+        <button class="login-btn" id="newPwBtn" onclick="doSetNewPassword()">Guardar y entrar →</button>
+        <div class="login-error" id="newPwError">No se pudo guardar la contraseña.</div>
       </div>
     </div>
   </div>
@@ -2447,6 +2481,102 @@
     if (hint && email) hint.textContent = email;
   }
 
+  /* ── Recuperar contraseña (admin o prestador, mismo flujo) ──
+     1) Pide el email y llama a /auth/v1/recover, que manda un mail con
+        un link de recuperación (mismo mecanismo que la confirmación de
+        alta: vuelve acá con #access_token=...&type=recovery en el hash).
+     2) consumeAuthHashSession() detecta type=recovery y en vez de rutear
+        directo a la app, initApp() muestra loginPanelNewPassword.
+     3) doSetNewPassword() usa ese token temporal para poner la
+        contraseña nueva vía PUT /auth/v1/user, y recién ahí loguea. */
+  function showRecoverPanel() {
+    document.querySelectorAll('.login-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('loginPanelRecover').classList.add('active');
+    document.getElementById('recoverError').style.display = 'none';
+    document.getElementById('recoverSuccess').style.display = 'none';
+  }
+
+  async function doRecoverRequest() {
+    const email = document.getElementById('recoverEmailInput').value.trim();
+    const errEl = document.getElementById('recoverError');
+    const okEl = document.getElementById('recoverSuccess');
+    const btn = document.getElementById('recoverBtn');
+    errEl.style.display = 'none'; okEl.style.display = 'none';
+    if (!email) { errEl.textContent = 'Ingresá tu email.'; errEl.style.display = 'block'; return; }
+    btn.disabled = true; btn.textContent = 'Enviando…';
+    try {
+      await authRequest('/auth/v1/recover', { email });
+      okEl.style.display = 'block';
+    } catch(e) {
+      // Supabase no distingue "no existe" de "existe" por seguridad — este
+      // mensaje solo debería verse ante errores reales (email inválido, etc).
+      errEl.textContent = e.message || 'No se pudo enviar el email.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Enviar link →';
+    }
+  }
+
+  function showNewPasswordPanel() {
+    document.querySelectorAll('.login-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('loginPanelNewPassword').classList.add('active');
+  }
+
+  async function doSetNewPassword() {
+    const pw = document.getElementById('newPwInput').value;
+    const pw2 = document.getElementById('newPwConfirmInput').value;
+    const errEl = document.getElementById('newPwError');
+    const btn = document.getElementById('newPwBtn');
+    errEl.style.display = 'none';
+    if (!pw || pw.length < 6) { errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.'; errEl.style.display = 'block'; return; }
+    if (pw !== pw2) { errEl.textContent = 'Las contraseñas no coinciden.'; errEl.style.display = 'block'; return; }
+    if (!authSession?.access_token) { errEl.textContent = 'El link ya expiró. Pedí uno nuevo desde "¿Olvidaste tu contraseña?".'; errEl.style.display = 'block'; return; }
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+      const res = await fetch(SB_URL + '/auth/v1/user', {
+        method: 'PUT',
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + authSession.access_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw })
+      });
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok) throw new Error(data.msg || data.message || 'No se pudo guardar la contraseña.');
+      // Contraseña actualizada — ahora sí, rutear a la app según el rol.
+      let profile = await fetchMyProfile().catch(()=>null);
+      if (!profile) profile = await finishPendingOrgSignup(authSession.user?.email).catch(()=>null);
+      if (!profile) profile = await finishPendingPrestadorSignup(authSession.user?.email).catch(()=>null);
+      if (profile && profile.role === 'admin') {
+        sessionStorage.setItem('hh_role','admin');
+        currentRole = 'admin';
+        document.getElementById('loginScreen').style.display = 'none';
+        const remote = await loadStateFromSupabase();
+        if (remote) state = normalizeState(remote);
+        showAdminApp();
+        await loadOrgName();
+        await renderAll();
+        return;
+      }
+      if (profile && profile.role === 'prestador' && profile.prestador_id) {
+        sessionStorage.setItem('hh_role','prestador');
+        sessionStorage.setItem('hh_prestador_id', profile.prestador_id);
+        currentRole = 'prestador';
+        document.getElementById('loginScreen').style.display = 'none';
+        await renderPrestadorPublicView(profile.prestador_id);
+        return;
+      }
+      // No se pudo determinar el perfil: contraseña guardada igual, que
+      // inicie sesión manualmente.
+      alert('Contraseña actualizada. Iniciá sesión con tu email y la nueva contraseña.');
+      switchLoginTab('admin');
+    } catch(e) {
+      errEl.textContent = e.message || 'No se pudo guardar la contraseña.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Guardar y entrar →';
+    }
+  }
+
   async function doFinishOrgSetup() {
     const orgName = document.getElementById('finishOrgNameInput').value.trim();
     const adminName = document.getElementById('finishAdminNameInput').value.trim();
@@ -2480,12 +2610,18 @@
   // (#access_token=...), no en localStorage — esto pasa incluso si el
   // link se abrió en un navegador distinto al del registro. La
   // levantamos acá y limpiamos la URL.
+  // Se pone en true cuando el link consumido es de recuperación de
+  // contraseña (type=recovery) — initApp() lo usa para mostrar el panel
+  // de "elegí tu nueva contraseña" en vez de rutear directo a la app.
+  let authRecoveryPending = false;
+
   async function consumeAuthHashSession() {
     const hash = window.location.hash;
     if (!hash || hash.indexOf('access_token=') === -1) return false;
     const params = new URLSearchParams(hash.slice(1));
     const access_token = params.get('access_token');
     const refresh_token = params.get('refresh_token');
+    const type = params.get('type');
     if (!access_token) return false;
     history.replaceState(null, '', window.location.pathname + window.location.search);
     try {
@@ -2495,6 +2631,7 @@
       const user = await res.json().catch(()=>null);
       if (!res.ok || !user?.id) return false;
       saveAuthSession({ access_token, refresh_token, user });
+      authRecoveryPending = (type === 'recovery');
       return true;
     } catch(_) { return false; }
   }
@@ -8697,6 +8834,15 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     // confirmación de email de Supabase), si no la que ya estaba guardada.
     const cameFromEmailLink = await consumeAuthHashSession();
     if (!cameFromEmailLink) loadAuthSession();
+
+    if (cameFromEmailLink && authRecoveryPending) {
+      // Vino del link de "olvidé mi contraseña": frenar acá y pedirle la
+      // contraseña nueva antes de rutear a la app (doSetNewPassword se
+      // encarga de eso una vez que la guarda).
+      document.getElementById('loginScreen').style.display = 'flex';
+      showNewPasswordPanel();
+      return;
+    }
 
     if (authSession?.access_token) {
       let profile = await fetchMyProfile().catch(()=>null);
