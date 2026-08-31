@@ -8412,6 +8412,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     el.innerHTML = postulaciones.map(p => {
       const s = servicioById(p.servicioId);
       const prest = prestadorById(p.prestadorId);
+      // Caso raro pero posible: quedó marcada "aceptada" pero el módulo
+      // asignado nunca se llegó a crear (falló el guardado a mitad de
+      // camino). Sin esto, no quedaría ningún botón para destrabarla.
+      const faltaModulo = p.estado==='aceptada' && !(state.modulosAsignados||[]).some(m => m.postulacionId === p.id);
       const estadoBadge = p.estado==='pendiente' ? '<span class="badge blue">Pendiente</span>' : p.estado==='aceptada' ? '<span class="badge green">Aceptada</span>' : '<span class="badge gray">Rechazada</span>';
       return '<div class="card" style="margin-bottom:10px">' +
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
@@ -8425,6 +8429,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '<button class="btn primary small" data-action="accept-postulacion" data-id="'+p.id+'">✓ Aceptar</button>' +
           '<button class="btn danger small" data-action="reject-postulacion" data-id="'+p.id+'">✕ Rechazar</button>' +
         '</div>' : '') +
+        (faltaModulo ? '<div style="margin-top:10px">' +
+          '<div style="font-size:11px;color:#dc2626;margin-bottom:6px">⚠️ Se aceptó pero no se pudo crear el módulo asignado.</div>' +
+          '<button class="btn secondary small" data-action="accept-postulacion" data-id="'+p.id+'">🔄 Reintentar creación de módulo</button>' +
+        '</div>' : '') +
       '</div>';
     }).join('');
   }
@@ -8437,27 +8445,61 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const p = postulacionById(id);
     const s = p && servicioById(p.servicioId);
     if (!p || !s) return;
-    // Evita duplicar el módulo asignado si se hace doble clic en "Aceptar"
-    // (o el evento se dispara dos veces): esta postulación ya fue procesada.
-    if (p.estado !== 'pendiente') return;
-    if ((state.modulosAsignados||[]).some(m => m.postulacionId === p.id)) return;
-    if (cuposOcupados(s.id) >= (s.cupos||1)) {
-      alert('No hay cupos disponibles para "'+s.titulo+'" ('+(s.cupos||1)+' cupo(s), ya cubiertos). Cerrá otra postulación o aumentá los cupos del módulo para aceptar esta.');
+
+    // Autocorrección: si ya existe un módulo asignado para esta
+    // postulación (típicamente porque un intento anterior creó el
+    // módulo pero se cortó antes de marcar la postulación como
+    // aceptada), no la bloqueamos en silencio — arreglamos el estado
+    // y avisamos, en vez de dejar la postulación "pendiente" para
+    // siempre con el botón de Aceptar sin hacer nada visible.
+    const moduloExistente = (state.modulosAsignados||[]).find(m => m.postulacionId === p.id);
+    if (moduloExistente) {
+      if (p.estado !== 'aceptada') {
+        p.estado = 'aceptada';
+        await saveOne(DB.postulaciones, postulacionToRow(p));
+        alert('Esta postulación ya tenía un módulo asignado creado (de un intento anterior que no se guardó del todo) — se corrigió el estado. Revisá "Módulos asignados".');
+      }
+      renderPostulaciones();
+      renderModulosAsignados();
       return;
     }
-    if (!(s.protocolo||[]).length) {
-      alert('"'+s.titulo+'" no tiene ítems cargados en el Protocolo de entregables. Editá el módulo y agregá al menos uno antes de aceptar postulaciones — si no, el prestador no va a tener nada para subir.');
-      return;
+    if (p.estado === 'rechazada') return; // no se acepta desde acá una ya rechazada
+
+    // Caso normal: todavía pendiente. Caso reintento: ya está "aceptada"
+    // pero sin módulo (falló la creación en un intento anterior) — en
+    // ese caso saltamos los chequeos de cupos/protocolo, porque el cupo
+    // de esta postulación ya se consideró ocupado desde que se aceptó.
+    if (p.estado === 'pendiente') {
+      if (cuposOcupados(s.id) >= (s.cupos||1)) {
+        alert('No hay cupos disponibles para "'+s.titulo+'" ('+(s.cupos||1)+' cupo(s), ya cubiertos). Cerrá otra postulación o aumentá los cupos del módulo para aceptar esta.');
+        return;
+      }
+      if (!(s.protocolo||[]).length) {
+        alert('"'+s.titulo+'" no tiene ítems cargados en el Protocolo de entregables. Editá el módulo y agregá al menos uno antes de aceptar postulaciones — si no, el prestador no va a tener nada para subir.');
+        return;
+      }
+      const estadoPrevio = p.estado;
+      p.estado = 'aceptada';
+      const okPost = await saveOne(DB.postulaciones, postulacionToRow(p));
+      if (!okPost) {
+        p.estado = estadoPrevio;
+        alert('No se pudo aceptar la postulación: falló al guardar en el servidor. Revisá la consola del navegador (F12) para el detalle, o probá de nuevo.');
+        renderPostulaciones();
+        return;
+      }
     }
-    p.estado = 'aceptada';
-    await saveOne(DB.postulaciones, postulacionToRow(p));
 
     const modulo = {
       id: uid(), organizationId: s.organizationId, servicioId: s.id, postulacionId: p.id, prestadorId: p.prestadorId,
       protocolo: JSON.parse(JSON.stringify(s.protocolo||[])), estado: 'en_progreso', createdAt: nowISO(),
     };
+    const okModulo = await saveOne(DB.modulosAsignados, moduloAsignadoToRow(modulo));
+    if (!okModulo) {
+      alert('La postulación se marcó como aceptada, pero no se pudo crear el módulo asignado (falló al guardar). Volvé a tocar "Aceptar" en un rato para reintentar solo la creación del módulo.');
+      renderPostulaciones();
+      return;
+    }
     state.modulosAsignados.push(modulo);
-    await saveOne(DB.modulosAsignados, moduloAsignadoToRow(modulo));
 
     // Primer ciclo (mes en curso) — los siguientes se abren solos
     // cuando llegue el mes, mientras el módulo siga vigente.
