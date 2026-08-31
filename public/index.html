@@ -8283,7 +8283,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       return tempProtocolo.map((it,i) =>
         '<div style="display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:6px;background:#fafaf8">' +
         '<div><strong style="font-size:13px">'+it.item+'</strong>' +
-          (it.tipo==='jornada' ? ' <span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">🕒 Jornada de trabajo</span>' : '') +
+          (it.tipo==='jornada' ? ' <span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">🕒 Jornada de servicio</span>' : '') +
           (it.descripcion?'<div style="font-size:12px;color:var(--muted)">'+it.descripcion+'</div>':'')+'</div>' +
         '<button type="button" class="btn danger xs" onclick="removeProtocoloItem('+i+')">✕</button>' +
         '</div>'
@@ -8339,11 +8339,11 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '<input id="protoDescInput" placeholder="Descripción (opcional)" style="flex:2;min-width:160px">' +
             '<select id="protoTipoInput" style="flex:1;min-width:150px">' +
               '<option value="tarea">📋 Tarea / entregable</option>' +
-              '<option value="jornada">🕒 Jornada de trabajo</option>' +
+              '<option value="jornada">🕒 Jornada de servicio</option>' +
             '</select>' +
             '<button type="button" class="btn secondary small" onclick="confirmAddProtocoloItem()">＋</button>' +
           '</div>' +
-          '<div style="font-size:11px;color:var(--muted);margin-top:4px">"Jornada de trabajo" es para tareas de campo con inicio/cierre diario (ej: Censo Flash) — se repite automáticamente "Veces por período" veces en cada ciclo, y el prestador marca inicio, marca cierre y adjunta una evidencia por jornada.</div>' +
+          '<div style="font-size:11px;color:var(--muted);margin-top:4px">"Jornada de servicio" es para tareas de campo con inicio/cierre diario (ej: Censo Flash) — se repite automáticamente "Veces por período" veces en cada ciclo, y el prestador marca inicio, marca cierre y adjunta una evidencia por jornada.</div>' +
         '</div>' +
         (existing ? '<div class="field"><label>Estado</label><select name="estado"><option value="activo"'+(existing.estado==='activo'?' selected':'')+'>Activo</option><option value="cerrado"'+(existing.estado==='cerrado'?' selected':'')+'>Cerrado</option></select></div>' : '') +
         '<div class="field full"><button class="btn primary" type="submit">'+(existing?'Actualizar':'Publicar')+' módulo</button></div>' +
