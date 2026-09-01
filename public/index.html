@@ -3208,7 +3208,15 @@
         if (state.products.length) await sbUpsert(DB.products, state.products.map(productToRow));
         if (state.certifications.length) await sbUpsert(DB.certifications, state.certifications.map(certToRow));
         if (state.comments.length) await sbUpsert(DB.comments, state.comments.map(commentToRow));
-        if (state.prestadores.length) await sbUpsert(DB.prestadores, state.prestadores.map(prestadorToRow));
+        // NO reintentar prestadores acá: desde el modelo de pool
+        // compartido, esta organización solo puede actualizar el
+        // legajo de un prestador si ya tiene un módulo asignado con
+        // ella (ver hh_prestadores_update). state.prestadores incluye
+        // también a los que solo tienen una POSTULACIÓN pendiente
+        // (visibles por SELECT, pero no editables) — reintentar el
+        // upsert de todos acá disparaba un 403 de RLS en cada render
+        // completo. Cada alta/edición real de prestador ya se guarda
+        // sola vía saveOne() en el momento en que pasa.
         if (state.protocolos.length) await sbUpsert(DB.protocolos, state.protocolos);
         if (state.itemsGlobales.length) await sbUpsert(DB.itemsGlobales, state.itemsGlobales);
         if (state.seguimientos.length) await sbUpsert(DB.seguimientos, state.seguimientos);
