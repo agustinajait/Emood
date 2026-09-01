@@ -8565,7 +8565,17 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           Object.keys(FRECUENCIA_LABEL).map(k=>'<option value="'+k+'"'+(existing?.frecuencia===k?' selected':'')+'>'+FRECUENCIA_LABEL[k]+'</option>').join('') +
         '</select></div>' +
         '<div class="field"><label>Cupos (vacantes)</label><input type="number" min="1" step="1" name="cupos" value="'+(existing?.cupos??1)+'"></div>' +
-        '<div class="field"><label>Veces por período</label><input type="number" min="1" step="1" name="cantidadPorPeriodo" value="'+(existing?.cantidadPorPeriodo??1)+'"><div style="font-size:11px;color:var(--muted);margin-top:3px">Ej: diario × 22 veces al mes = 22.</div></div>' +
+        '<div class="field"><label>Veces por período (siempre el total del MES — un remito es mensual)</label>' +
+          '<input type="number" min="1" step="1" name="cantidadPorPeriodo" id="cantidadPorPeriodoInput" value="'+(existing?.cantidadPorPeriodo??1)+'">' +
+          '<div style="font-size:11px;color:var(--muted);margin-top:3px">Ej: diario × 22 veces al mes = 22. Si es "2 veces por semana", NO pongas 2 acá — son ~8 al mes (usá la calculadora de abajo).</div>' +
+          '<div style="display:flex;gap:6px;align-items:center;margin-top:6px">' +
+            '<span style="font-size:11px;color:var(--muted)">🧮 veces/semana</span>' +
+            '<input type="number" id="vecesPorSemanaInput" min="1" step="1" style="width:56px" placeholder="2">' +
+            '<span style="font-size:11px;color:var(--muted)">× semanas/mes</span>' +
+            '<input type="number" id="semanasPorMesInput" min="1" step="0.1" style="width:56px" value="4">' +
+            '<button type="button" class="btn secondary xs" onclick="calcularCantidadPorPeriodo()">Calcular</button>' +
+          '</div>' +
+        '</div>' +
         '<div class="field"><label>Fecha de inicio</label><input type="date" name="fechaInicio" value="'+(existing?.fechaInicio||'')+'"></div>' +
         '<div class="field"><label>Fecha de fin</label><input type="date" name="fechaFin" value="'+(existing?.fechaFin||'')+'"></div>' +
         '<div class="field"><label>Deadline para postularse</label><input type="date" name="deadline" value="'+(existing?.deadline||'')+'"></div>' +
@@ -8608,6 +8618,12 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       '</form>'
     );
 
+    window.calcularCantidadPorPeriodo = function() {
+      const veces = Number(document.getElementById('vecesPorSemanaInput').value);
+      const semanas = Number(document.getElementById('semanasPorMesInput').value) || 4;
+      if (!veces || veces <= 0) { alert('Ingresá cuántas veces por semana trabaja.'); return; }
+      document.getElementById('cantidadPorPeriodoInput').value = Math.round(veces * semanas);
+    };
     window.confirmAddProtocoloItem = function() {
       const item = document.getElementById('protoItemInput').value.trim();
       const descripcion = document.getElementById('protoDescInput').value.trim();
