@@ -2046,6 +2046,34 @@
     return data;
   }
 
+  // El access_token de Supabase Auth vence (típicamente al ~1hs). Antes
+  // de esto, ninguna parte de la app lo renovaba — si dejabas la pestaña
+  // abierta más de una hora, todos los guardados (aceptar postulación,
+  // subir evidencia, etc.) empezaban a fallar en silencio con 401/403,
+  // sin ningún aviso claro. refreshAuthSessionOnce() lo renueva con el
+  // refresh_token guardado; sbFetch/sbUpload lo llaman solos ante un 401
+  // y reintentan el mismo pedido una vez.
+  let refreshInFlight = null;
+  async function refreshAuthSessionOnce() {
+    if (!authSession?.refresh_token) return false;
+    if (!refreshInFlight) {
+      refreshInFlight = (async () => {
+        try {
+          const res = await fetch(SB_URL + '/auth/v1/token?grant_type=refresh_token', {
+            method: 'POST',
+            headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: authSession.refresh_token })
+          });
+          const data = await res.json().catch(()=>({}));
+          if (!res.ok || !data.access_token) return false;
+          saveAuthSession({ access_token: data.access_token, refresh_token: data.refresh_token || authSession.refresh_token, user: data.user || authSession.user });
+          return true;
+        } catch(_) { return false; }
+      })().finally(() => { refreshInFlight = null; });
+    }
+    return refreshInFlight;
+  }
+
   async function authSignOut() {
     if (authSession?.access_token) {
       try {
@@ -2124,7 +2152,7 @@
     return data?.user?.id || data?.id || null;
   }
 
-  async function sbFetch(path, options) {
+  async function sbFetch(path, options, _retried) {
     try {
       // Always merge headers explicitly to avoid spread override issues
       const mergedHeaders = Object.assign({}, sbHeaders(), options?.headers || {});
@@ -2135,6 +2163,17 @@
       try { data = text ? JSON.parse(text) : []; } catch(_) { data = []; }
       if (!res.ok) {
         const errDetail = (data && data.message) ? data.message : text.slice(0, 300);
+        // Sesión vencida (o a punto de vencer): intenta renovarla UNA vez
+        // con el refresh_token y reintenta el mismo pedido, en vez de
+        // fallar en silencio dejando algo a medio guardar.
+        if (res.status === 401 && !_retried && authSession?.refresh_token) {
+          const renovado = await refreshAuthSessionOnce();
+          if (renovado) return sbFetch(path, options, true);
+          await authSignOut();
+          alert('Tu sesión venció. Iniciá sesión de nuevo para seguir — lo que estabas por hacer no se guardó.');
+          const loginScreen = document.getElementById('loginScreen');
+          if (loginScreen) loginScreen.style.display = 'flex';
+        }
         console.error('Supabase error [' + res.status + '] ' + path + ':', errDetail);
         return { data: [], error: errDetail };
       }
@@ -2189,7 +2228,7 @@
 
 
 
-  async function sbUpload(bucket, path, file) {
+  async function sbUpload(bucket, path, file, _retried) {
     try {
       // Bug: esto mandaba siempre la anon key, nunca el token del
       // usuario logueado — Postgres veía el pedido como 'anon', no
@@ -2208,6 +2247,12 @@
       });
       if (!res.ok) {
         const t = await res.text();
+        // Mismo caso que en sbFetch: sesión vencida, renovar y reintentar
+        // una vez antes de darlo por perdido.
+        if (res.status === 401 && !_retried && authSession?.refresh_token) {
+          const renovado = await refreshAuthSessionOnce();
+          if (renovado) return sbUpload(bucket, path, file, true);
+        }
         console.error('sbUpload error [' + res.status + ']:', t.slice(0, 200));
         return '';
       }
@@ -9300,6 +9345,13 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     // confirmación de email de Supabase), si no la que ya estaba guardada.
     const cameFromEmailLink = await consumeAuthHashSession();
     if (!cameFromEmailLink) loadAuthSession();
+
+    // Renueva el token de sesión cada 45' mientras la app quede abierta,
+    // para que no llegue a vencer en medio de una sesión de trabajo larga
+    // (el access_token de Supabase Auth dura ~1hs). sbFetch/sbUpload ya
+    // reintentan solos si igual llega a vencer, esto es para que ni
+    // siquiera pase.
+    setInterval(() => { if (authSession?.refresh_token) refreshAuthSessionOnce(); }, 45*60*1000);
 
     if (cameFromEmailLink && authRecoveryPending) {
       // Vino del link de "olvidé mi contraseña": frenar acá y pedirle la
