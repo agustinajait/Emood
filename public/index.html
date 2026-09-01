@@ -3189,6 +3189,34 @@
     return !errMsg;
   }
 
+  // Actualiza una fila EXISTENTE con un PATCH real, en vez del upsert
+  // (INSERT ... ON CONFLICT) que usa sbUpsert. Hace falta para tablas
+  // donde quien puede INSERTAR y quien puede ACTUALIZAR son roles
+  // distintos (ej: hh_postulaciones — solo el prestador puede crearlas,
+  // pero el admin las acepta/rechaza): Postgres exige que un upsert
+  // pase el WITH CHECK de la política de INSERT aunque el resultado
+  // sea un UPDATE por conflicto, así que el admin nunca podía guardar
+  // el cambio de estado — fallaba con "violates row-level security
+  // policy" sin ninguna pista de por qué. Un PATCH solo evalúa la
+  // política de UPDATE, que sí contempla al admin.
+  async function sbUpdate(table, id, row) {
+    const plainRow = JSON.parse(JSON.stringify(row));
+    delete plainRow.id;
+    const { error } = await sbFetch('/rest/v1/' + table + '?id=eq.' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify(plainRow)
+    });
+    if (error) console.error('sbUpdate [' + table + '] error:', error);
+    return !error;
+  }
+  async function saveOneUpdate(table, id, row) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeState(state))); } catch(e) {}
+    const ok = await sbUpdate(table, id, row);
+    setSyncStatus(ok ? 'Guardado' : 'Error al guardar — revisá la consola', ok ? 'ok' : 'error');
+    return ok;
+  }
+
   async function saveState() {
     try {
       // Always save full state locally as backup
@@ -8788,7 +8816,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     if (moduloExistente) {
       if (p.estado !== 'aceptada') {
         p.estado = 'aceptada';
-        await saveOne(DB.postulaciones, postulacionToRow(p));
+        await saveOneUpdate(DB.postulaciones, p.id, postulacionToRow(p));
         alert('Esta postulación ya tenía un módulo asignado creado (de un intento anterior que no se guardó del todo) — se corrigió el estado. Revisá "Módulos asignados".');
       }
       renderPostulaciones();
@@ -8812,7 +8840,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       }
       const estadoPrevio = p.estado;
       p.estado = 'aceptada';
-      const okPost = await saveOne(DB.postulaciones, postulacionToRow(p));
+      const okPost = await saveOneUpdate(DB.postulaciones, p.id, postulacionToRow(p));
       if (!okPost) {
         p.estado = estadoPrevio;
         alert('No se pudo aceptar la postulación: falló al guardar en el servidor. Revisá la consola del navegador (F12) para el detalle, o probá de nuevo.');
@@ -8889,8 +8917,13 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   async function rejectPostulacion(id) {
     const p = postulacionById(id);
     if (!p) return;
+    const estadoPrevio = p.estado;
     p.estado = 'rechazada';
-    await saveOne(DB.postulaciones, postulacionToRow(p));
+    const ok = await saveOneUpdate(DB.postulaciones, p.id, postulacionToRow(p));
+    if (!ok) {
+      p.estado = estadoPrevio;
+      alert('No se pudo rechazar la postulación: falló al guardar en el servidor. Probá de nuevo.');
+    }
     renderPostulaciones();
   }
 
