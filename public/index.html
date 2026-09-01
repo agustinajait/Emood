@@ -1775,8 +1775,16 @@
     <section class="page" id="page-prestadores">
       <div class="topbar">
         <div class="topbar-left"><h2>Prestadores de servicio</h2><p>Personas que brindan servicio a la organización.</p></div>
-        <div class="actions"><button class="btn primary" id="openPrestadorBtn">＋ Nuevo prestador</button></div>
+        <div class="actions">
+          <button class="btn secondary" id="openDuplaBtn" onclick="openDuplaModal()" style="display:none">＋ Nueva dupla</button>
+          <button class="btn primary" id="openPrestadorBtn">＋ Nuevo prestador</button>
+        </div>
       </div>
+      <div class="sv-tabs">
+        <button class="sv-tab active" data-prtab="prestadores" onclick="switchPrestadoresTab('prestadores')">Prestadores</button>
+        <button class="sv-tab" data-prtab="duplas" onclick="switchPrestadoresTab('duplas')">Duplas</button>
+      </div>
+      <div id="prestadoresTabPrestadores">
       <!-- LIST VIEW -->
       <div id="prestadoresListView">
         <div class="card">
@@ -1799,6 +1807,8 @@
         </div>
         <div id="prestadorDetailContent"></div>
       </div>
+      </div>
+      <div id="prestadoresTabDuplas" style="display:none"><div id="duplasListContent"></div></div>
     </section>
 
 
@@ -2391,7 +2401,8 @@
       postulaciones: Array.isArray(data?.postulaciones) ? data.postulaciones : [],
       modulosAsignados: Array.isArray(data?.modulosAsignados) ? data.modulosAsignados : [],
       moduloItems: Array.isArray(data?.moduloItems) ? data.moduloItems : [],
-      moduloCiclos: Array.isArray(data?.moduloCiclos) ? data.moduloCiclos : []
+      moduloCiclos: Array.isArray(data?.moduloCiclos) ? data.moduloCiclos : [],
+      duplas: Array.isArray(data?.duplas) ? data.duplas : []
     };
   }
 
@@ -2826,6 +2837,7 @@
     modulosAsignados: 'hh_modulos_asignados',
     moduloItems:      'hh_modulo_items',
     moduloCiclos:     'hh_modulo_ciclos',
+    duplas:           'hh_duplas',
   };
 
   // ── Servicio → Postulación → Módulo asignado → Remito ──────
@@ -2884,7 +2896,7 @@
     return {
       id: m.id, organization_id: m.organizationId||null, servicio_id: m.servicioId, postulacion_id: m.postulacionId||null,
       prestador_id: m.prestadorId, protocolo: JSON.stringify(m.protocolo||[]),
-      estado: m.estado||'en_progreso', codigo_externo: m.codigoExterno||null,
+      estado: m.estado||'en_progreso', codigo_externo: m.codigoExterno||null, dupla_id: m.duplaId||null,
       remito_numero: m.remitoNumero||null, remito_fecha: m.remitoFecha||null,
       created_at: m.createdAt||nowISO(), updated_at: nowISO(),
     };
@@ -2894,7 +2906,7 @@
       id: r.id, organizationId: r.organization_id||null, servicioId: r.servicio_id, postulacionId: r.postulacion_id||null,
       prestadorId: r.prestador_id,
       protocolo: (()=>{ try { return JSON.parse(r.protocolo||'[]'); } catch(_){ return []; } })(),
-      estado: r.estado||'en_progreso', codigoExterno: r.codigo_externo||'',
+      estado: r.estado||'en_progreso', codigoExterno: r.codigo_externo||'', duplaId: r.dupla_id||null,
       remitoNumero: r.remito_numero||'', remitoFecha: r.remito_fecha||'',
       createdAt: r.created_at||'', updatedAt: r.updated_at||'',
     };
@@ -2932,6 +2944,22 @@
       id: r.id, organizationId: r.organization_id||null, moduloAsignadoId: r.modulo_asignado_id, periodo: r.periodo||'',
       estado: r.estado||'en_progreso',
       remitoNumero: r.remito_numero||'', remitoFecha: r.remito_fecha||'',
+      createdAt: r.created_at||'', updatedAt: r.updated_at||'',
+    };
+  }
+  function duplaToRow(d) {
+    return {
+      id: d.id, organization_id: d.organizationId||null, nombre: d.nombre||'', codigo_externo: d.codigoExterno||null,
+      prestador_id_1: d.prestadorId1||null, rol_1: d.rol1||'',
+      prestador_id_2: d.prestadorId2||null, rol_2: d.rol2||'',
+      created_at: d.createdAt||nowISO(), updated_at: nowISO(),
+    };
+  }
+  function rowToDupla(r) {
+    return {
+      id: r.id, organizationId: r.organization_id||null, nombre: r.nombre||'', codigoExterno: r.codigo_externo||'',
+      prestadorId1: r.prestador_id_1||null, rol1: r.rol_1||'',
+      prestadorId2: r.prestador_id_2||null, rol2: r.rol_2||'',
       createdAt: r.created_at||'', updatedAt: r.updated_at||'',
     };
   }
@@ -3073,6 +3101,7 @@
       const masig = await sbSelect(DB.modulosAsignados, 'created_at.desc').catch(()=>({data:[],errMsg:null}));
       const mit   = await sbSelect(DB.moduloItems, 'created_at').catch(()=>({data:[],errMsg:null}));
       const cic   = await sbSelect(DB.moduloCiclos, 'periodo.desc').catch(()=>({data:[],errMsg:null}));
+      const dup   = await sbSelect(DB.duplas, 'created_at.desc').catch(()=>({data:[],errMsg:null}));
       return {
         agencies:       ag.data.map(rowToAgency),
         challenges:     ch.data.map(rowToChallenge),
@@ -3092,6 +3121,7 @@
         modulosAsignados: masig.data.map(rowToModuloAsignado),
         moduloItems:      mit.data.map(rowToModuloItem),
         moduloCiclos:     cic.data.map(rowToModuloCiclo),
+        duplas:           dup.data.map(rowToDupla),
       };
     } catch(e) {
       console.warn('Supabase unavailable:', e.message || e);
@@ -4164,6 +4194,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     renderAgencies();
     renderReports();
     renderPrestadores();
+    renderDuplas();
     renderProtocolos();
     renderSeguimiento();
     renderLiquidacion();
@@ -4711,6 +4742,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='resync-ciclo-items') await resyncCicloItems(id);
     else if (action==='admin-cargar-evidencia') openAdminEvidenciaModal(id);
     else if (action==='set-codigo-externo') await setCodigoExternoModulo(id);
+    else if (action==='generar-remito-dupla') await generarRemitoCombinadoDupla(id);
+    else if (action==='edit-dupla') { const d=duplaById(id); if(d) openDuplaModal(d); }
+    else if (action==='vincular-modulos-dupla') await vincularModulosDupla(id);
+    else if (action==='delete-dupla') await deleteDupla(id);
     else if (action==='postular-servicio') { const sid=btn.dataset.sid; openPostularModal(sid, id); }
     else if (action==='subir-evidencia-item') { openSubirEvidenciaModal(id, btn.dataset.pid); }
     else if (action==='marcar-inicio-jornada') await marcarInicioJornada(id, btn.dataset.pid);
@@ -4972,6 +5007,118 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       }
     });
     return Math.round(total);
+  }
+
+  /* ─── DUPLAS (equipos de 2 prestadores, ej: chofer + operador) ───
+     No reemplaza el modelo 1 prestador = 1 postulación = 1 módulo
+     asignado — es una capa de agrupación para vincular a los 2
+     integrantes bajo un mismo código externo (webhook) y, si hace
+     falta, generar un remito combinado en vez de uno por persona. ── */
+  function duplaById(id) { return (state.duplas||[]).find(d => d.id === id); }
+
+  function renderDuplas() {
+    const el = document.getElementById('duplasListContent');
+    if (!el) return;
+    const duplas = state.duplas || [];
+    if (!duplas.length) {
+      el.innerHTML = '<div class="empty">Todavía no creaste ninguna dupla. Usá "＋ Nueva dupla".</div>';
+      return;
+    }
+    el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px">' +
+      duplas.map(d => {
+        const p1 = prestadorById(d.prestadorId1);
+        const p2 = prestadorById(d.prestadorId2);
+        return '<div class="card">' +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">' +
+            '<div style="font-weight:700;font-size:15px">'+(d.nombre||'Dupla sin nombre')+'</div>' +
+            (d.codigoExterno ? '<span class="badge blue">🔗 '+d.codigoExterno+'</span>' : '<span class="badge gray">Sin código externo</span>') +
+          '</div>' +
+          '<div style="font-size:13px;margin-bottom:4px">👤 '+(d.rol1||'Integrante 1')+': <strong>'+(p1?.nombre||'—')+'</strong></div>' +
+          '<div style="font-size:13px;margin-bottom:10px">👤 '+(d.rol2||'Integrante 2')+': <strong>'+(p2?.nombre||'—')+'</strong></div>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+            '<button class="btn secondary small" data-action="edit-dupla" data-id="'+d.id+'">Editar</button>' +
+            '<button class="btn secondary small" data-action="vincular-modulos-dupla" data-id="'+d.id+'">🔗 Vincular módulos</button>' +
+            '<button class="btn danger small" data-action="delete-dupla" data-id="'+d.id+'">Eliminar</button>' +
+          '</div>' +
+        '</div>';
+      }).join('') + '</div>';
+  }
+
+  function openDuplaModal(existing=null) {
+    openModal(existing ? 'Editar dupla' : 'Nueva dupla',
+      'Agrupá a los 2 integrantes de un equipo (ej: chofer + operador) para vincular sus módulos asignados y, si hace falta, generar un remito combinado.',
+      '<form id="duplaForm" class="form-grid">' +
+        '<div class="field full"><label>Nombre de la dupla</label><input name="nombre" required placeholder="Ej: Dupla 07" value="'+(existing?.nombre||'')+'"></div>' +
+        '<div class="field full"><label>Código externo (ej: número de dupla en Censo Flash)</label><input name="codigoExterno" value="'+(existing?.codigoExterno||'')+'"></div>' +
+        '<div class="field"><label>Integrante 1 — rol</label><input name="rol1" placeholder="Ej: Chofer" value="'+(existing?.rol1||'')+'"></div>' +
+        '<div class="field"><label>Integrante 1 — prestador</label><select name="prestadorId1"><option value="">Sin asignar</option>' +
+          (state.prestadores||[]).map(p=>'<option value="'+p.id+'"'+(p.id===existing?.prestadorId1?' selected':'')+'>'+p.nombre+'</option>').join('') +
+        '</select></div>' +
+        '<div class="field"><label>Integrante 2 — rol</label><input name="rol2" placeholder="Ej: Operador" value="'+(existing?.rol2||'')+'"></div>' +
+        '<div class="field"><label>Integrante 2 — prestador</label><select name="prestadorId2"><option value="">Sin asignar</option>' +
+          (state.prestadores||[]).map(p=>'<option value="'+p.id+'"'+(p.id===existing?.prestadorId2?' selected':'')+'>'+p.nombre+'</option>').join('') +
+        '</select></div>' +
+        '<div class="field full"><button class="btn primary" type="submit">'+(existing?'Actualizar':'Crear')+' dupla</button></div>' +
+      '</form>'
+    );
+    document.getElementById('duplaForm').onsubmit = async e => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target).entries());
+      const fields = {
+        nombre: data.nombre.trim(), codigoExterno: (data.codigoExterno||'').trim(),
+        prestadorId1: data.prestadorId1||null, rol1: (data.rol1||'').trim(),
+        prestadorId2: data.prestadorId2||null, rol2: (data.rol2||'').trim(),
+      };
+      if (existing) {
+        Object.assign(existing, fields);
+        const ok = await saveOne(DB.duplas, duplaToRow(existing));
+        if (!ok) { alert('No se pudo actualizar la dupla. Probá de nuevo.'); return; }
+      } else {
+        const d = { id: uid(), ...fields, createdAt: nowISO() };
+        if (!state.duplas) state.duplas = [];
+        state.duplas.push(d);
+        const ok = await saveOne(DB.duplas, duplaToRow(d));
+        if (!ok) { alert('No se pudo crear la dupla. Probá de nuevo.'); state.duplas = state.duplas.filter(x=>x.id!==d.id); return; }
+      }
+      closeModal();
+      renderDuplas();
+    };
+  }
+
+  async function deleteDupla(id) {
+    if (!confirm('¿Eliminar esta dupla? No borra a los prestadores ni sus módulos asignados, solo la agrupación.')) return;
+    state.duplas = (state.duplas||[]).filter(d => d.id !== id);
+    await deleteOne(DB.duplas, id);
+    renderDuplas();
+  }
+
+  // Busca el módulo asignado ACTIVO de cada integrante y le carga el
+  // duplaId + código externo de la dupla, para que el webhook externo
+  // (ej: Censo Flash) y el remito combinado sepan cuáles son.
+  async function vincularModulosDupla(duplaId) {
+    const d = duplaById(duplaId);
+    if (!d) return;
+    if (!d.codigoExterno) { alert('Esta dupla todavía no tiene un código externo cargado — editala y agregalo primero.'); return; }
+    const candidatos = [d.prestadorId1, d.prestadorId2].filter(Boolean);
+    if (!candidatos.length) { alert('Esta dupla todavía no tiene integrantes cargados.'); return; }
+    let vinculados = 0;
+    const ambiguos = [];
+    for (const pid of candidatos) {
+      const activos = (state.modulosAsignados||[]).filter(m => m.prestadorId === pid && m.estado === 'en_progreso');
+      if (activos.length === 1) {
+        const m = activos[0];
+        m.duplaId = d.id;
+        m.codigoExterno = d.codigoExterno;
+        await saveOne(DB.modulosAsignados, moduloAsignadoToRow(m));
+        vinculados++;
+      } else if (activos.length > 1) {
+        ambiguos.push(prestadorById(pid)?.nombre || pid);
+      }
+    }
+    renderModulosAsignados();
+    let msg = vinculados + ' módulo(s) asignado(s) vinculado(s) a la dupla "'+d.nombre+'".';
+    if (ambiguos.length) msg += '\n\nOjo: '+ambiguos.join(', ')+' tiene(n) más de un módulo activo — vinculalo(s) a mano desde "Módulos asignados" con el botón "🔗 Vincular código externo" (código: "'+d.codigoExterno+'").';
+    alert(msg);
   }
 
   /* ─── RENDER PRESTADORES ─────────────────────────────── */
@@ -8184,10 +8331,19 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
   /* ─── SERVICIOS → POSTULACIONES → MÓDULOS ASIGNADOS → REMITO ─ */
   function switchServiciosTab(tab) {
-    document.querySelectorAll('.sv-tab').forEach(b => b.classList.toggle('active', b.dataset.svtab===tab));
+    document.querySelectorAll('#page-servicios .sv-tab').forEach(b => b.classList.toggle('active', b.dataset.svtab===tab));
     document.getElementById('serviciosTabServicios').style.display = tab==='servicios' ? 'block' : 'none';
     document.getElementById('serviciosTabPostulaciones').style.display = tab==='postulaciones' ? 'block' : 'none';
     document.getElementById('serviciosTabAsignados').style.display = tab==='asignados' ? 'block' : 'none';
+  }
+
+  function switchPrestadoresTab(tab) {
+    document.querySelectorAll('#page-prestadores .sv-tab').forEach(b => b.classList.toggle('active', b.dataset.prtab===tab));
+    document.getElementById('prestadoresTabPrestadores').style.display = tab==='prestadores' ? 'block' : 'none';
+    document.getElementById('prestadoresTabDuplas').style.display = tab==='duplas' ? 'block' : 'none';
+    document.getElementById('openPrestadorBtn').style.display = tab==='prestadores' ? '' : 'none';
+    document.getElementById('openDuplaBtn').style.display = tab==='duplas' ? '' : 'none';
+    if (tab === 'duplas') renderDuplas();
   }
 
   function servicioById(id) { return (state.servicios||[]).find(s => s.id === id); }
@@ -8683,7 +8839,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
               '</div>';
             }).join('') +
             (c.estado==='en_progreso' && !items.length ? '<div style="margin-top:6px"><div style="font-size:11px;color:#dc2626;margin-bottom:6px">⚠️ Este ciclo no tiene ítems (el módulo no tenía protocolo cargado cuando se abrió). Agregá ítems al módulo y después resincronizá.</div><button class="btn secondary xs" data-action="resync-ciclo-items" data-id="'+c.id+'">🔄 Resincronizar ítems del protocolo</button></div>' : '') +
-            (c.estado==='completado' ? '<div style="margin-top:10px"><button class="btn primary xs" data-action="generar-remito-asignado" data-id="'+c.id+'">📄 Generar remito de '+periodoLabel(c.periodo)+'</button></div>' : '') +
+            (c.estado==='completado' ? '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
+              '<button class="btn primary xs" data-action="generar-remito-asignado" data-id="'+c.id+'">📄 Generar remito de '+periodoLabel(c.periodo)+'</button>' +
+              (m.duplaId ? '<button class="btn secondary xs" data-action="generar-remito-dupla" data-id="'+c.id+'">🤝 Generar remito combinado (dupla)</button>' : '') +
+            '</div>' : '') +
             (c.estado==='aprobado' ? '<div style="margin-top:10px;font-size:12px;color:var(--muted)">Remito #'+c.remitoNumero+'</div>' : '') +
           '</div>';
         }).join('') : '<div class="empty">Todavía no se abrió el primer ciclo.</div>') +
@@ -8756,6 +8915,62 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     ciclo.remitoNumero = remitoNum;
     ciclo.remitoFecha = nowISO();
     await saveOne(DB.moduloCiclos, moduloCicloToRow(ciclo));
+    renderModulosAsignados();
+  }
+
+  // Para cuando la dupla factura con un solo comprobante en vez de uno
+  // por persona: suma el monto de los ciclos completados de los 2
+  // módulos asignados de la dupla en un único remito, y aprueba ambos
+  // ciclos con el mismo número.
+  async function generarRemitoCombinadoDupla(cicloId) {
+    const ciclo = cicloById(cicloId);
+    if (!ciclo || ciclo.estado !== 'completado') return;
+    const modulo = moduloAsignadoById(ciclo.moduloAsignadoId);
+    if (!modulo?.duplaId) return;
+    const dupla = duplaById(modulo.duplaId);
+    const partnerModulo = (state.modulosAsignados||[]).find(m => m.duplaId === modulo.duplaId && m.id !== modulo.id);
+    if (!partnerModulo) { alert('No encontré otro módulo asignado vinculado a esta dupla — vinculalos desde "Duplas".'); return; }
+    const partnerCiclo = (state.moduloCiclos||[]).find(c => c.moduloAsignadoId === partnerModulo.id && c.periodo === ciclo.periodo);
+    if (!partnerCiclo || partnerCiclo.estado !== 'completado') { alert('El otro integrante de la dupla todavía no tiene completado el ciclo de '+periodoLabel(ciclo.periodo)+'.'); return; }
+
+    const s = servicioById(modulo.servicioId);
+    const prest = prestadorById(modulo.prestadorId);
+    const partnerPrest = prestadorById(partnerModulo.prestadorId);
+    const items = itemsByCiclo(ciclo.id);
+    const partnerItems = itemsByCiclo(partnerCiclo.id);
+    const monto = montoCiclo(ciclo) + montoCiclo(partnerCiclo);
+    const hoy = new Date();
+    const remitoNum = hoy.getFullYear()+String(hoy.getMonth()+1).padStart(2,'0')+String(hoy.getDate()).padStart(2,'0')+'-DUPLA-'+ciclo.id.slice(0,4).toUpperCase();
+
+    const rowsFor = (lista, rol) => lista.map(it =>
+      '<tr class="cumplido"><td>'+(rol?'['+rol+'] ':'')+it.item+(it.descripcion?'<br><span style="font-weight:400;font-size:11px;color:#6b7280">'+it.descripcion+'</span>':'')+'</td>' +
+      '<td style="text-align:center">✓ Aprobado</td></tr>'
+    ).join('');
+    const rows = rowsFor(items, dupla?.rol1||prest?.nombre) + rowsFor(partnerItems, dupla?.rol2||partnerPrest?.nombre);
+
+    document.getElementById('remitoContent').innerHTML =
+      '<div class="remito-header">' +
+        '<div><div class="remito-org">🌿 E-Mood</div><div class="remito-org-sub">Remito combinado de dupla — '+periodoLabel(ciclo.periodo)+'</div></div>' +
+        '<div class="remito-num"><div class="remito-num-label">Remito</div><div class="remito-num-val">#'+remitoNum+'</div></div>' +
+      '</div>' +
+      '<div class="remito-prest-section">' +
+        '<div><div class="remito-field-label">Dupla</div><div class="remito-field-val" style="font-size:18px">'+(dupla?.nombre||'—')+'</div>' +
+          '<div style="font-size:12px;color:#6b7280">'+(dupla?.rol1||'Integrante 1')+': '+(prest?.nombre||'—')+' · '+(dupla?.rol2||'Integrante 2')+': '+(partnerPrest?.nombre||'—')+'</div></div>' +
+        '<div><div class="remito-field-label">Módulo</div><div class="remito-field-val">'+(s?.titulo||'')+'</div></div>' +
+      '</div>' +
+      '<table class="remito-table"><thead><tr><th>Ítem</th><th style="text-align:center">Estado</th></tr></thead><tbody>'+rows+'</tbody>' +
+      '<tr class="remito-total-row"><td>Total a pagar (combinado)</td><td style="text-align:center">$'+monto+'</td></tr></table>' +
+      '<div class="remito-footer"><div><div class="remito-footer-label">Firma dupla</div><div class="remito-sign-line">'+(prest?.nombre||'')+' / '+(partnerPrest?.nombre||'')+'</div></div>' +
+      '<div><div class="remito-footer-label">Firma organización</div><div class="remito-sign-line">Administración</div></div></div>' +
+      '<div class="remito-watermark">Generado por E-Mood</div>';
+
+    document.getElementById('remitoModal').classList.add('open');
+
+    ciclo.estado = 'aprobado'; ciclo.remitoNumero = remitoNum; ciclo.remitoFecha = nowISO();
+    partnerCiclo.estado = 'aprobado'; partnerCiclo.remitoNumero = remitoNum; partnerCiclo.remitoFecha = nowISO();
+    const ok1 = await saveOne(DB.moduloCiclos, moduloCicloToRow(ciclo));
+    const ok2 = await saveOne(DB.moduloCiclos, moduloCicloToRow(partnerCiclo));
+    if (!ok1 || !ok2) alert('El remito se generó pero hubo un problema guardando alguno de los ciclos. Revisá la consola.');
     renderModulosAsignados();
   }
 
