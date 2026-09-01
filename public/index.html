@@ -1776,6 +1776,7 @@
       <div class="topbar">
         <div class="topbar-left"><h2>Prestadores de servicio</h2><p>Personas que brindan servicio a la organización.</p></div>
         <div class="actions">
+          <button class="btn secondary" id="importDuplasBtn" onclick="openImportDuplasModal()" style="display:none">📥 Importar duplas</button>
           <button class="btn secondary" id="openDuplaBtn" onclick="openDuplaModal()" style="display:none">＋ Nueva dupla</button>
           <button class="btn primary" id="openPrestadorBtn">＋ Nuevo prestador</button>
         </div>
@@ -1948,6 +1949,8 @@
   </div>
 </div>
 
+<!-- Para leer el Excel/CSV de importación masiva de duplas -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
   /* ─── UTILS ─────────────────────────────────────────── */
   function uid() { return Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); }
@@ -5204,6 +5207,167 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     alert(msg);
   }
 
+  /* ── Importación masiva de duplas desde Excel/CSV ──
+     Formato esperado: una fila por PERSONA, agrupadas por
+     dupla_codigo (2 filas = 1 dupla). Columnas: dupla_codigo, rol,
+     nombre, contacto. Crea los prestadores que no existan (por
+     nombre) y arma la dupla con su código externo — no toca
+     postulaciones ni módulos asignados, eso se sigue aceptando a
+     mano por servicio. ── */
+  function descargarPlantillaDuplas() {
+    const csv = 'dupla_codigo,rol,nombre,contacto\n' +
+      '07,Chofer,Juan Pérez,juan@mail.com\n' +
+      '07,Operador,Ana Gómez,ana@mail.com\n' +
+      '08,Chofer,Carlos Ruiz,carlos@mail.com\n' +
+      '08,Operador,Laura Díaz,laura@mail.com\n';
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'plantilla_duplas.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function normalizarHeaderImport(h) {
+    return String(h||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  }
+
+  let importDuplasParsed = [];
+
+  function openImportDuplasModal() {
+    importDuplasParsed = [];
+    openModal('Importar duplas desde Excel',
+      'Subí un archivo (.xlsx o .csv) con una fila por persona: dupla_codigo, rol, nombre, contacto.',
+      '<div class="form-grid">' +
+        '<div class="field full"><button type="button" class="btn secondary small" onclick="descargarPlantillaDuplas()">📄 Descargar plantilla de ejemplo</button></div>' +
+        '<div class="field full"><label>Archivo (.xlsx o .csv)</label><input type="file" id="importDuplasFile" accept=".xlsx,.xls,.csv"></div>' +
+        '<div class="field full"><button type="button" class="btn secondary small" onclick="previsualizarImportDuplas()">👁 Previsualizar</button></div>' +
+        '<div class="field full" id="importDuplasPreview"></div>' +
+        '<div class="field full"><button type="button" class="btn primary" id="confirmarImportDuplasBtn" style="display:none" onclick="confirmarImportDuplas()">✓ Confirmar e importar</button></div>' +
+      '</div>' +
+      '<div id="importDuplasError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>'
+    );
+  }
+
+  async function previsualizarImportDuplas() {
+    const fileInput = document.getElementById('importDuplasFile');
+    const errEl = document.getElementById('importDuplasError');
+    const previewEl = document.getElementById('importDuplasPreview');
+    errEl.style.display = 'none';
+    const file = fileInput?.files?.[0];
+    if (!file) { errEl.textContent = 'Elegí un archivo primero.'; errEl.style.display = 'block'; return; }
+    try {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      const norm = rows.map(r => {
+        const o = {};
+        for (const k in r) o[normalizarHeaderImport(k)] = String(r[k]).trim();
+        return {
+          duplaCodigo: o['dupla_codigo'] || o['codigo'] || o['dupla'] || '',
+          rol: o['rol'] || '',
+          nombre: o['nombre'] || '',
+          contacto: o['contacto'] || o['email'] || o['telefono'] || '',
+        };
+      }).filter(r => r.nombre);
+
+      if (!norm.length) { errEl.textContent = 'No encontré filas válidas — revisá que las columnas se llamen dupla_codigo, rol, nombre, contacto.'; errEl.style.display = 'block'; return; }
+
+      const grupos = {};
+      norm.forEach(r => {
+        const key = r.duplaCodigo || '(sin código)';
+        if (!grupos[key]) grupos[key] = [];
+        grupos[key].push(r);
+      });
+
+      importDuplasParsed = norm;
+
+      let html = '<div style="font-size:13px;margin-bottom:8px">'+norm.length+' persona(s) en '+Object.keys(grupos).length+' dupla(s):</div>';
+      html += '<div style="max-height:260px;overflow-y:auto;border:1px solid var(--line);border-radius:8px">';
+      html += Object.keys(grupos).map(codigo => {
+        const personas = grupos[codigo];
+        const completa = personas.length === 2;
+        return '<div style="padding:8px 10px;border-bottom:1px solid var(--line);'+(completa?'':'background:#fef2f2')+'">' +
+          '<strong>Dupla '+codigo+'</strong>'+(completa?'':' <span style="color:#dc2626;font-size:11px">⚠️ '+personas.length+' persona(s) en vez de 2</span>')+
+          personas.map(p => '<div style="font-size:12px;color:var(--muted)">'+(p.rol||'Sin rol')+': '+p.nombre+(p.contacto?' ('+p.contacto+')':'')+'</div>').join('') +
+        '</div>';
+      }).join('');
+      html += '</div>';
+      previewEl.innerHTML = html;
+      document.getElementById('confirmarImportDuplasBtn').style.display = '';
+    } catch(err) {
+      errEl.textContent = 'No pude leer el archivo: ' + (err.message||err);
+      errEl.style.display = 'block';
+    }
+  }
+
+  async function confirmarImportDuplas() {
+    const btn = document.getElementById('confirmarImportDuplasBtn');
+    const errEl = document.getElementById('importDuplasError');
+    if (!importDuplasParsed.length) return;
+    btn.disabled = true; btn.textContent = 'Importando…';
+    let prestadoresCreados = 0, duplasCreadas = 0;
+    const advertencias = [];
+    try {
+      const grupos = {};
+      importDuplasParsed.forEach(r => {
+        const key = r.duplaCodigo || '(sin código)';
+        if (!grupos[key]) grupos[key] = [];
+        grupos[key].push(r);
+      });
+
+      function obtenerPrestadorPorNombre(nombre) {
+        return (state.prestadores||[]).find(p => p.nombre.trim().toLowerCase() === nombre.trim().toLowerCase()) || null;
+      }
+
+      for (const codigo of Object.keys(grupos)) {
+        const personas = grupos[codigo];
+        const ids = [];
+        for (const persona of personas) {
+          let p = obtenerPrestadorPorNombre(persona.nombre);
+          if (!p) {
+            p = { id: uid(), nombre: persona.nombre, rol: persona.rol||'', contacto: persona.contacto||'', activo: true, createdAt: nowISO() };
+            state.prestadores.push(p);
+            const ok = await saveOne(DB.prestadores, prestadorToRow(p));
+            if (!ok) { advertencias.push('No se pudo crear "'+persona.nombre+'".'); continue; }
+            prestadoresCreados++;
+          }
+          ids.push({ id: p.id, rol: persona.rol });
+        }
+        if (ids.length === 2 && codigo !== '(sin código)') {
+          const yaExiste = (state.duplas||[]).some(d =>
+            (d.prestadorId1===ids[0].id && d.prestadorId2===ids[1].id) ||
+            (d.prestadorId1===ids[1].id && d.prestadorId2===ids[0].id));
+          if (!yaExiste) {
+            const d = {
+              id: uid(), nombre: 'Dupla ' + codigo, codigoExterno: codigo,
+              prestadorId1: ids[0].id, rol1: ids[0].rol||'',
+              prestadorId2: ids[1].id, rol2: ids[1].rol||'', createdAt: nowISO(),
+            };
+            if (!state.duplas) state.duplas = [];
+            state.duplas.push(d);
+            const ok = await saveOne(DB.duplas, duplaToRow(d));
+            if (ok) duplasCreadas++; else advertencias.push('No se pudo crear la dupla '+codigo+'.');
+          } else {
+            advertencias.push('La dupla '+codigo+' ya existía, no se duplicó.');
+          }
+        } else if (codigo !== '(sin código)') {
+          advertencias.push('Dupla '+codigo+' tiene '+personas.length+' persona(s) — no se creó (necesita exactamente 2).');
+        }
+      }
+
+      renderPrestadores();
+      renderDuplas();
+      closeModal();
+      alert('Importación lista: '+prestadoresCreados+' prestador(es) nuevo(s), '+duplasCreadas+' dupla(s) creada(s).' + (advertencias.length ? '\n\nAvisos:\n- '+advertencias.join('\n- ') : ''));
+    } catch(err) {
+      errEl.textContent = 'Error durante la importación: ' + (err.message||err);
+      errEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = '✓ Confirmar e importar';
+    }
+  }
+
   /* ─── RENDER PRESTADORES ─────────────────────────────── */
   function renderPrestadores() {
     const el = document.getElementById('prestadoresTable');
@@ -8426,6 +8590,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     document.getElementById('prestadoresTabDuplas').style.display = tab==='duplas' ? 'block' : 'none';
     document.getElementById('openPrestadorBtn').style.display = tab==='prestadores' ? '' : 'none';
     document.getElementById('openDuplaBtn').style.display = tab==='duplas' ? '' : 'none';
+    document.getElementById('importDuplasBtn').style.display = tab==='duplas' ? '' : 'none';
     if (tab === 'duplas') renderDuplas();
   }
 
