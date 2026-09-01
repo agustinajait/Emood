@@ -1714,6 +1714,9 @@
           <h2 id="dashboardOrgName">Dashboard</h2>
           <p>Vista ejecutiva de la organización.</p>
         </div>
+        <div class="actions">
+          <button class="btn secondary" onclick="openIntegracionesModal()">🔌 Integraciones</button>
+        </div>
       </div>
       <div class="stats" id="dashboardStats"></div>
       <div class="grid-2">
@@ -2413,6 +2416,42 @@
   }
   let currentOwner = null;
 
+  // Datos para conectar sistemas externos (ej: Censo Flash) que validan
+  // "Jornada de servicio" automáticamente vía el RPC registrar_cierre_censo.
+  async function openIntegracionesModal() {
+    openModal('Integraciones', 'Conectá sistemas externos para que validen "Jornada de servicio" automáticamente.', '<div id="integracionesBody" style="font-size:13px;color:var(--muted)">Cargando…</div>');
+    const r = await sbSelect('organizations');
+    const body = document.getElementById('integracionesBody');
+    if (!body) return;
+    const org = r.data?.[0];
+    if (r.errMsg || !org?.webhook_secret) {
+      body.innerHTML = '<div style="color:#dc2626">No se pudo cargar (¿corriste la migración de integraciones en Supabase?).</div>';
+      return;
+    }
+    const endpoint = SB_URL + '/rest/v1/rpc/registrar_cierre_censo';
+    body.innerHTML =
+      '<div style="font-size:13px;line-height:1.7">' +
+      '<p><strong>1.</strong> En "Módulos asignados", cada módulo con ítems de tipo "Jornada de servicio" tiene un botón <em>"🔗 Vincular código externo"</em> — cargá ahí el mismo código que usa el sistema externo (ej: el número de dupla en Censo Flash).</p>' +
+      '<p><strong>2.</strong> Desde ese sistema, en el mismo submit que ya usan para guardar el cierre, agregá un POST a:</p>' +
+      '<pre style="background:#f3f4f6;padding:10px;border-radius:8px;font-size:11px;overflow-x:auto;white-space:pre-wrap;word-break:break-all">'+endpoint+'</pre>' +
+      '<p>Headers: <code>apikey: '+SB_KEY+'</code>, <code>Authorization: Bearer '+SB_KEY+'</code> y <code>Content-Type: application/json</code></p>' +
+      '<p>Body (JSON):</p>' +
+      '<pre style="background:#f3f4f6;padding:10px;border-radius:8px;font-size:11px;overflow-x:auto">{\n' +
+      '  "p_secret": "'+org.webhook_secret+'",\n' +
+      '  "p_dupla": "07",\n' +
+      '  "p_fecha": "2026-08-31",\n' +
+      '  "p_responsable": "Nombre Apellido",\n' +
+      '  "p_horario": "09:00 a 17:00",\n' +
+      '  "p_cantidad_registros": "42",\n' +
+      '  "p_inconvenientes": "",\n' +
+      '  "p_situaciones_urgentes": "",\n' +
+      '  "p_observaciones": ""\n' +
+      '}</pre>' +
+      '<p style="color:#dc2626"><strong>⚠️ "p_secret" es exclusivo de tu organización — no lo compartas fuera del sistema que estás conectando.</strong></p>' +
+      '<p>El llamado cierra la próxima jornada pendiente del módulo con esa hora de cierre y guarda el resto de los campos como nota de evidencia. Queda en estado "por validar" — no se aprueba solo, seguís validándola vos desde "Módulos asignados".</p>' +
+      '</div>';
+  }
+
   /* ─── URL PARAMS (backward compat) ──────────────────── */
   const urlParams = new URLSearchParams(window.location.search);
   const ownerFromUrl      = (urlParams.get('owner')||'').trim();
@@ -2845,7 +2884,7 @@
     return {
       id: m.id, organization_id: m.organizationId||null, servicio_id: m.servicioId, postulacion_id: m.postulacionId||null,
       prestador_id: m.prestadorId, protocolo: JSON.stringify(m.protocolo||[]),
-      estado: m.estado||'en_progreso',
+      estado: m.estado||'en_progreso', codigo_externo: m.codigoExterno||null,
       remito_numero: m.remitoNumero||null, remito_fecha: m.remitoFecha||null,
       created_at: m.createdAt||nowISO(), updated_at: nowISO(),
     };
@@ -2855,7 +2894,7 @@
       id: r.id, organizationId: r.organization_id||null, servicioId: r.servicio_id, postulacionId: r.postulacion_id||null,
       prestadorId: r.prestador_id,
       protocolo: (()=>{ try { return JSON.parse(r.protocolo||'[]'); } catch(_){ return []; } })(),
-      estado: r.estado||'en_progreso',
+      estado: r.estado||'en_progreso', codigoExterno: r.codigo_externo||'',
       remitoNumero: r.remito_numero||'', remitoFecha: r.remito_fecha||'',
       createdAt: r.created_at||'', updatedAt: r.updated_at||'',
     };
@@ -4671,6 +4710,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='generar-remito-asignado') await generarRemitoModuloAsignado(id);
     else if (action==='resync-ciclo-items') await resyncCicloItems(id);
     else if (action==='admin-cargar-evidencia') openAdminEvidenciaModal(id);
+    else if (action==='set-codigo-externo') await setCodigoExternoModulo(id);
     else if (action==='postular-servicio') { const sid=btn.dataset.sid; openPostularModal(sid, id); }
     else if (action==='subir-evidencia-item') { openSubirEvidenciaModal(id, btn.dataset.pid); }
     else if (action==='marcar-inicio-jornada') await marcarInicioJornada(id, btn.dataset.pid);
@@ -8230,6 +8270,21 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     alert('Listo — se cargaron los ítem(s) en el ciclo. El prestador ya puede subir evidencia.');
   }
 
+  // Vincula un módulo asignado con el código que usa un sistema externo
+  // (ej: número de dupla en Censo Flash) para que registrar_cierre_censo
+  // sepa a cuál actualizar. Si una dupla son 2 personas con 2 módulos
+  // asignados distintos, ponerles a ambos el mismo código.
+  async function setCodigoExternoModulo(moduloId) {
+    const m = moduloAsignadoById(moduloId);
+    if (!m) return;
+    const nuevo = prompt('Código externo (ej: número de dupla en Censo Flash):', m.codigoExterno || '');
+    if (nuevo === null) return; // canceló
+    m.codigoExterno = nuevo.trim();
+    const ok = await saveOne(DB.modulosAsignados, moduloAsignadoToRow(m));
+    if (!ok) { alert('No se pudo guardar el código. Probá de nuevo.'); return; }
+    renderModulosAsignados();
+  }
+
   const FRECUENCIA_LABEL = { diaria:'Diaria', semanal:'Semanal', mensual:'Mensual', unica:'Única' };
 
   /* ── Servicios (admin) ── */
@@ -8593,9 +8648,13 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const s = servicioById(m.servicioId);
       const prest = prestadorById(m.prestadorId);
       const ciclos = ciclosByModuloAsignado(m.id);
+      const tieneJornadas = (m.protocolo||[]).some(it => it.tipo === 'jornada');
       return '<div class="card" style="margin-bottom:12px">' +
-        '<div style="margin-bottom:10px"><div style="font-weight:700">'+(prest?.nombre||'—')+'</div>' +
-        '<div style="font-size:13px;color:var(--muted)">'+(s?.titulo||'—')+(s?.fechaFin?' · hasta '+s.fechaFin:'')+'</div></div>' +
+        '<div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">' +
+          '<div><div style="font-weight:700">'+(prest?.nombre||'—')+'</div>' +
+          '<div style="font-size:13px;color:var(--muted)">'+(s?.titulo||'—')+(s?.fechaFin?' · hasta '+s.fechaFin:'')+'</div></div>' +
+          (tieneJornadas ? '<button class="btn secondary xs" data-action="set-codigo-externo" data-id="'+m.id+'">🔗 '+(m.codigoExterno?'Código: '+m.codigoExterno:'Vincular código externo')+'</button>' : '') +
+        '</div>' +
         (ciclos.length ? ciclos.map(c => {
           const items = itemsByCiclo(c.id);
           const aprobados = items.filter(it => it.estado === 'aprobado').length;
