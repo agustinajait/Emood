@@ -1849,7 +1849,20 @@
         <button class="sv-tab" data-svtab="postulaciones" onclick="switchServiciosTab('postulaciones')">Postulaciones <span id="postulacionesTabCount" class="sv-tab-count" style="display:none">0</span></button>
         <button class="sv-tab" data-svtab="asignados" onclick="switchServiciosTab('asignados')">Módulos asignados <span id="asignadosTabCount" class="sv-tab-count" style="display:none">0</span></button>
       </div>
-      <div id="serviciosTabServicios"><div id="serviciosListContent"></div></div>
+      <div id="serviciosTabServicios">
+        <div class="card" style="margin-bottom:14px">
+          <div class="search-bar">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="servicioSearch" placeholder="Buscar por título…" oninput="renderServicios()">
+          </div>
+          <div class="toolbar">
+            <select id="servicioEcosistemaFilter" onchange="renderServicios()">
+              <option value="all">Todos los ecosistemas</option>
+            </select>
+          </div>
+        </div>
+        <div id="serviciosListContent"></div>
+      </div>
       <div id="serviciosTabPostulaciones" style="display:none"><div id="postulacionesListContent"></div></div>
       <div id="serviciosTabAsignados" style="display:none"><div id="modulosAsignadosListContent"></div></div>
     </section>
@@ -8997,9 +9010,29 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function renderServicios() {
     const el = document.getElementById('serviciosListContent');
     if (!el) return;
-    const servicios = state.servicios || [];
-    if (!servicios.length) {
+    const todosLosServicios = state.servicios || [];
+    if (!todosLosServicios.length) {
       el.innerHTML = '<div class="empty">Todavía no creaste ningún módulo. Usá "＋ Nuevo módulo".</div>';
+      return;
+    }
+
+    const ecoFilter = document.getElementById('servicioEcosistemaFilter');
+    if (ecoFilter && ecoFilter.options.length <= 1) {
+      ecoFilter.innerHTML = '<option value="all">Todos los ecosistemas</option>' +
+        (state.ecosistemas||[]).map(e => '<option value="'+e.id+'">'+e.nombre+'</option>').join('') +
+        '<option value="none">Sin ecosistema</option>';
+    }
+    const ecoVal = ecoFilter?.value || 'all';
+    const q = (document.getElementById('servicioSearch')?.value||'').toLowerCase().trim();
+
+    const servicios = todosLosServicios.filter(s => {
+      if (ecoVal === 'none' && s.ecosistemaId) return false;
+      if (ecoVal !== 'all' && ecoVal !== 'none' && s.ecosistemaId !== ecoVal) return false;
+      if (q && !s.titulo.toLowerCase().includes(q)) return false;
+      return true;
+    });
+    if (!servicios.length) {
+      el.innerHTML = '<div class="empty">Ningún módulo coincide con la búsqueda/filtro.</div>';
       return;
     }
 
