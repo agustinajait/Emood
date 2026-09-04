@@ -2818,7 +2818,7 @@
       let profile = await fetchMyProfile().catch(()=>null);
       if (!profile) profile = await finishPendingOrgSignup(authSession.user?.email).catch(()=>null);
       if (!profile) profile = await finishPendingPrestadorSignup(authSession.user?.email).catch(()=>null);
-      if (profile && profile.role === 'admin') {
+      if (profile && (profile.role === 'admin' || profile.role === 'superadmin')) {
         sessionStorage.setItem('hh_role','admin');
         currentRole = 'admin';
         document.getElementById('loginScreen').style.display = 'none';
@@ -2926,7 +2926,7 @@
         showFinishOrgPanel(email);
         return;
       }
-      if (profile.role !== 'admin') throw new Error('Esta cuenta no tiene permisos de administrador.');
+      if (profile.role !== 'admin' && profile.role !== 'superadmin') throw new Error('Esta cuenta no tiene permisos de administrador.');
       sessionStorage.setItem('hh_role','admin');
       currentRole = 'admin';
       const remote = await loadStateFromSupabase();
@@ -9985,7 +9985,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       if (!profile) profile = await finishPendingOrgSignup(authSession.user?.email).catch(()=>null);
       if (!profile) profile = await finishPendingPrestadorSignup(authSession.user?.email).catch(()=>null);
       if (!profile) profile = await finishPendingClaim(authSession.user?.email).catch(()=>null);
-      if (profile && profile.role === 'admin') {
+      if (profile && (profile.role === 'admin' || profile.role === 'superadmin')) {
         sessionStorage.setItem('hh_role','admin');
         currentRole = 'admin';
         const remote = await loadStateFromSupabase();
