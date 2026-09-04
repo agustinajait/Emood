@@ -1693,6 +1693,7 @@
         <h1>E-Mood Huehaci</h1>
       </div>
       <div class="brand-role">Panel de administración</div>
+      <select id="superadminOrgSwitcher" onchange="switchSuperadminOrg(this.value)" style="display:none;width:100%;margin-top:8px;font-size:12px;padding:6px 8px;border-radius:8px;border:1px solid var(--line)"></select>
     </div>
 
     <div class="sidebar-nav">
@@ -2523,8 +2524,40 @@
   async function loadOrgName() {
     try {
       const r = await sbSelect('organizations');
-      if (r.data?.[0]?.name) currentOrgName = r.data[0].name;
+      const orgs = r.data || [];
+      // Para un superadmin, sbSelect trae TODAS las organizaciones (RLS
+      // ampliada) — hay que elegir la que realmente tiene asignada
+      // ahora mismo (myProfile.organization_id), no la primera que
+      // venga. Para un admin normal, RLS ya devuelve solo la suya.
+      const mia = myProfile?.organization_id ? orgs.find(o => o.id === myProfile.organization_id) : orgs[0];
+      if (mia?.name) currentOrgName = mia.name;
+      actualizarSelectorSuperadmin(orgs);
     } catch(_) {}
+  }
+
+  // El selector de organización solo se muestra si el perfil logueado
+  // es 'superadmin' — para el resto queda oculto (y esta función no
+  // hace nada más que asegurarse de eso).
+  function actualizarSelectorSuperadmin(orgs) {
+    const sel = document.getElementById('superadminOrgSwitcher');
+    if (!sel) return;
+    if (myProfile?.role !== 'superadmin') { sel.style.display = 'none'; return; }
+    sel.innerHTML = orgs.map(o => '<option value="'+o.id+'"'+(o.id===myProfile.organization_id?' selected':'')+'>'+o.name+'</option>').join('');
+    sel.style.display = '';
+  }
+
+  // Cambia a qué organización está "parado" el superadmin — se vuelve
+  // miembro de esa organización (ver switch_superadmin_org en la
+  // migración) y recarga todo el estado, igual que un login nuevo.
+  async function switchSuperadminOrg(orgId) {
+    if (!orgId) return;
+    const rpc = await callRpc('switch_superadmin_org', { target_org_id: orgId });
+    if (rpc.error) { alert('No se pudo cambiar de organización: ' + rpc.error); return; }
+    await fetchMyProfile();
+    const remote = await loadStateFromSupabase();
+    if (remote) state = normalizeState(remote);
+    await loadOrgName();
+    await renderAll();
   }
   let currentOwner = null;
 
