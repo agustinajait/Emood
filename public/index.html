@@ -3299,27 +3299,33 @@
 
   async function loadStateFromSupabase() {
     try {
-      const ag = await sbSelect(DB.agencies, 'name');
+      // Las 19 consultas son independientes entre sí (recién se combinan
+      // al final), así que se piden todas EN PARALELO en vez de una por
+      // una — antes esto era una cadena de ~20 awaits en serie, lo que
+      // con más datos se sentía como que la pantalla "se colgaba".
+      const [ag, ch, ci, pr, ce, co, prest, prot, ig, seg, mod, mev, eco, serv, post, masig, mit, cic, dup] = await Promise.all([
+        sbSelect(DB.agencies, 'name'),
+        sbSelect(DB.challenges, 'created_at'),
+        sbSelect(DB.checkins, 'created_at.desc'),
+        sbSelect(DB.products, 'created_at'),
+        sbSelect(DB.certifications, 'created_at'),
+        sbSelect(DB.comments, 'created_at.desc'),
+        sbSelect(DB.prestadores, 'nombre').catch(()=>({data:[],errMsg:null})),
+        sbSelect(DB.protocolos, 'nombre').catch(()=>({data:[],errMsg:null})),
+        sbSelect(DB.itemsGlobales, 'orden').catch(()=>({data:[],errMsg:null})),
+        sbSelect(DB.seguimientos, 'mes.desc').catch(()=>({data:[],errMsg:null})),
+        sbSelect(DB.modulos, 'orden').catch(()=>({data:[],errMsg:null})),
+        sbSelect(DB.modEvidencias, 'created_at.desc').catch(()=>({data:[],errMsg:null})),
+        sbSelect(DB.ecosistemas, 'nombre').catch(()=>({data:[],errMsg:null})),
+        sbSelect(DB.servicios, 'created_at.desc').catch(()=>({data:[],errMsg:null})),
+        sbSelect(DB.postulaciones, 'created_at.desc').catch(()=>({data:[],errMsg:null})),
+        sbSelect(DB.modulosAsignados, 'created_at.desc').catch(()=>({data:[],errMsg:null})),
+        sbSelect(DB.moduloItems, 'created_at').catch(()=>({data:[],errMsg:null})),
+        sbSelect(DB.moduloCiclos, 'periodo.desc').catch(()=>({data:[],errMsg:null})),
+        sbSelect(DB.duplas, 'created_at.desc').catch(()=>({data:[],errMsg:null})),
+      ]);
       if (ag.errMsg) { console.warn('Load agencies error:', ag.errMsg); return null; }
-      const ch = await sbSelect(DB.challenges, 'created_at');
       if (ch.errMsg) { console.warn('Load challenges error:', ch.errMsg); return null; }
-      const ci = await sbSelect(DB.checkins, 'created_at.desc');
-      const pr = await sbSelect(DB.products, 'created_at');
-      const ce = await sbSelect(DB.certifications, 'created_at');
-      const co = await sbSelect(DB.comments, 'created_at.desc');
-      const prest = await sbSelect(DB.prestadores, 'nombre').catch(()=>({data:[],errMsg:null}));
-      const prot  = await sbSelect(DB.protocolos, 'nombre').catch(()=>({data:[],errMsg:null}));
-      const ig    = await sbSelect(DB.itemsGlobales, 'orden').catch(()=>({data:[],errMsg:null}));
-      const seg   = await sbSelect(DB.seguimientos, 'mes.desc').catch(()=>({data:[],errMsg:null}));
-      const mod   = await sbSelect(DB.modulos, 'orden').catch(()=>({data:[],errMsg:null}));
-      const mev   = await sbSelect(DB.modEvidencias, 'created_at.desc').catch(()=>({data:[],errMsg:null}));
-      const eco   = await sbSelect(DB.ecosistemas, 'nombre').catch(()=>({data:[],errMsg:null}));
-      const serv  = await sbSelect(DB.servicios, 'created_at.desc').catch(()=>({data:[],errMsg:null}));
-      const post  = await sbSelect(DB.postulaciones, 'created_at.desc').catch(()=>({data:[],errMsg:null}));
-      const masig = await sbSelect(DB.modulosAsignados, 'created_at.desc').catch(()=>({data:[],errMsg:null}));
-      const mit   = await sbSelect(DB.moduloItems, 'created_at').catch(()=>({data:[],errMsg:null}));
-      const cic   = await sbSelect(DB.moduloCiclos, 'periodo.desc').catch(()=>({data:[],errMsg:null}));
-      const dup   = await sbSelect(DB.duplas, 'created_at.desc').catch(()=>({data:[],errMsg:null}));
       return {
         agencies:       ag.data.map(rowToAgency),
         challenges:     ch.data.map(rowToChallenge),
@@ -5920,14 +5926,19 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       '<div id="prestadorDetailMesContent"></div>',
     ].join('');
 
-    // Render initial month
-    renderPrestadorDetailMes(p.id);
+    // Render initial month — sin recargar: openPrestadorDetail() ya trajo
+    // todo fresco un momento antes, recargar de nuevo acá era pedirle
+    // a Supabase las mismas 19 tablas dos veces seguidas.
+    renderPrestadorDetailMes(p.id, true);
   }
 
-  async function renderPrestadorDetailMes(prestadorId) {
-    // Reload from Supabase to get latest evidence
-    const fresh = await loadStateFromSupabase();
-    if (fresh) state = normalizeState(fresh);
+  async function renderPrestadorDetailMes(prestadorId, skipReload) {
+    // Reload from Supabase to get latest evidence (salvo que ya se haya
+    // recargado un instante antes, ver arriba)
+    if (!skipReload) {
+      const fresh = await loadStateFromSupabase();
+      if (fresh) state = normalizeState(fresh);
+    }
     const el = document.getElementById('prestadorDetailMesContent');
     if (!el) return;
     const mes = document.getElementById('prestadorDetailMes')?.value || new Date().toISOString().slice(0,7);
