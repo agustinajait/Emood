@@ -3388,6 +3388,34 @@
     return ok;
   }
 
+  // INSERT puro (sin on_conflict), para altas donde sabemos con certeza
+  // que la fila es nueva (ids recién generados client-side). saveOne()
+  // usa upsert (INSERT ... ON CONFLICT DO UPDATE) para poder servir
+  // tanto altas como ediciones con una sola función, pero eso tiene el
+  // mismo problema que ya resolvimos en postulaciones: si el id
+  // "choca" con una fila ya existente (aunque sea invisible por RLS),
+  // Postgres evalúa la política de UPDATE en vez de la de INSERT, y
+  // esa falla para un registro con el que todavía no tenés relación
+  // — el alta queda rechazada con un 403 que no tiene nada que ver
+  // con el motivo real. Usar un INSERT puro evita pisar esa política
+  // por completo.
+  async function sbInsert(table, row) {
+    const plainRow = JSON.parse(JSON.stringify(row));
+    const { error } = await sbFetch('/rest/v1/' + table, {
+      method: 'POST',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify(plainRow)
+    });
+    if (error) console.error('sbInsert [' + table + '] error:', error);
+    return !error;
+  }
+  async function saveOneInsert(table, row) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeState(state))); } catch(e) {}
+    const ok = await sbInsert(table, row);
+    setSyncStatus(ok ? 'Guardado' : 'Error al guardar — revisá la consola', ok ? 'ok' : 'error');
+    return ok;
+  }
+
   async function saveState() {
     try {
       // Always save full state locally as backup
@@ -5533,7 +5561,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           if (!p) {
             p = { id: uid(), nombre: persona.nombre, rol: persona.rol||'', contacto: persona.contacto||'', activo: true, createdAt: nowISO() };
             state.prestadores.push(p);
-            const ok = await saveOne(DB.prestadores, prestadorToRow(p));
+            const ok = await saveOneInsert(DB.prestadores, prestadorToRow(p));
             if (!ok) { advertencias.push('No se pudo crear "'+persona.nombre+'".'); continue; }
             prestadoresCreados++;
           }
@@ -5694,7 +5722,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         if (!p) {
           p = { id: uid(), nombre: persona.nombre, rol: persona.rol||'', contacto: persona.contacto||'', ecosistemaId, activo: true, createdAt: nowISO() };
           state.prestadores.push(p);
-          const ok = await saveOne(DB.prestadores, prestadorToRow(p));
+          const ok = await saveOneInsert(DB.prestadores, prestadorToRow(p));
           if (!ok) { advertencias.push(persona.nombre+': no se pudo crear el prestador.'); continue; }
           prestadoresCreados++;
         }
@@ -7076,7 +7104,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         const p = { id: prestadorId, ...fields, createdAt:nowISO() };
         if (!state.prestadores) state.prestadores = [];
         state.prestadores.push(p);
-        await saveOne(DB.prestadores, prestadorToRow(p));
+        await saveOneInsert(DB.prestadores, prestadorToRow(p));
       }
       // Save new modules (only for new prestador or added ones)
       const existingModIds = (existing ? modulosByPrestador(prestadorId).map(m=>m.id) : []);
