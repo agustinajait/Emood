@@ -1776,6 +1776,7 @@
       <div class="topbar">
         <div class="topbar-left"><h2>Prestadores de servicio</h2><p>Personas que brindan servicio a la organización.</p></div>
         <div class="actions">
+          <button class="btn secondary" id="importNominaBtn" onclick="openImportNominaModal()">📥 Importar nómina</button>
           <button class="btn secondary" id="importDuplasBtn" onclick="openImportDuplasModal()" style="display:none">📥 Importar duplas</button>
           <button class="btn secondary" id="openDuplaBtn" onclick="openDuplaModal()" style="display:none">＋ Nueva dupla</button>
           <button class="btn primary" id="openPrestadorBtn">＋ Nuevo prestador</button>
@@ -5368,6 +5369,148 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     }
   }
 
+  /* ── Importación masiva de nómina (prestadores individuales,
+     ej: CPI Norte) con asignación DIRECTA a un módulo — sin pasar
+     por postularse/aceptar. El admin ya conoce a esta gente, así que
+     se salta ese paso: crea la postulación ya 'aceptada' en su
+     nombre (requiere la política de INSERT ampliada de
+     20260829_admin_asigna_prestador_directo.sql) y el módulo
+     asignado con su primer ciclo, igual que acceptPostulacion(). ── */
+  async function asignarPrestadorDirecto(prestador, servicio) {
+    const yaAsignado = (state.modulosAsignados||[]).some(m => m.servicioId === servicio.id && m.prestadorId === prestador.id && m.estado === 'en_progreso');
+    if (yaAsignado) return { ok: false, motivo: 'ya tiene un módulo asignado activo en este servicio' };
+    if (cuposOcupados(servicio.id) >= (servicio.cupos||1)) return { ok: false, motivo: 'no hay cupos disponibles en el módulo' };
+
+    const p = {
+      id: uid(), organizationId: servicio.organizationId, servicioId: servicio.id, prestadorId: prestador.id,
+      mensaje: 'Asignación directa por administrador (importación de nómina)', docsConfirmados: [], estado: 'aceptada', createdAt: nowISO(),
+    };
+    const okPost = await saveOne(DB.postulaciones, postulacionToRow(p));
+    if (!okPost) return { ok: false, motivo: 'falló al crear la postulación (revisá la consola)' };
+    if (!state.postulaciones) state.postulaciones = [];
+    state.postulaciones.push(p);
+
+    const modulo = {
+      id: uid(), organizationId: servicio.organizationId, servicioId: servicio.id, postulacionId: p.id, prestadorId: prestador.id,
+      protocolo: JSON.parse(JSON.stringify(servicio.protocolo||[])), estado: 'en_progreso', createdAt: nowISO(),
+    };
+    const okModulo = await saveOne(DB.modulosAsignados, moduloAsignadoToRow(modulo));
+    if (!okModulo) return { ok: false, motivo: 'la postulación se creó pero falló al crear el módulo asignado' };
+    state.modulosAsignados.push(modulo);
+
+    await ensureCicloForPeriodo(modulo.id, periodoActual());
+    return { ok: true };
+  }
+
+  function descargarPlantillaNomina() {
+    const csv = 'nombre,contacto,rol\n' +
+      'Juan Pérez,juan@mail.com,Operador territorial\n' +
+      'Ana Gómez,ana@mail.com,Operadora territorial\n';
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'plantilla_nomina.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  let importNominaParsed = [];
+
+  function openImportNominaModal() {
+    importNominaParsed = [];
+    const ecosistemasOpts = '<option value="">Sin ecosistema</option>' + (state.ecosistemas||[]).map(e=>'<option value="'+e.id+'">'+e.nombre+'</option>').join('');
+    const serviciosOpts = '<option value="">— Elegí un módulo —</option>' + (state.servicios||[]).filter(s=>s.estado==='activo').map(s=>'<option value="'+s.id+'">'+s.titulo+' ('+cuposOcupados(s.id)+'/'+(s.cupos||1)+' cupos)</option>').join('');
+    openModal('Importar nómina de prestadores',
+      'Subí un archivo (.xlsx o .csv) con una fila por persona: nombre, contacto, rol. Quedan asignados DIRECTO al módulo que elijas, sin pasar por postulación.',
+      '<div class="form-grid">' +
+        '<div class="field full"><button type="button" class="btn secondary small" onclick="descargarPlantillaNomina()">📄 Descargar plantilla de ejemplo</button></div>' +
+        '<div class="field full"><label>Archivo (.xlsx o .csv)</label><input type="file" id="importNominaFile" accept=".xlsx,.xls,.csv"></div>' +
+        '<div class="field"><label>Ecosistema (opcional, para todos)</label><select id="importNominaEcosistema">'+ecosistemasOpts+'</select></div>' +
+        '<div class="field"><label>Módulo al que asignarlos</label><select id="importNominaServicio">'+serviciosOpts+'</select></div>' +
+        '<div class="field full"><button type="button" class="btn secondary small" onclick="previsualizarImportNomina()">👁 Previsualizar</button></div>' +
+        '<div class="field full" id="importNominaPreview"></div>' +
+        '<div class="field full"><button type="button" class="btn primary" id="confirmarImportNominaBtn" style="display:none" onclick="confirmarImportNomina()">✓ Confirmar e importar</button></div>' +
+      '</div>' +
+      '<div id="importNominaError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>'
+    );
+  }
+
+  async function previsualizarImportNomina() {
+    const fileInput = document.getElementById('importNominaFile');
+    const errEl = document.getElementById('importNominaError');
+    const previewEl = document.getElementById('importNominaPreview');
+    errEl.style.display = 'none';
+    const file = fileInput?.files?.[0];
+    if (!file) { errEl.textContent = 'Elegí un archivo primero.'; errEl.style.display = 'block'; return; }
+    try {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      const norm = rows.map(r => {
+        const o = {};
+        for (const k in r) o[normalizarHeaderImport(k)] = String(r[k]).trim();
+        return { nombre: o['nombre']||'', contacto: o['contacto']||o['email']||o['telefono']||'', rol: o['rol']||'' };
+      }).filter(r => r.nombre);
+
+      if (!norm.length) { errEl.textContent = 'No encontré filas válidas — revisá que las columnas se llamen nombre, contacto, rol.'; errEl.style.display = 'block'; return; }
+
+      importNominaParsed = norm;
+      previewEl.innerHTML = '<div style="font-size:13px;margin-bottom:8px">'+norm.length+' persona(s):</div>' +
+        '<div style="max-height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:8px">' +
+        norm.map(r => '<div style="padding:6px 10px;border-bottom:1px solid var(--line);font-size:12px">'+r.nombre+(r.rol?' — '+r.rol:'')+(r.contacto?' · '+r.contacto:'')+'</div>').join('') +
+        '</div>';
+      document.getElementById('confirmarImportNominaBtn').style.display = '';
+    } catch(err) {
+      errEl.textContent = 'No pude leer el archivo: ' + (err.message||err);
+      errEl.style.display = 'block';
+    }
+  }
+
+  async function confirmarImportNomina() {
+    const btn = document.getElementById('confirmarImportNominaBtn');
+    const errEl = document.getElementById('importNominaError');
+    errEl.style.display = 'none';
+    const ecosistemaId = document.getElementById('importNominaEcosistema').value || null;
+    const servicioId = document.getElementById('importNominaServicio').value;
+    if (!servicioId) { errEl.textContent = 'Elegí a qué módulo asignarlos.'; errEl.style.display = 'block'; return; }
+    const s = servicioById(servicioId);
+    if (!s) { errEl.textContent = 'Módulo no encontrado.'; errEl.style.display = 'block'; return; }
+    if (!(s.protocolo||[]).length) { errEl.textContent = '"'+s.titulo+'" no tiene ítems en el Protocolo de entregables — agregá al menos uno antes de asignar gente.'; errEl.style.display = 'block'; return; }
+    if (!importNominaParsed.length) return;
+
+    btn.disabled = true; btn.textContent = 'Importando…';
+    let prestadoresCreados = 0, asignados = 0;
+    const advertencias = [];
+    try {
+      function obtenerPrestadorPorNombre(nombre) {
+        return (state.prestadores||[]).find(p => p.nombre.trim().toLowerCase() === nombre.trim().toLowerCase()) || null;
+      }
+      for (const persona of importNominaParsed) {
+        let p = obtenerPrestadorPorNombre(persona.nombre);
+        if (!p) {
+          p = { id: uid(), nombre: persona.nombre, rol: persona.rol||'', contacto: persona.contacto||'', ecosistemaId, activo: true, createdAt: nowISO() };
+          state.prestadores.push(p);
+          const ok = await saveOne(DB.prestadores, prestadorToRow(p));
+          if (!ok) { advertencias.push(persona.nombre+': no se pudo crear el prestador.'); continue; }
+          prestadoresCreados++;
+        }
+        const res = await asignarPrestadorDirecto(p, s);
+        if (res.ok) asignados++;
+        else advertencias.push(persona.nombre+': '+res.motivo+'.');
+      }
+      renderPrestadores();
+      renderServicios();
+      renderModulosAsignados();
+      closeModal();
+      alert('Importación lista: '+prestadoresCreados+' prestador(es) nuevo(s), '+asignados+' asignado(s) a "'+s.titulo+'".' + (advertencias.length ? '\n\nAvisos:\n- '+advertencias.join('\n- ') : ''));
+    } catch(err) {
+      errEl.textContent = 'Error durante la importación: ' + (err.message||err);
+      errEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = '✓ Confirmar e importar';
+    }
+  }
+
   /* ─── RENDER PRESTADORES ─────────────────────────────── */
   function renderPrestadores() {
     const el = document.getElementById('prestadoresTable');
@@ -8589,6 +8732,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     document.getElementById('prestadoresTabPrestadores').style.display = tab==='prestadores' ? 'block' : 'none';
     document.getElementById('prestadoresTabDuplas').style.display = tab==='duplas' ? 'block' : 'none';
     document.getElementById('openPrestadorBtn').style.display = tab==='prestadores' ? '' : 'none';
+    document.getElementById('importNominaBtn').style.display = tab==='prestadores' ? '' : 'none';
     document.getElementById('openDuplaBtn').style.display = tab==='duplas' ? '' : 'none';
     document.getElementById('importDuplasBtn').style.display = tab==='duplas' ? '' : 'none';
     if (tab === 'duplas') renderDuplas();
