@@ -5372,6 +5372,50 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     );
   }
 
+  // Busca en el objeto de una fila ya normalizada (headers en
+  // minúscula/sin acentos) una clave que contenga TODOS los patrones
+  // dados — sirve para leer el Sheet que arma Google Forms, donde el
+  // nombre exacto de columna es la pregunta completa (ej: "integrante
+  // 1 - nombre completo") en vez de un nombre fijo tipo "nombre".
+  function buscarValorPorPatrones(o, ...patrones) {
+    for (const k in o) {
+      if (patrones.every(p => k.includes(p))) return o[k];
+    }
+    return '';
+  }
+
+  // Acepta dos formatos de planilla:
+  //  - Formato largo: 1 fila = 1 persona (columnas dupla_codigo, rol,
+  //    nombre, contacto) — el que arma la plantilla de ejemplo.
+  //  - Formato ancho: 1 fila = 1 dupla con sus 2 integrantes — el que
+  //    arma automáticamente un Google Form con preguntas "Integrante
+  //    1 - Nombre completo", "Integrante 1 - Rol", etc.
+  function extraerFilasDuplaImport(rows) {
+    const out = [];
+    for (const r of rows) {
+      const o = {};
+      for (const k in r) o[normalizarHeaderImport(k)] = String(r[k]).trim();
+      const esFormatoAncho = Object.keys(o).some(k => k.includes('integrante 1') || k.includes('integrante1'));
+      if (esFormatoAncho) {
+        const codigo = o['codigo de dupla'] || o['dupla_codigo'] || o['codigo'] || o['dupla'] || '';
+        for (const n of [1, 2]) {
+          const nombre = buscarValorPorPatrones(o, 'integrante '+n, 'nombre') || buscarValorPorPatrones(o, 'integrante'+n, 'nombre');
+          const rol = buscarValorPorPatrones(o, 'integrante '+n, 'rol') || buscarValorPorPatrones(o, 'integrante'+n, 'rol');
+          const contacto = buscarValorPorPatrones(o, 'integrante '+n, 'contacto') || buscarValorPorPatrones(o, 'integrante'+n, 'contacto');
+          if (nombre) out.push({ duplaCodigo: codigo, rol: rol||'', nombre, contacto: contacto||'' });
+        }
+      } else {
+        out.push({
+          duplaCodigo: o['dupla_codigo'] || o['codigo'] || o['dupla'] || '',
+          rol: o['rol'] || '',
+          nombre: o['nombre'] || '',
+          contacto: o['contacto'] || o['email'] || o['telefono'] || '',
+        });
+      }
+    }
+    return out.filter(r => r.nombre);
+  }
+
   async function previsualizarImportDuplas() {
     const fileInput = document.getElementById('importDuplasFile');
     const errEl = document.getElementById('importDuplasError');
@@ -5384,18 +5428,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const wb = XLSX.read(data, { type: 'array' });
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-      const norm = rows.map(r => {
-        const o = {};
-        for (const k in r) o[normalizarHeaderImport(k)] = String(r[k]).trim();
-        return {
-          duplaCodigo: o['dupla_codigo'] || o['codigo'] || o['dupla'] || '',
-          rol: o['rol'] || '',
-          nombre: o['nombre'] || '',
-          contacto: o['contacto'] || o['email'] || o['telefono'] || '',
-        };
-      }).filter(r => r.nombre);
+      const norm = extraerFilasDuplaImport(rows);
 
-      if (!norm.length) { errEl.textContent = 'No encontré filas válidas — revisá que las columnas se llamen dupla_codigo, rol, nombre, contacto.'; errEl.style.display = 'block'; return; }
+      if (!norm.length) { errEl.textContent = 'No encontré filas válidas — revisá las columnas (dupla_codigo/rol/nombre/contacto, o las de un Google Form de duplas).'; errEl.style.display = 'block'; return; }
 
       const grupos = {};
       norm.forEach(r => {
