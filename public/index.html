@@ -1654,6 +1654,24 @@
         <button class="login-btn" id="newPwBtn" onclick="doSetNewPassword()">Guardar y entrar →</button>
         <div class="login-error" id="newPwError">No se pudo guardar la contraseña.</div>
       </div>
+
+      <!-- Invitación de prestador: se llega acá con ?invite=TOKEN -->
+      <div class="login-panel" id="loginPanelClaimInvite">
+        <div style="margin-bottom:14px;color:rgba(255,255,255,0.55);font-size:13px;line-height:1.6">
+          Te invitaron a E-Mood. Elegí tu email y contraseña para poder ingresar — vas a quedar vinculado/a a tus datos ya cargados.
+        </div>
+        <div class="login-field">
+          <label>Email</label>
+          <input type="email" id="claimInviteEmailInput" placeholder="vos@email.com" onkeydown="if(event.key==='Enter') doClaimInvite()">
+        </div>
+        <div class="login-field">
+          <label>Contraseña</label>
+          <input type="password" id="claimInvitePwInput" placeholder="Mínimo 6 caracteres" onkeydown="if(event.key==='Enter') doClaimInvite()">
+        </div>
+        <button class="login-btn" id="claimInviteBtn" style="background:#6d28d9;box-shadow:0 8px 24px rgba(109,40,217,0.35)" onclick="doClaimInvite()">Crear mi cuenta →</button>
+        <div class="login-error" id="claimInviteError">No se pudo crear la cuenta.</div>
+        <div class="login-success" id="claimInviteSuccess">Te enviamos un correo para confirmar tu cuenta. Confirmalo y después volvé a este mismo link para terminar.</div>
+      </div>
     </div>
   </div>
 
@@ -2148,6 +2166,27 @@
     return fetchMyProfile();
   }
 
+  // Vínculo de invitación (?invite=TOKEN) pendiente de confirmar el
+  // email: mismo patrón que el alta de prestador, pero acá NO se crea
+  // un prestador nuevo — claim_prestador_invite() vincula la cuenta al
+  // que ya cargó el admin.
+  const PENDING_CLAIM_KEY = 'e-mood-huehaci_pending_claim_v1';
+  function savePendingClaim(email, token) {
+    try { localStorage.setItem(PENDING_CLAIM_KEY, JSON.stringify({ email, token })); } catch(_) {}
+  }
+  function clearPendingClaim() {
+    try { localStorage.removeItem(PENDING_CLAIM_KEY); } catch(_) {}
+  }
+  async function finishPendingClaim(email) {
+    let pending = null;
+    try { pending = JSON.parse(localStorage.getItem(PENDING_CLAIM_KEY) || 'null'); } catch(_) {}
+    if (!pending || pending.email !== email) return null;
+    const rpc = await callRpc('claim_prestador_invite', { p_token: pending.token });
+    if (rpc.error || !rpc.data?.[0]?.ok) return null;
+    clearPendingClaim();
+    return fetchMyProfile();
+  }
+
   // El admin crea la cuenta de Auth de OTRA persona (prestador/socio) sin
   // pisar su propia sesión — por eso NO usamos authSignUp (que guarda la
   // sesión global), sino authRequest directo, descartando el resultado.
@@ -2476,6 +2515,39 @@
   }
   let currentOwner = null;
 
+  // Genera un link de invitación de un solo uso para un prestador ya
+  // cargado (ej: por importación de nómina) sin login propio — al
+  // abrirlo, la persona crea su email/contraseña y queda vinculada a
+  // ESTE mismo registro (profiles.prestador_id), en vez de crear uno
+  // nuevo y duplicado.
+  async function openInvitarPrestadorModal(p) {
+    openModal('Invitar a ' + p.nombre, 'Generá un link único para que se loguee y quede vinculado a este mismo registro (no se crea uno nuevo).', '<div id="invitarPrestadorBody" style="font-size:13px;color:var(--muted)">Generando link…</div>');
+    const rpc = await callRpc('generar_invitacion_prestador', { p_prestador_id: p.id });
+    const body = document.getElementById('invitarPrestadorBody');
+    if (!body) return;
+    if (rpc.error || !rpc.data?.[0]) {
+      body.innerHTML = '<div style="color:#dc2626">' + (rpc.error || 'No se pudo generar el link — ¿ya tiene una cuenta vinculada?') + '</div>';
+      return;
+    }
+    const token = rpc.data[0];
+    const link = window.location.origin + window.location.pathname + '?invite=' + token;
+    body.innerHTML =
+      '<div style="font-size:13px;margin-bottom:10px">Compartile este link a '+p.nombre+' — al abrirlo va a poder crear su email y contraseña, y va a quedar vinculado automáticamente a este prestador (sin duplicarlo). Es de un solo uso.</div>' +
+      '<div style="display:flex;gap:6px">' +
+        '<input readonly id="inviteLinkInput" value="'+link+'" style="flex:1;font-size:12px;padding:8px;border:1px solid var(--line);border-radius:8px" onclick="this.select()">' +
+        '<button type="button" class="btn secondary small" onclick="copiarInviteLink()">📋 Copiar</button>' +
+      '</div>';
+  }
+  function copiarInviteLink() {
+    const input = document.getElementById('inviteLinkInput');
+    if (!input) return;
+    input.select();
+    (navigator.clipboard?.writeText(input.value) || Promise.reject()).then(
+      () => alert('Link copiado.'),
+      () => { try { document.execCommand('copy'); alert('Link copiado.'); } catch(_) { alert('No se pudo copiar — seleccionalo y copialo a mano.'); } }
+    );
+  }
+
   // Datos para conectar sistemas externos (ej: Censo Flash) que validan
   // "Jornada de servicio" automáticamente vía el RPC registrar_cierre_censo.
   async function openIntegracionesModal() {
@@ -2519,6 +2591,7 @@
   const subFromUrl        = (urlParams.get('sub')||'').trim();
   const prestadorFromUrl  = (urlParams.get('prestador')||'').trim();
   const modeFromUrl       = urlParams.get('mode') || '';
+  const inviteTokenFromUrl = (urlParams.get('invite')||'').trim();
 
   /* ─── LOGIN LOGIC ────────────────────────────────────── */
   function switchLoginTab(tab) {
@@ -2584,6 +2657,54 @@
     document.getElementById('loginPanelFinishOrg').classList.add('active');
     const hint = document.getElementById('finishOrgEmailHint');
     if (hint && email) hint.textContent = email;
+  }
+
+  function showClaimInvitePanel() {
+    document.querySelectorAll('.login-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('loginPanelClaimInvite').classList.add('active');
+  }
+
+  // El prestador crea su cuenta desde un link de invitación
+  // (?invite=TOKEN, generado por openInvitarPrestadorModal) — NO crea
+  // un prestador nuevo, se vincula al que ya cargó el admin vía
+  // claim_prestador_invite().
+  async function doClaimInvite() {
+    const email = document.getElementById('claimInviteEmailInput').value.trim();
+    const pw = document.getElementById('claimInvitePwInput').value;
+    const errEl = document.getElementById('claimInviteError');
+    const okEl = document.getElementById('claimInviteSuccess');
+    const btn = document.getElementById('claimInviteBtn');
+    errEl.style.display = 'none'; okEl.style.display = 'none';
+    if (!email || !pw) { errEl.textContent = 'Completá email y contraseña.'; errEl.style.display = 'block'; return; }
+    if (pw.length < 6) { errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.'; errEl.style.display = 'block'; return; }
+    if (!inviteTokenFromUrl) { errEl.textContent = 'Este link de invitación no es válido.'; errEl.style.display = 'block'; return; }
+    btn.disabled = true; btn.textContent = 'Creando…';
+    try {
+      savePendingClaim(email, inviteTokenFromUrl);
+      await authSignUp(email, pw);
+      if (!authSession?.access_token) {
+        okEl.style.display = 'block';
+        return;
+      }
+      const rpc = await callRpc('claim_prestador_invite', { p_token: inviteTokenFromUrl });
+      if (rpc.error || !rpc.data?.[0]?.ok) {
+        throw new Error(rpc.error || rpc.data?.[0]?.error || 'No se pudo vincular la cuenta.');
+      }
+      clearPendingClaim();
+      const profile = await fetchMyProfile();
+      if (!profile?.prestador_id) throw new Error('La cuenta se creó pero no se pudo cargar tu perfil. Recargá la página e iniciá sesión.');
+      sessionStorage.setItem('hh_role', 'prestador');
+      sessionStorage.setItem('hh_prestador_id', profile.prestador_id);
+      currentRole = 'prestador';
+      document.getElementById('loginScreen').style.display = 'none';
+      await renderPrestadorPublicView(profile.prestador_id);
+    } catch(e) {
+      errEl.textContent = e.message || 'No se pudo crear la cuenta.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Crear mi cuenta →';
+    }
   }
 
   /* ── Recuperar contraseña (admin o prestador, mismo flujo) ──
@@ -4818,6 +4939,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='share-prestador') sharePrestadorLink(id);
     else if (action==='edit-prestador') { const p=prestadorById(id); if(p) openPrestadorModal(p); }
     else if (action==='grant-prestador-access') { const p=prestadorById(id); if(p) openGrantAccessModal(p); }
+    else if (action==='invitar-prestador') { const p=prestadorById(id); if(p) await openInvitarPrestadorModal(p); }
     else if (action==='edit-servicio') { const s=servicioById(id); if(s) openServicioModal(s); }
     else if (action==='toggle-servicio') await toggleServicioEstado(id);
     else if (action==='delete-servicio') await deleteServicio(id);
@@ -5653,6 +5775,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '<button class="btn secondary small" data-action="edit-prestador" data-id="'+p.id+'">Editar</button>',
             '<button class="btn secondary small" data-action="share-prestador" data-id="'+p.id+'">🔗 Link</button>',
             '<button class="btn secondary small" data-action="grant-prestador-access" data-id="'+p.id+'">🔑 Dar acceso</button>',
+            '<button class="btn secondary small" data-action="invitar-prestador" data-id="'+p.id+'">✉️ Invitar a loguearse</button>',
             '<button class="btn primary small" data-action="edit-prestador" data-id="'+p.id+'">＋ Módulo</button>',
           '</div>',
         '</div>',
@@ -9728,10 +9851,20 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       return;
     }
 
+    if (inviteTokenFromUrl && !authSession?.access_token) {
+      // Primera vez que abre el link de invitación (?invite=TOKEN): en
+      // vez del login normal, pedirle que cree su email/contraseña —
+      // doClaimInvite() lo vincula al prestador ya cargado.
+      document.getElementById('loginScreen').style.display = 'flex';
+      showClaimInvitePanel();
+      return;
+    }
+
     if (authSession?.access_token) {
       let profile = await fetchMyProfile().catch(()=>null);
       if (!profile) profile = await finishPendingOrgSignup(authSession.user?.email).catch(()=>null);
       if (!profile) profile = await finishPendingPrestadorSignup(authSession.user?.email).catch(()=>null);
+      if (!profile) profile = await finishPendingClaim(authSession.user?.email).catch(()=>null);
       if (profile && profile.role === 'admin') {
         sessionStorage.setItem('hh_role','admin');
         currentRole = 'admin';
