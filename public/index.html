@@ -9002,37 +9002,56 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       el.innerHTML = '<div class="empty">Todavía no creaste ningún módulo. Usá "＋ Nuevo módulo".</div>';
       return;
     }
-    el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px">' +
-      servicios.map(s => {
-        const postCount = (state.postulaciones||[]).filter(p => p.servicioId === s.id).length;
-        const ocupados = cuposOcupados(s.id);
-        const cupos = s.cupos||1;
-        const pagoMensual = (s.horasModulo||0) * (s.precioHora||0) * (s.cantidadPorPeriodo||1);
-        const eco = (state.ecosistemas||[]).find(e => e.id === s.ecosistemaId);
-        return '<div class="card">' +
-          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">' +
-            '<div><div style="font-weight:700;font-size:15px">'+s.titulo+'</div>' +
-            '<div style="font-size:12px;color:var(--muted)">'+FRECUENCIA_LABEL[s.frecuencia]+' × '+(s.cantidadPorPeriodo||1)+(eco?' · 🌿 '+eco.nombre:'')+(s.deadline?' · vence '+s.deadline:'')+'</div></div>' +
-            '<span class="badge '+(s.estado==='activo'?'green':'gray')+'">'+s.estado+'</span>' +
-          '</div>' +
-          (s.descripcion?'<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+s.descripcion.slice(0,120)+'</div>':'') +
-          '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">' +
-            '<span class="challenge-meta-tag" style="background:'+(ocupados>=cupos?'#fef2f2':'#eff6ff')+';color:'+(ocupados>=cupos?'#dc2626':'#1d4ed8')+'">👤 '+ocupados+'/'+cupos+' cupos</span>' +
-            '<span class="challenge-meta-tag">📦 '+s.horasModulo+' hs/módulo</span>' +
-            '<span class="challenge-meta-tag">💵 $'+s.precioHora+'/h</span>' +
-            (pagoMensual?'<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534">≈ $'+pagoMensual+'/mes c/u</span>':'') +
-            '<span class="challenge-meta-tag">📋 '+(s.protocolo||[]).length+' ítems</span>' +
-            (postCount?'<span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">👥 '+postCount+' postulantes</span>':'') +
-            (s.tipoContrato?'<span class="challenge-meta-tag" style="background:#fffbeb;color:#92400e">📄 '+s.tipoContrato+'</span>':'') +
-            (s.docAdjuntoUrl?'<a href="'+s.docAdjuntoUrl+'" target="_blank" class="challenge-meta-tag" style="background:#e8f0fe;color:#1a73e8;text-decoration:none">📎 Documento</a>':'') +
-          '</div>' +
-          '<div style="display:flex;gap:8px">' +
-            '<button class="btn secondary small" data-action="edit-servicio" data-id="'+s.id+'">Editar</button>' +
-            '<button class="btn secondary small" data-action="toggle-servicio" data-id="'+s.id+'">'+(s.estado==='activo'?'Cerrar':'Reabrir')+'</button>' +
-            '<button class="btn danger small" data-action="delete-servicio" data-id="'+s.id+'">Eliminar</button>' +
-          '</div>' +
-        '</div>';
-      }).join('') + '</div>';
+
+    function cardServicio(s) {
+      const postCount = (state.postulaciones||[]).filter(p => p.servicioId === s.id).length;
+      const ocupados = cuposOcupados(s.id);
+      const cupos = s.cupos||1;
+      const pagoMensual = (s.horasModulo||0) * (s.precioHora||0) * (s.cantidadPorPeriodo||1);
+      return '<div class="card">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">' +
+          '<div><div style="font-weight:700;font-size:15px">'+s.titulo+'</div>' +
+          '<div style="font-size:12px;color:var(--muted)">'+FRECUENCIA_LABEL[s.frecuencia]+' × '+(s.cantidadPorPeriodo||1)+(s.deadline?' · vence '+s.deadline:'')+'</div></div>' +
+          '<span class="badge '+(s.estado==='activo'?'green':'gray')+'">'+s.estado+'</span>' +
+        '</div>' +
+        (s.descripcion?'<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+s.descripcion.slice(0,120)+'</div>':'') +
+        '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">' +
+          '<span class="challenge-meta-tag" style="background:'+(ocupados>=cupos?'#fef2f2':'#eff6ff')+';color:'+(ocupados>=cupos?'#dc2626':'#1d4ed8')+'">👤 '+ocupados+'/'+cupos+' cupos</span>' +
+          '<span class="challenge-meta-tag">📦 '+s.horasModulo+' hs/módulo</span>' +
+          '<span class="challenge-meta-tag">💵 $'+s.precioHora+'/h</span>' +
+          (pagoMensual?'<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534">≈ $'+pagoMensual+'/mes c/u</span>':'') +
+          '<span class="challenge-meta-tag">📋 '+(s.protocolo||[]).length+' ítems</span>' +
+          (postCount?'<span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">👥 '+postCount+' postulantes</span>':'') +
+          (s.tipoContrato?'<span class="challenge-meta-tag" style="background:#fffbeb;color:#92400e">📄 '+s.tipoContrato+'</span>':'') +
+          (s.docAdjuntoUrl?'<a href="'+s.docAdjuntoUrl+'" target="_blank" class="challenge-meta-tag" style="background:#e8f0fe;color:#1a73e8;text-decoration:none">📎 Documento</a>':'') +
+        '</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button class="btn secondary small" data-action="edit-servicio" data-id="'+s.id+'">Editar</button>' +
+          '<button class="btn secondary small" data-action="toggle-servicio" data-id="'+s.id+'">'+(s.estado==='activo'?'Cerrar':'Reabrir')+'</button>' +
+          '<button class="btn danger small" data-action="delete-servicio" data-id="'+s.id+'">Eliminar</button>' +
+        '</div>' +
+      '</div>';
+    }
+
+    // Agrupados por ecosistema — para clientes con varios ecosistemas
+    // (ej: Caipli / Asociación Camino a la Educación) se ve de un
+    // vistazo qué módulos son de cuál.
+    const grupos = {}; // ecosistemaId (o '' = sin ecosistema) -> [servicios]
+    servicios.forEach(s => {
+      const key = s.ecosistemaId || '';
+      if (!grupos[key]) grupos[key] = [];
+      grupos[key].push(s);
+    });
+    const ecosistemasConModulos = (state.ecosistemas||[]).filter(e => grupos[e.id]);
+    const sinEco = grupos[''] || [];
+
+    const seccion = (titulo, lista) =>
+      '<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:18px 0 10px">'+titulo+' <span style="font-weight:400;text-transform:none;letter-spacing:normal">('+lista.length+' módulo'+(lista.length===1?'':'s')+')</span></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px">' + lista.map(cardServicio).join('') + '</div>';
+
+    let html = ecosistemasConModulos.map(eco => seccion('🌿 '+eco.nombre, grupos[eco.id])).join('');
+    if (sinEco.length) html += seccion('Sin ecosistema', sinEco);
+    el.innerHTML = html;
   }
 
   function openServicioModal(existing=null) {
