@@ -1795,6 +1795,7 @@
       <div class="topbar">
         <div class="topbar-left"><h2>Prestadores de servicio</h2><p>Personas que brindan servicio a la organización.</p></div>
         <div class="actions">
+          <button class="btn secondary" onclick="copiarLinkAltaPrestador()">🔗 Link de alta para prestadores</button>
           <button class="btn secondary" id="importNominaBtn" onclick="openImportNominaModal()">📥 Importar nómina</button>
           <button class="btn secondary" id="importDuplasBtn" onclick="openImportDuplasModal()" style="display:none">📥 Importar duplas</button>
           <button class="btn secondary" id="openDuplaBtn" onclick="openDuplaModal()" style="display:none">＋ Nueva dupla</button>
@@ -2611,6 +2612,18 @@
         '<button type="button" class="btn secondary small" onclick="copiarInviteLink()">📋 Copiar</button>' +
       '</div>';
   }
+  // Link general de autoregistro (?alta=prestador): uno solo para mandar
+  // por WhatsApp a cualquier cantidad de gente — cada quien crea su
+  // propia cuenta y completa su perfil, sin que el admin tenga que
+  // cargar a nadie a mano.
+  function copiarLinkAltaPrestador() {
+    const url = location.origin + location.pathname + '?alta=prestador';
+    (navigator.clipboard?.writeText(url) || Promise.reject()).then(
+      () => alert('Link copiado:\n' + url),
+      () => { prompt('Copiá este link:', url); }
+    );
+  }
+
   function copiarInviteLink() {
     const input = document.getElementById('inviteLinkInput');
     if (!input) return;
@@ -2665,6 +2678,7 @@
   const prestadorFromUrl  = (urlParams.get('prestador')||'').trim();
   const modeFromUrl       = urlParams.get('mode') || '';
   const inviteTokenFromUrl = (urlParams.get('invite')||'').trim();
+  const altaPrestadorFromUrl = (urlParams.get('alta')||'').trim() === 'prestador';
 
   /* ─── LOGIN LOGIC ────────────────────────────────────── */
   function switchLoginTab(tab) {
@@ -10067,6 +10081,16 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       // doClaimInvite() lo vincula al prestador ya cargado.
       document.getElementById('loginScreen').style.display = 'flex';
       showClaimInvitePanel();
+      return;
+    }
+
+    if (altaPrestadorFromUrl && !authSession?.access_token) {
+      // Link general de autoregistro (?alta=prestador), para mandar por
+      // WhatsApp a todo el mundo sin cargar a nadie a mano: abre directo
+      // el formulario de "Creá tu cuenta de prestador" en vez del login.
+      document.getElementById('loginScreen').style.display = 'flex';
+      switchLoginTab('prestador');
+      showPrestadorSignupPanel();
       return;
     }
 
