@@ -2360,6 +2360,7 @@
       oportunai_link: p.oportunaiLink||'',
       tipo_contrato: p.tipoContrato||'',
       doc_contrato_url: p.docContratoUrl||'',
+      created_by_org_id: p.createdByOrgId||null,
       created_at: p.createdAt||new Date().toISOString(),
     };
   }
@@ -2382,6 +2383,7 @@
       oportunaiLink: r.oportunai_link||'',
       tipoContrato: r.tipo_contrato||'',
       docContratoUrl: r.doc_contrato_url||'',
+      createdByOrgId: r.created_by_org_id||null,
       createdAt: r.created_at||'',
     };
   }
@@ -5572,7 +5574,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         for (const persona of personas) {
           let p = obtenerPrestadorPorNombre(persona.nombre);
           if (!p) {
-            p = { id: uid(), nombre: persona.nombre, rol: persona.rol||'', contacto: persona.contacto||'', activo: true, createdAt: nowISO() };
+            p = { id: uid(), nombre: persona.nombre, rol: persona.rol||'', contacto: persona.contacto||'', activo: true, createdByOrgId: myProfile?.organization_id||null, createdAt: nowISO() };
             state.prestadores.push(p);
             const ok = await saveOneInsert(DB.prestadores, prestadorToRow(p));
             if (!ok) { advertencias.push('No se pudo crear "'+persona.nombre+'".'); continue; }
@@ -5733,7 +5735,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       for (const persona of importNominaParsed) {
         let p = obtenerPrestadorPorNombre(persona.nombre);
         if (!p) {
-          p = { id: uid(), nombre: persona.nombre, rol: persona.rol||'', contacto: persona.contacto||'', ecosistemaId, activo: true, createdAt: nowISO() };
+          p = { id: uid(), nombre: persona.nombre, rol: persona.rol||'', contacto: persona.contacto||'', ecosistemaId, activo: true, createdByOrgId: myProfile?.organization_id||null, createdAt: nowISO() };
           state.prestadores.push(p);
           const ok = await saveOneInsert(DB.prestadores, prestadorToRow(p));
           if (!ok) { advertencias.push(persona.nombre+': no se pudo crear el prestador.'); continue; }
@@ -7119,7 +7121,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         Object.assign(existing, fields);
         await saveOne(DB.prestadores, prestadorToRow(existing));
       } else {
-        const p = { id: prestadorId, ...fields, createdAt:nowISO() };
+        const p = { id: prestadorId, ...fields, createdByOrgId: myProfile?.organization_id||null, createdAt:nowISO() };
         if (!state.prestadores) state.prestadores = [];
         state.prestadores.push(p);
         await saveOneInsert(DB.prestadores, prestadorToRow(p));
