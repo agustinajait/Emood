@@ -1808,6 +1808,13 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════════════
+     PERFIL PÚBLICO DE UNA ORGANIZACIÓN (?org=ID) — hero propio +
+     sus módulos disponibles. Contenido 100% dinámico, ver
+     renderOrgProfileScreen().
+═══════════════════════════════════════════════════════ -->
+<div id="orgProfileScreen" style="display:none"></div>
+
+<!-- ═══════════════════════════════════════════════════════
      OWNER VIEW
 ═══════════════════════════════════════════════════════ -->
 <div id="ownerView"></div>
@@ -1819,7 +1826,8 @@
   <aside class="sidebar">
     <div class="sidebar-top">
       <div class="brand">
-        <div class="brand-icon">🌿</div>
+        <div class="brand-icon" id="sidebarBrandIcon">🌿</div>
+        <img id="sidebarOrgLogo" style="display:none;width:34px;height:34px;border-radius:9px;object-fit:cover;flex-shrink:0">
         <h1>E-Mood Huehaci</h1>
       </div>
       <div class="brand-role">Panel de administración</div>
@@ -2714,6 +2722,15 @@
       if (mia?.name) currentOrgName = mia.name;
       currentOrgFull = mia || null;
       actualizarSelectorSuperadmin(orgs);
+      // Logo de la organización en la barra lateral, si tiene uno
+      // cargado en "🏢 Perfil público" — si no, se mantiene el ícono
+      // genérico de siempre.
+      const logoEl = document.getElementById('sidebarOrgLogo');
+      const iconEl = document.getElementById('sidebarBrandIcon');
+      if (logoEl && iconEl) {
+        if (mia?.logo_url) { logoEl.src = mia.logo_url; logoEl.style.display = ''; iconEl.style.display = 'none'; }
+        else { logoEl.style.display = 'none'; iconEl.style.display = ''; }
+      }
       // Invitar administrador es exclusivo del superadmin — un admin de
       // organización no puede sumar colegas por su cuenta.
       const invitarAdminBtn = document.getElementById('invitarAdminBtn');
@@ -2732,13 +2749,18 @@
       <div style="display:flex;gap:6px;margin-bottom:16px">
         <input readonly value="${link}" style="flex:1;font-size:12px;padding:8px;border:1px solid var(--line);border-radius:8px" onclick="this.select()">
         <button type="button" class="btn secondary small" onclick="navigator.clipboard?.writeText('${link}').then(()=>alert('Link copiado.')).catch(()=>prompt('Copiá este link:','${link}'))">📋 Copiar link</button>
-        <button type="button" class="btn secondary small" onclick="mostrarPerfilOrgModal(currentOrgFull)">👁 Vista previa</button>
+        <button type="button" class="btn secondary small" onclick="closeModal();renderOrgProfileScreen('${org.id}')">👁 Vista previa</button>
       </div>
       <form id="perfilOrgForm" class="form-grid">
         <div class="field full" style="text-align:center">
           ${org.logo_url ? '<img src="'+org.logo_url+'" style="width:80px;height:80px;object-fit:cover;border-radius:16px;margin-bottom:8px">' : ''}
           <label>Logo</label>
           <input type="file" name="logo" accept="image/*">
+        </div>
+        <div class="field full" style="text-align:center">
+          ${org.cover_url ? '<img src="'+org.cover_url+'" style="width:100%;max-height:100px;object-fit:cover;border-radius:12px;margin-bottom:8px">' : ''}
+          <label>Imagen de portada (opcional — se ve de fondo en el perfil público)</label>
+          <input type="file" name="cover" accept="image/*">
         </div>
         <div class="field full"><label>Bio / descripción</label><textarea name="descripcion" placeholder="Contá de qué se trata la organización, a qué se dedica…">${org.descripcion||''}</textarea></div>
         <div class="field full"><label>Dirección</label><input name="direccion" value="${org.direccion||''}" placeholder="Calle, número, ciudad…"></div>
@@ -2755,6 +2777,7 @@
       errEl.style.display = 'none';
       const data = Object.fromEntries(new FormData(e.target).entries());
       const logoFile = e.target.querySelector('[name="logo"]')?.files?.[0];
+      const coverFile = e.target.querySelector('[name="cover"]')?.files?.[0];
       btn.disabled = true; btn.textContent = 'Guardando…';
       try {
         let logoUrl = org.logo_url || '';
@@ -2764,12 +2787,20 @@
           if (!uploaded) throw new Error('No se pudo subir el logo. Probá de nuevo.');
           logoUrl = uploaded;
         }
+        let coverUrl = org.cover_url || '';
+        if (coverFile) {
+          const ext = (coverFile.name.split('.').pop() || 'jpg').toLowerCase();
+          const uploaded = await sbUpload('org-logos', org.id + '/cover_' + Date.now() + '.' + ext, coverFile);
+          if (!uploaded) throw new Error('No se pudo subir la portada. Probá de nuevo.');
+          coverUrl = uploaded;
+        }
         const ok = await sbUpdate('organizations', org.id, {
           descripcion: (data.descripcion||'').trim(),
           direccion: (data.direccion||'').trim(),
           contacto: (data.contacto||'').trim(),
           sitio_web: (data.sitioWeb||'').trim(),
           logo_url: logoUrl,
+          cover_url: coverUrl,
         });
         if (!ok) throw new Error('No se pudo guardar. Revisá la consola.');
         org.descripcion = (data.descripcion||'').trim();
@@ -2777,6 +2808,15 @@
         org.contacto = (data.contacto||'').trim();
         org.sitio_web = (data.sitioWeb||'').trim();
         org.logo_url = logoUrl;
+        org.cover_url = coverUrl;
+        // org === currentOrgFull, así que esto ya alcanza para reflejar
+        // el logo nuevo en la barra lateral sin recargar todo.
+        const logoEl = document.getElementById('sidebarOrgLogo');
+        const iconEl = document.getElementById('sidebarBrandIcon');
+        if (logoEl && iconEl) {
+          if (logoUrl) { logoEl.src = logoUrl; logoEl.style.display = ''; iconEl.style.display = 'none'; }
+          else { logoEl.style.display = 'none'; iconEl.style.display = ''; }
+        }
         closeModal();
         alert('Perfil público actualizado.');
       } catch(err) {
@@ -2950,6 +2990,7 @@
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('ownerView').style.display = 'none';
     document.getElementById('adminApp').style.display = 'none';
+    document.getElementById('orgProfileScreen').style.display = 'none';
     document.getElementById('homeScreen').style.display = 'block';
     cargarModulosDisponiblesHome();
   }
@@ -2966,6 +3007,7 @@
   function goToLoginFromHome(target) {
     closeModal();
     document.getElementById('homeScreen').style.display = 'none';
+    document.getElementById('orgProfileScreen').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'flex';
     if (target === 'admin') switchLoginTab('admin');
     else if (target === 'prestador-signup') { switchLoginTab('prestador'); showPrestadorSignupPanel(); }
@@ -3046,6 +3088,77 @@
       mostrarPerfilOrgModal(org);
     } catch(e) {
       alert('No se pudo cargar el perfil público.');
+    }
+  }
+
+  // Página pública completa de una organización (?org=ID): hero propio
+  // (logo, portada, bio) + sus módulos disponibles — el link que se
+  // comparte, a diferencia de mostrarPerfilOrgModal() que es solo el
+  // modal rápido "¿quién publica este módulo?" desde otra pantalla.
+  async function renderOrgProfileScreen(orgId) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('homeScreen').style.display = 'none';
+    document.getElementById('ownerView').style.display = 'none';
+    document.getElementById('adminApp').style.display = 'none';
+    const el = document.getElementById('orgProfileScreen');
+    el.style.display = 'block';
+    el.innerHTML = '<div style="padding:80px;text-align:center;color:var(--muted)"><div style="font-size:28px;margin-bottom:10px">⏳</div>Cargando…</div>';
+    try {
+      const orgRes = await sbFetch('/rest/v1/organizations?id=eq.' + encodeURIComponent(orgId) + '&select=*', { method: 'GET' });
+      const org = orgRes.data?.[0];
+      if (!org) {
+        el.innerHTML = '<div style="padding:80px;text-align:center;color:var(--muted)">No se encontró esa organización.<br><button class="btn secondary" style="margin-top:16px" onclick="renderHomeScreen()">← Volver al inicio</button></div>';
+        return;
+      }
+      orgsCacheById[org.id] = org;
+      const servRes = await sbSelect(DB.servicios, 'created_at.desc');
+      const modulos = (servRes.data||[]).filter(s => s.organization_id === org.id && s.estado === 'activo');
+      homeModulosCache = modulos; // para que "Ver detalle" de cada módulo funcione
+
+      el.innerHTML = `
+        <nav class="home-nav">
+          <div class="home-nav-brand">${org.logo_url ? '<img src="'+org.logo_url+'" style="width:24px;height:24px;object-fit:cover;border-radius:6px">' : '🏢'} ${org.name}</div>
+          <div class="home-nav-links"><a onclick="renderHomeScreen()">← Todas las organizaciones</a></div>
+          <div class="home-nav-actions">
+            <button class="btn secondary small" onclick="goToLoginFromHome('prestador')">Ya tengo cuenta</button>
+            <button class="btn primary small" onclick="goToLoginFromHome('prestador-signup')">Crear cuenta</button>
+          </div>
+        </nav>
+        <header class="home-hero"${org.cover_url ? ' style="background-image:linear-gradient(rgba(15,35,24,.78),rgba(15,35,24,.92)), url(\''+org.cover_url+'\');background-size:cover;background-position:center"' : ''}>
+          ${org.logo_url ? '<img src="'+org.logo_url+'" style="position:relative;z-index:1;display:block;width:64px;height:64px;object-fit:cover;border-radius:16px;margin:0 auto 18px">' : ''}
+          <div class="home-hero-badge"><span>Organización en E-Mood</span></div>
+          <h1>${org.name}</h1>
+          ${org.descripcion ? '<p>'+org.descripcion+'</p>' : ''}
+          <button class="btn primary home-hero-cta" onclick="goToLoginFromHome('prestador-signup')">Postularme →</button>
+        </header>
+
+        <section class="home-section">
+          <div class="home-section-title">📦 Módulos disponibles de ${org.name}</div>
+          <div class="home-modulos-grid">
+            ${modulos.length ? modulos.map(s => `
+              <div class="card">
+                <div style="font-weight:700;margin-bottom:6px">${s.titulo||'Módulo'}</div>
+                ${s.descripcion ? '<div style="font-size:13px;margin-bottom:10px">'+s.descripcion.slice(0,140)+(s.descripcion.length>140?'…':'')+'</div>' : ''}
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button class="btn secondary small" onclick="verDetalleModuloHome('${s.id}')">Ver detalle</button>
+                  <button class="btn primary small" onclick="goToLoginFromHome('prestador-signup')">Postularme →</button>
+                </div>
+              </div>
+            `).join('') : '<div class="empty">Esta organización no tiene módulos abiertos por ahora.</div>'}
+          </div>
+        </section>
+
+        <footer class="home-footer">
+          <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px">
+            ${org.direccion ? '<div>📍 '+org.direccion+'</div>' : ''}
+            ${org.contacto ? '<div>📞 '+org.contacto+'</div>' : ''}
+            ${org.sitio_web ? '<a href="'+org.sitio_web+'" target="_blank">🔗 '+org.sitio_web+'</a>' : ''}
+          </div>
+          <a onclick="renderHomeScreen()">← Volver al inicio de E-Mood</a>
+        </footer>
+      `;
+    } catch(e) {
+      el.innerHTML = '<div style="padding:80px;text-align:center;color:var(--muted)">No se pudo cargar el perfil.<br><button class="btn secondary" style="margin-top:16px" onclick="renderHomeScreen()">← Volver al inicio</button></div>';
     }
   }
 
@@ -10497,9 +10610,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     state = loadStateLocal();
 
     // Link compartible del perfil público de una organización
-    // (?org=ID) — se abre como modal arriba de lo que sea que se
-    // muestre, sin depender de sesión ni de a qué pantalla se rutee.
-    if (orgProfileIdFromUrl) verOrganizacionPorId(orgProfileIdFromUrl);
+    // (?org=ID): página propia con hero y sus módulos disponibles,
+    // sin depender de sesión — no sigue con el resto del routing.
+    if (orgProfileIdFromUrl) { renderOrgProfileScreen(orgProfileIdFromUrl); return; }
 
     // Nota: Owner/Prestador (?owner=, ?mode=sub, ?prestador=) quedan
     // temporalmente sin datos: desde la migración a multi-organización,
