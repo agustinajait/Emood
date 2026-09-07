@@ -1736,6 +1736,24 @@
         <div class="login-error" id="claimInviteError">No se pudo crear la cuenta.</div>
         <div class="login-success" id="claimInviteSuccess">Te enviamos un correo para confirmar tu cuenta. Confirmalo y después volvé a este mismo link para terminar.</div>
       </div>
+
+      <!-- Invitación de administrador de una organización: se llega con ?admin_invite=TOKEN -->
+      <div class="login-panel" id="loginPanelClaimAdminInvite">
+        <div style="margin-bottom:14px;color:rgba(255,255,255,0.55);font-size:13px;line-height:1.6">
+          Te invitaron a administrar una organización en E-Mood. Elegí tu email y contraseña para poder ingresar.
+        </div>
+        <div class="login-field">
+          <label>Email</label>
+          <input type="email" id="claimAdminInviteEmailInput" placeholder="vos@email.com" onkeydown="if(event.key==='Enter') doClaimAdminInvite()">
+        </div>
+        <div class="login-field">
+          <label>Contraseña</label>
+          <input type="password" id="claimAdminInvitePwInput" placeholder="Mínimo 6 caracteres" onkeydown="if(event.key==='Enter') doClaimAdminInvite()">
+        </div>
+        <button class="login-btn" id="claimAdminInviteBtn" onclick="doClaimAdminInvite()">Crear mi cuenta →</button>
+        <div class="login-error" id="claimAdminInviteError">No se pudo crear la cuenta.</div>
+        <div class="login-success" id="claimAdminInviteSuccess">Te enviamos un correo para confirmar tu cuenta. Confirmalo y después volvé a este mismo link para terminar.</div>
+      </div>
     </div>
   </div>
 
@@ -1847,6 +1865,7 @@
         </div>
         <div class="actions">
           <button class="btn secondary" onclick="openPerfilOrgModal()">🏢 Perfil público</button>
+          <button class="btn secondary" onclick="openInvitarAdminModal()">👤 Invitar administrador</button>
           <button class="btn secondary" onclick="openIntegracionesModal()">🔌 Integraciones</button>
         </div>
       </div>
@@ -2320,6 +2339,26 @@
     return fetchMyProfile();
   }
 
+  // Igual que arriba, pero para el link de "invitar administrador de
+  // esta organización" (?admin_invite=TOKEN) — la persona queda como
+  // admin PERMANENTE de esa organización, no como superadmin.
+  const PENDING_ADMIN_CLAIM_KEY = 'e-mood-huehaci_pending_admin_claim_v1';
+  function savePendingAdminClaim(email, token) {
+    try { localStorage.setItem(PENDING_ADMIN_CLAIM_KEY, JSON.stringify({ email, token })); } catch(_) {}
+  }
+  function clearPendingAdminClaim() {
+    try { localStorage.removeItem(PENDING_ADMIN_CLAIM_KEY); } catch(_) {}
+  }
+  async function finishPendingAdminClaim(email) {
+    let pending = null;
+    try { pending = JSON.parse(localStorage.getItem(PENDING_ADMIN_CLAIM_KEY) || 'null'); } catch(_) {}
+    if (!pending || pending.email !== email) return null;
+    const rpc = await callRpc('claim_admin_invite', { p_token: pending.token });
+    if (rpc.error || !rpc.data?.[0]?.ok) return null;
+    clearPendingAdminClaim();
+    return fetchMyProfile();
+  }
+
   // El admin crea la cuenta de Auth de OTRA persona (prestador/socio) sin
   // pisar su propia sesión — por eso NO usamos authSignUp (que guarda la
   // sesión global), sino authRequest directo, descartando el resultado.
@@ -2781,6 +2820,31 @@
         '<button type="button" class="btn secondary small" onclick="copiarInviteLink()">📋 Copiar</button>' +
       '</div>';
   }
+  // Genera un link para que alguien cree SU PROPIO usuario admin de
+  // esta organización (permanente — no puede cambiar de organización
+  // como el superadmin). Lo puede generar el superadmin o un admin ya
+  // existente de la organización (para sumar un colega).
+  async function openInvitarAdminModal() {
+    const org = currentOrgFull;
+    if (!org) { alert('Todavía no cargó la organización — probá de nuevo en un segundo.'); return; }
+    openModal('Invitar administrador de ' + org.name, 'Generá un link único para que cree su cuenta y quede como admin de esta organización.', '<div id="invitarAdminBody" style="font-size:13px;color:var(--muted)">Generando link…</div>');
+    const rpc = await callRpc('generar_invitacion_admin', { target_org_id: org.id });
+    const body = document.getElementById('invitarAdminBody');
+    if (!body) return;
+    if (rpc.error || !rpc.data?.[0]) {
+      body.innerHTML = '<div style="color:#dc2626">' + (rpc.error || 'No se pudo generar el link.') + '</div>';
+      return;
+    }
+    const token = rpc.data[0];
+    const link = window.location.origin + window.location.pathname + '?admin_invite=' + token;
+    body.innerHTML =
+      '<div style="font-size:13px;margin-bottom:10px">Compartile este link a quien va a administrar '+org.name+' — al abrirlo va a poder crear su email y contraseña, y va a quedar como admin de esta organización (no de otras). Es de un solo uso.</div>' +
+      '<div style="display:flex;gap:6px">' +
+        '<input readonly id="inviteLinkInput" value="'+link+'" style="flex:1;font-size:12px;padding:8px;border:1px solid var(--line);border-radius:8px" onclick="this.select()">' +
+        '<button type="button" class="btn secondary small" onclick="copiarInviteLink()">📋 Copiar</button>' +
+      '</div>';
+  }
+
   // Link general de autoregistro (?alta=prestador): uno solo para mandar
   // por WhatsApp a cualquier cantidad de gente — cada quien crea su
   // propia cuenta y completa su perfil, sin que el admin tenga que
@@ -2848,6 +2912,7 @@
   const modeFromUrl       = urlParams.get('mode') || '';
   const inviteTokenFromUrl = (urlParams.get('invite')||'').trim();
   const altaPrestadorFromUrl = (urlParams.get('alta')||'').trim() === 'prestador';
+  const adminInviteTokenFromUrl = (urlParams.get('admin_invite')||'').trim();
 
   /* ─── LOGIN LOGIC ────────────────────────────────────── */
   function switchLoginTab(tab) {
@@ -3029,6 +3094,12 @@
     document.getElementById('loginPanelClaimInvite').classList.add('active');
   }
 
+  function showClaimAdminInvitePanel() {
+    document.querySelectorAll('.login-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('loginPanelClaimAdminInvite').classList.add('active');
+  }
+
   // El prestador crea su cuenta desde un link de invitación
   // (?invite=TOKEN, generado por openInvitarPrestadorModal) — NO crea
   // un prestador nuevo, se vincula al que ya cargó el admin vía
@@ -3063,6 +3134,50 @@
       currentRole = 'prestador';
       document.getElementById('loginScreen').style.display = 'none';
       await renderPrestadorPublicView(profile.prestador_id);
+    } catch(e) {
+      errEl.textContent = e.message || 'No se pudo crear la cuenta.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Crear mi cuenta →';
+    }
+  }
+
+  // El admin invitado crea su cuenta desde ?admin_invite=TOKEN — queda
+  // como admin PERMANENTE de esa organización (claim_admin_invite()),
+  // no puede cambiar de organización como el superadmin.
+  async function doClaimAdminInvite() {
+    const email = document.getElementById('claimAdminInviteEmailInput').value.trim();
+    const pw = document.getElementById('claimAdminInvitePwInput').value;
+    const errEl = document.getElementById('claimAdminInviteError');
+    const okEl = document.getElementById('claimAdminInviteSuccess');
+    const btn = document.getElementById('claimAdminInviteBtn');
+    errEl.style.display = 'none'; okEl.style.display = 'none';
+    if (!email || !pw) { errEl.textContent = 'Completá email y contraseña.'; errEl.style.display = 'block'; return; }
+    if (pw.length < 6) { errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.'; errEl.style.display = 'block'; return; }
+    if (!adminInviteTokenFromUrl) { errEl.textContent = 'Este link de invitación no es válido.'; errEl.style.display = 'block'; return; }
+    btn.disabled = true; btn.textContent = 'Creando…';
+    try {
+      savePendingAdminClaim(email, adminInviteTokenFromUrl);
+      await authSignUp(email, pw);
+      if (!authSession?.access_token) {
+        okEl.style.display = 'block';
+        return;
+      }
+      const rpc = await callRpc('claim_admin_invite', { p_token: adminInviteTokenFromUrl });
+      if (rpc.error || !rpc.data?.[0]?.ok) {
+        throw new Error(rpc.error || rpc.data?.[0]?.error || 'No se pudo vincular la cuenta.');
+      }
+      clearPendingAdminClaim();
+      const profile = await fetchMyProfile();
+      if (!profile || profile.role !== 'admin') throw new Error('La cuenta se creó pero no se pudo cargar tu perfil. Recargá la página e iniciá sesión.');
+      sessionStorage.setItem('hh_role', 'admin');
+      currentRole = 'admin';
+      document.getElementById('loginScreen').style.display = 'none';
+      const remote = await loadStateFromSupabase();
+      if (remote) state = normalizeState(remote);
+      showAdminApp();
+      await loadOrgName();
+      await renderAll();
     } catch(e) {
       errEl.textContent = e.message || 'No se pudo crear la cuenta.';
       errEl.style.display = 'block';
@@ -10387,11 +10502,22 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       return;
     }
 
+    if (adminInviteTokenFromUrl && !authSession?.access_token) {
+      // Primera vez que abre el link de invitación a administrar una
+      // organización (?admin_invite=TOKEN): pedirle que cree su email/
+      // contraseña — doClaimAdminInvite() lo deja como admin de esa
+      // organización puntual.
+      document.getElementById('loginScreen').style.display = 'flex';
+      showClaimAdminInvitePanel();
+      return;
+    }
+
     if (authSession?.access_token) {
       let profile = await fetchMyProfile().catch(()=>null);
       if (!profile) profile = await finishPendingOrgSignup(authSession.user?.email).catch(()=>null);
       if (!profile) profile = await finishPendingPrestadorSignup(authSession.user?.email).catch(()=>null);
       if (!profile) profile = await finishPendingClaim(authSession.user?.email).catch(()=>null);
+      if (!profile) profile = await finishPendingAdminClaim(authSession.user?.email).catch(()=>null);
       if (profile && (profile.role === 'admin' || profile.role === 'superadmin')) {
         sessionStorage.setItem('hh_role','admin');
         currentRole = 'admin';
