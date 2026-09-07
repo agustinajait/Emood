@@ -1801,7 +1801,12 @@
           <button class="btn primary" id="openPrestadorBtn">＋ Nuevo prestador</button>
         </div>
       </div>
-      <div class="sv-tabs">
+      <!-- Sistema de duplas oculto: cada prestador ahora se postula
+           directo al módulo (Operador/Chofer) con un casillero opcional
+           de "Número de dupla" en la postulación, en vez de armar la
+           dupla como entidad aparte. El tab/código sigue acá por si se
+           reactiva más adelante. -->
+      <div class="sv-tabs" style="display:none">
         <button class="sv-tab active" data-prtab="prestadores" onclick="switchPrestadoresTab('prestadores')">Prestadores</button>
         <button class="sv-tab" data-prtab="duplas" onclick="switchPrestadoresTab('duplas')">Duplas</button>
       </div>
@@ -3097,6 +3102,7 @@
       mensaje: p.mensaje||'', docs_confirmados: JSON.stringify(p.docsConfirmados||[]),
       estado: p.estado||'pendiente',
       dupla_prestador_id: p.duplaPrestadorId||null, dupla_rol_propio: p.duplaRolPropio||'', dupla_rol_companero: p.duplaRolCompanero||'',
+      numero_dupla: p.numeroDupla||'',
       created_at: p.createdAt||nowISO(), updated_at: nowISO(),
     };
   }
@@ -3107,6 +3113,7 @@
       docsConfirmados: (()=>{ try { return JSON.parse(r.docs_confirmados||'[]'); } catch(_){ return []; } })(),
       estado: r.estado||'pendiente',
       duplaPrestadorId: r.dupla_prestador_id||null, duplaRolPropio: r.dupla_rol_propio||'', duplaRolCompanero: r.dupla_rol_companero||'',
+      numeroDupla: r.numero_dupla||'',
       createdAt: r.created_at||'', updatedAt: r.updated_at||'',
     };
   }
@@ -9372,7 +9379,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '<div><div style="font-weight:700">'+(prest?.nombre||'Prestador eliminado')+'</div>' +
           '<div style="font-size:13px;color:var(--muted)">postula a: '+(s?.titulo||'Módulo eliminado')+'</div>' +
           (p.mensaje?'<div style="font-size:13px;margin-top:6px">"'+p.mensaje+'"</div>':'') +
-          (p.duplaPrestadorId?'<div style="font-size:12px;color:#5b21b6;margin-top:6px">🤝 Se postula en dupla con <strong>'+(prestadorById(p.duplaPrestadorId)?.nombre||'—')+'</strong>'+(p.duplaRolPropio||p.duplaRolCompanero?' ('+(p.duplaRolPropio||'—')+' / '+(p.duplaRolCompanero||'—')+')':'')+'</div>':'') +
+          (p.numeroDupla?'<div style="font-size:12px;color:#5b21b6;margin-top:6px">🤝 Número de dupla: <strong>'+p.numeroDupla+'</strong></div>':'') +
           (p.docsConfirmados?.length?'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+p.docsConfirmados.map(d=>'<a href="'+d.url+'" target="_blank" style="font-size:11px;color:#1a73e8;background:#e8f0fe;padding:3px 8px;border-radius:6px;text-decoration:none">📎 '+d.doc+'</a>').join('')+'</div>':'') +
           '</div>' + estadoBadge +
         '</div>' +
@@ -9544,12 +9551,15 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     el.innerHTML = modulos.map(m => {
       const s = servicioById(m.servicioId);
       const prest = prestadorById(m.prestadorId);
+      const post = (state.postulaciones||[]).find(po => po.id === m.postulacionId);
       const ciclos = ciclosByModuloAsignado(m.id);
       const tieneJornadas = (m.protocolo||[]).some(it => it.tipo === 'jornada');
       return '<div class="card" style="margin-bottom:12px">' +
         '<div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">' +
           '<div><div style="font-weight:700">'+(prest?.nombre||'—')+'</div>' +
-          '<div style="font-size:13px;color:var(--muted)">'+(s?.titulo||'—')+(s?.fechaFin?' · hasta '+s.fechaFin:'')+'</div></div>' +
+          '<div style="font-size:13px;color:var(--muted)">'+(s?.titulo||'—')+(s?.fechaFin?' · hasta '+s.fechaFin:'')+'</div>' +
+          (post?.numeroDupla?'<div style="font-size:12px;color:#5b21b6;margin-top:2px">🤝 Dupla #'+post.numeroDupla+'</div>':'') +
+          '</div>' +
           (tieneJornadas ? '<button class="btn secondary xs" data-action="set-codigo-externo" data-id="'+m.id+'">🔗 '+(m.codigoExterno?'Código: '+m.codigoExterno:'Vincular código externo')+'</button>' : '') +
         '</div>' +
         (ciclos.length ? ciclos.map(c => {
@@ -9732,15 +9742,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           </div>
         `).join('')}
         <div class="field full"><label>¿Algo que quieras contarle a la organización? (opcional)</label><textarea name="mensaje"></textarea></div>
-        <div class="field full" style="background:var(--bg2);border-radius:12px;padding:14px;margin-top:4px">
-          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">🤝 ¿Te postulás en dupla con otro prestador? (opcional)</div>
-          <div class="form-grid">
-            <div class="field full"><label>Compañero/a</label><select name="duplaPrestadorId"><option value="">No, me postulo solo/a</option>${(state.prestadores||[]).filter(p=>p.id!==prestadorId).map(p=>'<option value="'+p.id+'">'+p.nombre+'</option>').join('')}</select></div>
-            <div class="field"><label>Tu rol</label><input name="duplaRolPropio" placeholder="Ej: Chofer"></div>
-            <div class="field"><label>Rol de tu compañero/a</label><input name="duplaRolCompanero" placeholder="Ej: Operador"></div>
-          </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">Si tu compañero/a también se postula y ambos quedan aceptados, E-Mood arma la dupla sola.</div>
-        </div>
+        <div class="field full"><label>Número de dupla (opcional)</label><input name="numeroDupla" placeholder="Ej: 14 — completalo solo si ya tenés uno asignado"></div>
         <div class="field full"><button class="btn primary" type="submit">Enviar postulación</button></div>
       </form>
       <div id="postularError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>
@@ -9753,9 +9755,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       errEl.style.display = 'none';
       const fd = new FormData(e.target);
       const mensaje = (fd.get('mensaje') || '').trim();
-      const duplaPrestadorId = fd.get('duplaPrestadorId') || null;
-      const duplaRolPropio = (fd.get('duplaRolPropio') || '').trim();
-      const duplaRolCompanero = (fd.get('duplaRolCompanero') || '').trim();
+      const numeroDupla = (fd.get('numeroDupla') || '').trim();
       const fileInputs = Array.from(e.target.querySelectorAll('input[type="file"]'));
       btn.disabled = true; btn.textContent = 'Subiendo documentos…';
       try {
@@ -9769,7 +9769,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           if (!url) throw new Error('No se pudo subir "' + docName + '". Probá de nuevo.');
           docsConfirmados.push({ doc: docName, url });
         }
-        const p = { id: uid(), organizationId: s.organizationId, servicioId, prestadorId, mensaje, docsConfirmados, estado: 'pendiente', duplaPrestadorId, duplaRolPropio, duplaRolCompanero, createdAt: nowISO() };
+        const p = { id: uid(), organizationId: s.organizationId, servicioId, prestadorId, mensaje, docsConfirmados, estado: 'pendiente', numeroDupla, createdAt: nowISO() };
         const ok = await saveOne(DB.postulaciones, postulacionToRow(p));
         if (!ok) throw new Error('No se pudo guardar la postulación. Probá de nuevo.');
         state.postulaciones.push(p);
