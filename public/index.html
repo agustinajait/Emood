@@ -233,6 +233,37 @@
       .home-steps { grid-template-columns:1fr; }
     }
 
+    /* ── Hero del perfil público de una organización ── */
+    .org-hero-inner {
+      position: relative; z-index: 1;
+      display: flex; align-items: flex-start; justify-content: center;
+      gap: 36px; max-width: 920px; margin: 0 auto; text-align: left;
+      flex-wrap: wrap;
+    }
+    .org-hero-main { flex: 1; min-width: 260px; }
+    .org-hero-logo {
+      width: 56px; height: 56px; border-radius: 14px; object-fit: cover;
+      background: #fff; margin-bottom: 16px; display: block;
+    }
+    .org-hero-main h1 { font-size: clamp(26px, 4vw, 40px); margin-bottom: 14px; }
+    .org-hero-main p { max-width: 480px; margin: 0 0 22px; }
+    .org-info-card {
+      width: 260px; flex-shrink: 0;
+      background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 16px; padding: 18px; backdrop-filter: blur(6px);
+    }
+    .org-info-card .org-info-row { display: flex; gap: 10px; margin-bottom: 14px; align-items: flex-start; }
+    .org-info-card .org-info-row:last-child { margin-bottom: 0; }
+    .org-info-card .org-info-icon { font-size: 15px; margin-top: 1px; }
+    .org-info-card .org-info-label { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,0.45); margin-bottom: 2px; }
+    .org-info-card .org-info-value { font-size: 13px; color: #fff; line-height: 1.4; word-break: break-word; }
+    .org-info-card .org-info-value a { color: #fff; }
+    @media (max-width: 720px) {
+      .org-hero-inner { flex-direction: column; align-items: center; text-align: center; }
+      .org-hero-main p { margin-left: auto; margin-right: auto; }
+      .org-info-card { width: 100%; max-width: 320px; text-align: left; }
+    }
+
     /* ── Login card ── */
     .login-right {
       display: flex;
@@ -3125,14 +3156,27 @@
           </div>
         </nav>
         <header class="home-hero"${org.cover_url ? ' style="background-image:linear-gradient(rgba(15,35,24,.78),rgba(15,35,24,.92)), url(\''+org.cover_url+'\');background-size:cover;background-position:center"' : ''}>
-          ${org.logo_url ? '<img src="'+org.logo_url+'" style="position:relative;z-index:1;display:block;width:64px;height:64px;object-fit:cover;border-radius:16px;margin:0 auto 18px">' : ''}
-          <div class="home-hero-badge"><span>Organización en E-Mood</span></div>
-          <h1>${org.name}</h1>
-          ${org.descripcion ? '<p>'+org.descripcion+'</p>' : ''}
-          <button class="btn primary home-hero-cta" onclick="goToLoginFromHome('prestador-signup')">Postularme →</button>
+          <div class="org-hero-inner">
+            <div class="org-hero-main">
+              <div class="home-hero-badge"><span>Organización en E-Mood</span></div>
+              ${org.logo_url ? '<img src="'+org.logo_url+'" class="org-hero-logo">' : ''}
+              <h1>${org.name}</h1>
+              ${org.descripcion ? '<p>'+org.descripcion+'</p>' : ''}
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <button class="btn primary home-hero-cta" onclick="goToLoginFromHome('prestador-signup')">Postularme →</button>
+                ${modulos.length ? '<button class="btn secondary" style="background:rgba(255,255,255,0.08);color:#fff;border-color:rgba(255,255,255,0.2)" onclick="scrollToHomeSection(\'orgModulosSection\')">📦 '+modulos.length+' módulo'+(modulos.length===1?'':'s')+' disponible'+(modulos.length===1?'':'s')+'</button>' : ''}
+              </div>
+            </div>
+            ${(org.direccion || org.contacto || org.sitio_web) ? `
+            <div class="org-info-card">
+              ${org.direccion ? '<div class="org-info-row"><span class="org-info-icon">📍</span><div><div class="org-info-label">Ubicación</div><div class="org-info-value">'+org.direccion+'</div></div></div>' : ''}
+              ${org.contacto ? '<div class="org-info-row"><span class="org-info-icon">📞</span><div><div class="org-info-label">Contacto</div><div class="org-info-value">'+org.contacto+'</div></div></div>' : ''}
+              ${org.sitio_web ? '<div class="org-info-row"><span class="org-info-icon">🌐</span><div><div class="org-info-label">Web</div><div class="org-info-value"><a href="'+org.sitio_web+'" target="_blank">'+org.sitio_web+'</a></div></div></div>' : ''}
+            </div>` : ''}
+          </div>
         </header>
 
-        <section class="home-section">
+        <section class="home-section" id="orgModulosSection">
           <div class="home-section-title">📦 Módulos disponibles de ${org.name}</div>
           <div class="home-modulos-grid">
             ${modulos.length ? modulos.map(s => `
@@ -3149,11 +3193,6 @@
         </section>
 
         <footer class="home-footer">
-          <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px">
-            ${org.direccion ? '<div>📍 '+org.direccion+'</div>' : ''}
-            ${org.contacto ? '<div>📞 '+org.contacto+'</div>' : ''}
-            ${org.sitio_web ? '<a href="'+org.sitio_web+'" target="_blank">🔗 '+org.sitio_web+'</a>' : ''}
-          </div>
           <a onclick="renderHomeScreen()">← Volver al inicio de E-Mood</a>
         </footer>
       `;
