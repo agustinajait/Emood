@@ -1865,7 +1865,7 @@
         </div>
         <div class="actions">
           <button class="btn secondary" onclick="openPerfilOrgModal()">🏢 Perfil público</button>
-          <button class="btn secondary" onclick="openInvitarAdminModal()">👤 Invitar administrador</button>
+          <button class="btn secondary" id="invitarAdminBtn" onclick="openInvitarAdminModal()" style="display:none">👤 Invitar administrador</button>
           <button class="btn secondary" onclick="openIntegracionesModal()">🔌 Integraciones</button>
         </div>
       </div>
@@ -2714,6 +2714,10 @@
       if (mia?.name) currentOrgName = mia.name;
       currentOrgFull = mia || null;
       actualizarSelectorSuperadmin(orgs);
+      // Invitar administrador es exclusivo del superadmin — un admin de
+      // organización no puede sumar colegas por su cuenta.
+      const invitarAdminBtn = document.getElementById('invitarAdminBtn');
+      if (invitarAdminBtn) invitarAdminBtn.style.display = myProfile?.role === 'superadmin' ? '' : 'none';
     } catch(_) {}
   }
 
@@ -2723,7 +2727,13 @@
   function openPerfilOrgModal() {
     const org = currentOrgFull;
     if (!org) { alert('Todavía no cargó la organización — probá de nuevo en un segundo.'); return; }
+    const link = window.location.origin + window.location.pathname + '?org=' + org.id;
     openModal('Perfil público de ' + (org.name||'tu organización'), 'Esto es lo que ve cualquier prestador cuando mira quién publica un módulo.', `
+      <div style="display:flex;gap:6px;margin-bottom:16px">
+        <input readonly value="${link}" style="flex:1;font-size:12px;padding:8px;border:1px solid var(--line);border-radius:8px" onclick="this.select()">
+        <button type="button" class="btn secondary small" onclick="navigator.clipboard?.writeText('${link}').then(()=>alert('Link copiado.')).catch(()=>prompt('Copiá este link:','${link}'))">📋 Copiar link</button>
+        <button type="button" class="btn secondary small" onclick="mostrarPerfilOrgModal(currentOrgFull)">👁 Vista previa</button>
+      </div>
       <form id="perfilOrgForm" class="form-grid">
         <div class="field full" style="text-align:center">
           ${org.logo_url ? '<img src="'+org.logo_url+'" style="width:80px;height:80px;object-fit:cover;border-radius:16px;margin-bottom:8px">' : ''}
@@ -2731,6 +2741,8 @@
           <input type="file" name="logo" accept="image/*">
         </div>
         <div class="field full"><label>Bio / descripción</label><textarea name="descripcion" placeholder="Contá de qué se trata la organización, a qué se dedica…">${org.descripcion||''}</textarea></div>
+        <div class="field full"><label>Dirección</label><input name="direccion" value="${org.direccion||''}" placeholder="Calle, número, ciudad…"></div>
+        <div class="field full"><label>Contacto (teléfono o email)</label><input name="contacto" value="${org.contacto||''}" placeholder="Ej: 11 1234-5678 / contacto@org.com"></div>
         <div class="field full"><label>Sitio web (opcional)</label><input type="url" name="sitioWeb" value="${org.sitio_web||''}" placeholder="https://…"></div>
         <div class="field full"><button class="btn primary" type="submit">Guardar</button></div>
       </form>
@@ -2754,11 +2766,15 @@
         }
         const ok = await sbUpdate('organizations', org.id, {
           descripcion: (data.descripcion||'').trim(),
+          direccion: (data.direccion||'').trim(),
+          contacto: (data.contacto||'').trim(),
           sitio_web: (data.sitioWeb||'').trim(),
           logo_url: logoUrl,
         });
         if (!ok) throw new Error('No se pudo guardar. Revisá la consola.');
         org.descripcion = (data.descripcion||'').trim();
+        org.direccion = (data.direccion||'').trim();
+        org.contacto = (data.contacto||'').trim();
         org.sitio_web = (data.sitioWeb||'').trim();
         org.logo_url = logoUrl;
         closeModal();
@@ -2913,6 +2929,7 @@
   const inviteTokenFromUrl = (urlParams.get('invite')||'').trim();
   const altaPrestadorFromUrl = (urlParams.get('alta')||'').trim() === 'prestador';
   const adminInviteTokenFromUrl = (urlParams.get('admin_invite')||'').trim();
+  const orgProfileIdFromUrl = (urlParams.get('org')||'').trim();
 
   /* ─── LOGIN LOGIC ────────────────────────────────────── */
   function switchLoginTab(tab) {
@@ -2997,16 +3014,39 @@
   }
 
   // Perfil público de la organización que publica el módulo: logo,
-  // bio y sitio web (lo carga el admin desde "🏢 Perfil público" en
-  // su Dashboard). Sin login, igual que el resto de la home.
-  function verOrganizacion(orgId) {
-    const org = orgsCacheById[orgId];
-    if (!org) return;
+  // bio, dirección, contacto y sitio web (lo carga el admin desde
+  // "🏢 Perfil público" en su Dashboard). Sin login, igual que el
+  // resto de la home.
+  function mostrarPerfilOrgModal(org) {
     openModal(org.name || 'Organización', '', `
       ${org.logo_url ? '<img src="'+org.logo_url+'" style="width:72px;height:72px;object-fit:cover;border-radius:16px;margin-bottom:14px">' : ''}
       ${org.descripcion ? '<p style="white-space:pre-wrap;line-height:1.6;margin-top:0">'+org.descripcion+'</p>' : '<p style="color:var(--muted)">Esta organización todavía no cargó una bio.</p>'}
-      ${org.sitio_web ? '<a href="'+org.sitio_web+'" target="_blank" style="font-size:13px;color:#1a73e8">🔗 '+org.sitio_web+'</a>' : ''}
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;margin-top:10px">
+        ${org.direccion ? '<div>📍 '+org.direccion+'</div>' : ''}
+        ${org.contacto ? '<div>📞 '+org.contacto+'</div>' : ''}
+        ${org.sitio_web ? '<a href="'+org.sitio_web+'" target="_blank" style="color:#1a73e8">🔗 '+org.sitio_web+'</a>' : ''}
+      </div>
     `);
+  }
+
+  function verOrganizacion(orgId) {
+    const org = orgsCacheById[orgId];
+    if (!org) return;
+    mostrarPerfilOrgModal(org);
+  }
+
+  // Para el link compartible del perfil público (?org=ID) — trae esa
+  // organización puntual, sin depender de que ya esté en caché.
+  async function verOrganizacionPorId(orgId) {
+    try {
+      const r = await sbFetch('/rest/v1/organizations?id=eq.' + encodeURIComponent(orgId) + '&select=*', { method: 'GET' });
+      const org = r.data?.[0];
+      if (!org) { alert('No se encontró esa organización (o no está activa).'); return; }
+      orgsCacheById[org.id] = org;
+      mostrarPerfilOrgModal(org);
+    } catch(e) {
+      alert('No se pudo cargar el perfil público.');
+    }
   }
 
   function verDetalleModuloHome(servicioId) {
@@ -10455,6 +10495,11 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   /* ─── INIT ───────────────────────────────────────────── */
   async function initApp() {
     state = loadStateLocal();
+
+    // Link compartible del perfil público de una organización
+    // (?org=ID) — se abre como modal arriba de lo que sea que se
+    // muestre, sin depender de sesión ni de a qué pantalla se rutee.
+    if (orgProfileIdFromUrl) verOrganizacionPorId(orgProfileIdFromUrl);
 
     // Nota: Owner/Prestador (?owner=, ?mode=sub, ?prestador=) quedan
     // temporalmente sin datos: desde la migración a multi-organización,
