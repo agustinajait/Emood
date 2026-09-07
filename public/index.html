@@ -9341,7 +9341,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">' +
           '<div><div style="font-weight:700;font-size:15px">'+s.titulo+'</div>' +
           '<div style="font-size:12px;color:var(--muted)">'+FRECUENCIA_LABEL[s.frecuencia]+' × '+(s.cantidadPorPeriodo||1)+(s.deadline?' · vence '+s.deadline:'')+'</div></div>' +
-          '<span class="badge '+(s.estado==='activo'?'green':'gray')+'">'+s.estado+'</span>' +
+          '<span class="badge '+(s.estado==='activo'?'green':'gray')+'">'+(s.estado==='activo'?'Activo':'⏸ Pausado')+'</span>' +
         '</div>' +
         (s.descripcion?'<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+s.descripcion.slice(0,120)+'</div>':'') +
         '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">' +
@@ -9356,7 +9356,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '</div>' +
         '<div style="display:flex;gap:8px">' +
           '<button class="btn secondary small" data-action="edit-servicio" data-id="'+s.id+'">Editar</button>' +
-          '<button class="btn secondary small" data-action="toggle-servicio" data-id="'+s.id+'">'+(s.estado==='activo'?'Cerrar':'Reabrir')+'</button>' +
+          '<button class="btn secondary small" data-action="toggle-servicio" data-id="'+s.id+'">'+(s.estado==='activo'?'⏸ Pausar':'▶ Reactivar')+'</button>' +
           '<button class="btn danger small" data-action="delete-servicio" data-id="'+s.id+'">Eliminar</button>' +
         '</div>' +
       '</div>';
@@ -9464,7 +9464,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '</div>' +
           '<div style="font-size:11px;color:var(--muted);margin-top:4px">"Jornada de servicio" es para tareas de campo con inicio/cierre diario (ej: Censo Flash) — se repite automáticamente "Veces por período" veces en cada ciclo, y el prestador marca inicio, marca cierre y adjunta una evidencia por jornada.</div>' +
         '</div>' +
-        (existing ? '<div class="field"><label>Estado</label><select name="estado"><option value="activo"'+(existing.estado==='activo'?' selected':'')+'>Activo</option><option value="cerrado"'+(existing.estado==='cerrado'?' selected':'')+'>Cerrado</option></select></div>' : '') +
+        (existing ? '<div class="field"><label>Estado</label><select name="estado"><option value="activo"'+(existing.estado==='activo'?' selected':'')+'>Activo (publicado)</option><option value="cerrado"'+(existing.estado==='cerrado'?' selected':'')+'>Pausado (no se publica)</option></select></div>' : '') +
         '<div class="field full"><button class="btn primary" type="submit">'+(existing?'Actualizar':'Publicar')+' módulo</button></div>' +
       '</form>'
     );
