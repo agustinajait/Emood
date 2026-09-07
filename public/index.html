@@ -2346,6 +2346,11 @@
     return {
       id: p.id,
       nombre: p.nombre||'',
+      apellido: p.apellido||'',
+      direccion: p.direccion||'',
+      telefono: p.telefono||'',
+      email: p.email||'',
+      fecha_nacimiento: p.fechaNacimiento||null,
       rol: p.rol||'',
       agency_id: p.agencyId||null,
       ecosistema_id: p.ecosistemaId||null,
@@ -2369,6 +2374,11 @@
     return {
       id: r.id,
       nombre: r.nombre||'',
+      apellido: r.apellido||'',
+      direccion: r.direccion||'',
+      telefono: r.telefono||'',
+      email: r.email||'',
+      fechaNacimiento: r.fecha_nacimiento||'',
       rol: r.rol||'',
       agencyId: r.agency_id||null,
       ecosistemaId: r.ecosistema_id||null,
@@ -2386,6 +2396,16 @@
       createdByOrgId: r.created_by_org_id||null,
       createdAt: r.created_at||'',
     };
+  }
+
+  // Datos mínimos para que un prestador pueda postularse a un módulo:
+  // nombre, apellido, dirección, teléfono, mail y fecha de nacimiento.
+  function perfilPrestadorCompleto(p) {
+    return !!(p && p.nombre && p.apellido && p.direccion && p.telefono && p.email && p.fechaNacimiento);
+  }
+  function camposPerfilFaltantes(p) {
+    const req = { nombre:'Nombre', apellido:'Apellido', direccion:'Dirección', telefono:'Teléfono', email:'Email', fechaNacimiento:'Fecha de nacimiento' };
+    return Object.keys(req).filter(k => !p?.[k]).map(k => req[k]);
   }
 
   function moduloToRow(m) {
@@ -7942,6 +7962,15 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           <p>${prest.rol||'Prestador de servicio'}</p>
         </div>
 
+        ${!perfilPrestadorCompleto(prest) ? `
+        <div class="card" style="background:#fffbeb;border:1px solid #fde68a;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <div>
+            <div style="font-weight:700;color:#92400e">⚠️ Completá tu perfil para poder postularte</div>
+            <div style="font-size:12px;color:#92400e">Te falta: ${camposPerfilFaltantes(prest).join(', ')}.</div>
+          </div>
+          <button class="btn primary small" onclick="openMisDatosModal('${prest.id}')">Completar ahora</button>
+        </div>` : ''}
+
         <div class="owner-stats">
           <div class="owner-stat">
             <div class="owner-stat-val">${mods.length}</div>
@@ -9731,6 +9760,12 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function openPostularModal(servicioId, prestadorId) {
     const ya = (state.postulaciones||[]).find(p => p.servicioId===servicioId && p.prestadorId===prestadorId);
     if (ya) { alert('Ya te postulaste a este módulo.'); return; }
+    const prest = prestadorById(prestadorId);
+    if (!perfilPrestadorCompleto(prest)) {
+      alert('Para postularte primero completá tu perfil (te falta: ' + camposPerfilFaltantes(prest).join(', ') + ').');
+      openMisDatosModal(prestadorId);
+      return;
+    }
     const s = servicioById(servicioId);
     if (!s) return;
     const docs = s.docsRequeridos || [];
@@ -9932,9 +9967,17 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function openMisDatosModal(prestadorId) {
     const p = (state.prestadores||[]).find(x => x.id === prestadorId);
     if (!p) return;
-    openModal('Mis datos', 'Contacto, perfil en OportunAI, tipo de contrato y documentación.', `
+    const faltan = camposPerfilFaltantes(p);
+    openModal('Mis datos', 'Completá tu perfil para poder postularte a cualquier módulo disponible.', `
       <form id="misDatosForm" class="form-grid">
-        <div class="field full"><label>Contacto (teléfono o email alternativo)</label><input name="contacto" value="${p.contacto||''}"></div>
+        ${faltan.length ? '<div class="field full" style="background:#fffbeb;border-radius:10px;padding:10px 12px;font-size:12px;color:#92400e">⚠️ Te falta completar: '+faltan.join(', ')+'.</div>' : '<div class="field full" style="background:#f0fdf4;border-radius:10px;padding:10px 12px;font-size:12px;color:#166534">✓ Tu perfil está completo — ya podés postularte a cualquier módulo.</div>'}
+        <div class="field"><label>Nombre</label><input name="nombre" value="${p.nombre||''}" required></div>
+        <div class="field"><label>Apellido</label><input name="apellido" value="${p.apellido||''}" required></div>
+        <div class="field full"><label>Dirección</label><input name="direccion" value="${p.direccion||''}" required></div>
+        <div class="field"><label>Teléfono</label><input name="telefono" value="${p.telefono||''}" required></div>
+        <div class="field"><label>Email</label><input type="email" name="email" value="${p.email||''}" required></div>
+        <div class="field"><label>Fecha de nacimiento</label><input type="date" name="fechaNacimiento" value="${p.fechaNacimiento||''}" required></div>
+        <div class="field full"><label>Contacto adicional (opcional)</label><input name="contacto" value="${p.contacto||''}"></div>
         <div class="field full"><label>🔗 Perfil en OportunAI</label><input type="url" name="oportunaiLink" value="${p.oportunaiLink||''}" placeholder="https://oportunai.com/…"></div>
         <div class="field full"><label>Tipo de contrato</label><select name="tipoContrato">
           <option value="">Sin especificar</option>
@@ -9965,6 +10008,12 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           if (!uploaded) throw new Error('No se pudo subir el archivo. Probá de nuevo.');
           docContratoUrl = uploaded;
         }
+        p.nombre = (data.nombre||'').trim();
+        p.apellido = (data.apellido||'').trim();
+        p.direccion = (data.direccion||'').trim();
+        p.telefono = (data.telefono||'').trim();
+        p.email = (data.email||'').trim();
+        p.fechaNacimiento = data.fechaNacimiento||'';
         p.contacto = (data.contacto||'').trim();
         p.oportunaiLink = (data.oportunaiLink||'').trim();
         p.tipoContrato = data.tipoContrato||'';
