@@ -1846,6 +1846,7 @@
           <p>Vista ejecutiva de la organización.</p>
         </div>
         <div class="actions">
+          <button class="btn secondary" onclick="openPerfilOrgModal()">🏢 Perfil público</button>
           <button class="btn secondary" onclick="openIntegracionesModal()">🔌 Integraciones</button>
         </div>
       </div>
@@ -2661,6 +2662,7 @@
   let currentPrestadorId = null;
   let currentRole = null; // 'admin' | 'owner'
   let currentOrgName = '';
+  let currentOrgFull = null; // fila completa de organizations (para editar el perfil público)
   async function loadOrgName() {
     try {
       const r = await sbSelect('organizations');
@@ -2671,8 +2673,63 @@
       // venga. Para un admin normal, RLS ya devuelve solo la suya.
       const mia = myProfile?.organization_id ? orgs.find(o => o.id === myProfile.organization_id) : orgs[0];
       if (mia?.name) currentOrgName = mia.name;
+      currentOrgFull = mia || null;
       actualizarSelectorSuperadmin(orgs);
     } catch(_) {}
+  }
+
+  // Perfil público de la organización (bio, logo, sitio web): lo que
+  // ve cualquier prestador — logueado o no — cuando toca "Ver
+  // organización" en un módulo. Lo edita el admin desde acá.
+  function openPerfilOrgModal() {
+    const org = currentOrgFull;
+    if (!org) { alert('Todavía no cargó la organización — probá de nuevo en un segundo.'); return; }
+    openModal('Perfil público de ' + (org.name||'tu organización'), 'Esto es lo que ve cualquier prestador cuando mira quién publica un módulo.', `
+      <form id="perfilOrgForm" class="form-grid">
+        <div class="field full" style="text-align:center">
+          ${org.logo_url ? '<img src="'+org.logo_url+'" style="width:80px;height:80px;object-fit:cover;border-radius:16px;margin-bottom:8px">' : ''}
+          <label>Logo</label>
+          <input type="file" name="logo" accept="image/*">
+        </div>
+        <div class="field full"><label>Bio / descripción</label><textarea name="descripcion" placeholder="Contá de qué se trata la organización, a qué se dedica…">${org.descripcion||''}</textarea></div>
+        <div class="field full"><label>Sitio web (opcional)</label><input type="url" name="sitioWeb" value="${org.sitio_web||''}" placeholder="https://…"></div>
+        <div class="field full"><button class="btn primary" type="submit">Guardar</button></div>
+      </form>
+      <div id="perfilOrgError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>
+    `);
+    document.getElementById('perfilOrgForm').onsubmit = async e => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button[type="submit"]');
+      const errEl = document.getElementById('perfilOrgError');
+      errEl.style.display = 'none';
+      const data = Object.fromEntries(new FormData(e.target).entries());
+      const logoFile = e.target.querySelector('[name="logo"]')?.files?.[0];
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      try {
+        let logoUrl = org.logo_url || '';
+        if (logoFile) {
+          const ext = (logoFile.name.split('.').pop() || 'jpg').toLowerCase();
+          const uploaded = await sbUpload('org-logos', org.id + '/logo_' + Date.now() + '.' + ext, logoFile);
+          if (!uploaded) throw new Error('No se pudo subir el logo. Probá de nuevo.');
+          logoUrl = uploaded;
+        }
+        const ok = await sbUpdate('organizations', org.id, {
+          descripcion: (data.descripcion||'').trim(),
+          sitio_web: (data.sitioWeb||'').trim(),
+          logo_url: logoUrl,
+        });
+        if (!ok) throw new Error('No se pudo guardar. Revisá la consola.');
+        org.descripcion = (data.descripcion||'').trim();
+        org.sitio_web = (data.sitioWeb||'').trim();
+        org.logo_url = logoUrl;
+        closeModal();
+        alert('Perfil público actualizado.');
+      } catch(err) {
+        errEl.textContent = err.message || 'No se pudo guardar.';
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Guardar';
+      }
+    };
   }
 
   // El selector de organización solo se muestra si el perfil logueado
@@ -2840,7 +2897,7 @@
   // "Ver detalle" abre la descripción completa (acá se la recorta para
   // que las tarjetas no queden desparejas) en un modal, sin login.
   let homeModulosCache = [];
-  let homeModulosOrgNombre = {};
+  let orgsCacheById = {};
   async function cargarModulosDisponiblesHome() {
     const grid = document.getElementById('homeModulosGrid');
     if (!grid) return;
@@ -2848,34 +2905,54 @@
       const [serv, orgs] = await Promise.all([ sbSelect(DB.servicios, 'created_at.desc'), sbSelect('organizations', 'name') ]);
       const activos = (serv.data||[]).filter(s => s.estado === 'activo');
       homeModulosCache = activos;
-      homeModulosOrgNombre = {};
-      (orgs.data||[]).forEach(o => { homeModulosOrgNombre[o.id] = o.name; });
+      orgsCacheById = {};
+      (orgs.data||[]).forEach(o => { orgsCacheById[o.id] = o; });
       if (!activos.length) {
         grid.innerHTML = '<div class="empty">Por ahora no hay módulos disponibles — volvé a mirar pronto.</div>';
         return;
       }
-      grid.innerHTML = activos.map(s => (
-        '<div class="card">' +
+      grid.innerHTML = activos.map(s => {
+        const org = orgsCacheById[s.organization_id];
+        return '<div class="card">' +
           '<div style="font-weight:700;margin-bottom:4px">'+(s.titulo||'Módulo')+'</div>' +
-          '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">🏢 '+(homeModulosOrgNombre[s.organization_id]||'Organización')+(s.frecuencia?' · '+s.frecuencia:'')+'</div>' +
+          '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:8px;cursor:pointer" onclick="verOrganizacion(\''+(s.organization_id||'')+'\')">' +
+            (org?.logo_url ? '<img src="'+org.logo_url+'" style="width:18px;height:18px;object-fit:cover;border-radius:5px">' : '🏢') +
+            ' <span style="text-decoration:underline">'+(org?.name||'Organización')+'</span>' + (s.frecuencia?' · '+s.frecuencia:'') +
+          '</div>' +
           (s.descripcion ? '<div style="font-size:13px;margin-bottom:10px">'+s.descripcion.slice(0,140)+(s.descripcion.length>140?'…':'')+'</div>' : '') +
-          '<div style="display:flex;gap:8px">' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
             '<button class="btn secondary small" onclick="verDetalleModuloHome(\''+s.id+'\')">Ver detalle</button>' +
             '<button class="btn primary small" onclick="goToLoginFromHome(\'prestador-signup\')">Postularme →</button>' +
           '</div>' +
-        '</div>'
-      )).join('');
+        '</div>';
+      }).join('');
     } catch(e) {
       grid.innerHTML = '<div class="empty">No se pudieron cargar los módulos disponibles ahora.</div>';
     }
   }
 
+  // Perfil público de la organización que publica el módulo: logo,
+  // bio y sitio web (lo carga el admin desde "🏢 Perfil público" en
+  // su Dashboard). Sin login, igual que el resto de la home.
+  function verOrganizacion(orgId) {
+    const org = orgsCacheById[orgId];
+    if (!org) return;
+    openModal(org.name || 'Organización', '', `
+      ${org.logo_url ? '<img src="'+org.logo_url+'" style="width:72px;height:72px;object-fit:cover;border-radius:16px;margin-bottom:14px">' : ''}
+      ${org.descripcion ? '<p style="white-space:pre-wrap;line-height:1.6;margin-top:0">'+org.descripcion+'</p>' : '<p style="color:var(--muted)">Esta organización todavía no cargó una bio.</p>'}
+      ${org.sitio_web ? '<a href="'+org.sitio_web+'" target="_blank" style="font-size:13px;color:#1a73e8">🔗 '+org.sitio_web+'</a>' : ''}
+    `);
+  }
+
   function verDetalleModuloHome(servicioId) {
     const s = homeModulosCache.find(x => x.id === servicioId);
     if (!s) return;
-    const orgNombre = homeModulosOrgNombre[s.organization_id] || 'Organización';
-    const pagoMensual = (s.horas_modulo||0) * (s.precio_hora||0) * (s.cantidad_por_periodo||1);
-    openModal(s.titulo || 'Módulo', '🏢 ' + orgNombre, `
+    const org = orgsCacheById[s.organization_id];
+    openModal(s.titulo || 'Módulo', '', `
+      <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-bottom:14px;cursor:pointer" onclick="verOrganizacion('${s.organization_id||''}')">
+        ${org?.logo_url ? '<img src="'+org.logo_url+'" style="width:22px;height:22px;object-fit:cover;border-radius:6px">' : '🏢'}
+        <span style="text-decoration:underline">${org?.name||'Organización'}</span>
+      </div>
       ${s.descripcion ? '<p style="white-space:pre-wrap;line-height:1.6;margin-top:0">'+s.descripcion+'</p>' : '<p style="color:var(--muted)">Sin descripción.</p>'}
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
         <span class="challenge-meta-tag">📦 ${s.horas_modulo||0} hs/módulo</span>
@@ -8121,6 +8198,15 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const fresh = await loadStateFromSupabase();
     if (fresh) state = normalizeState(fresh);
 
+    // Para poder mostrar "quién publica" cada módulo (nombre, logo,
+    // bio) — RLS ya deja ver cualquier organización activa, no solo
+    // la propia (que un prestador no tiene).
+    try {
+      const orgsRes = await sbSelect('organizations', 'name');
+      orgsCacheById = {};
+      (orgsRes.data||[]).forEach(o => { orgsCacheById[o.id] = o; });
+    } catch(_) {}
+
     const prest = (state.prestadores||[]).find(p => p.id === prestadorId);
     if (!prest) {
       ov.innerHTML = '<div style="padding:60px;text-align:center;color:var(--muted)"><div style="font-size:40px">⚠️</div><div style="font-weight:600;margin-top:12px">No se encontró el prestador.</div><button onclick="location.reload()" class="btn secondary" style="margin-top:16px">🔄 Reintentar</button></div>';
@@ -8321,8 +8407,13 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         disponibles.map(s => {
           const pagoMensual = (s.horasModulo||0)*(s.precioHora||0)*(s.cantidadPorPeriodo||1);
           const libres = (s.cupos||1) - cuposOcupados(s.id);
+          const org = orgsCacheById[s.organizationId];
           return '<div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafaf8">' +
             '<div style="font-size:14px;font-weight:700;margin-bottom:6px">'+s.titulo+'</div>' +
+            '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:8px;cursor:pointer" onclick="verOrganizacion(\''+(s.organizationId||'')+'\')">' +
+              (org?.logo_url?'<img src="'+org.logo_url+'" style="width:18px;height:18px;object-fit:cover;border-radius:5px">':'🏢') +
+              ' <span style="text-decoration:underline">'+(org?.name||'Organización')+'</span>' +
+            '</div>' +
             (s.descripcion?'<div style="font-size:12px;color:var(--muted);margin-bottom:8px">'+s.descripcion+'</div>':'') +
             '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">' +
               '<span class="challenge-meta-tag" style="background:#eff6ff;color:#1d4ed8">👤 '+libres+' cupo(s) libre(s)</span>' +
