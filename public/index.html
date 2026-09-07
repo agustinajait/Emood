@@ -64,7 +64,6 @@
       position: relative;
       overflow: hidden;
     }
-    .login-hero { display: none; }
     /* Subtle texture */
     #loginScreen::before {
       content: '';
@@ -86,9 +85,9 @@
       background-size: 60px 60px;
       pointer-events: none;
     }
-    /* ── Hero (left) ── */
+    /* ── Hero (left) — oculto: ver nota arriba de #loginScreen ── */
     .login-hero {
-      display: flex;
+      display: none;
       flex-direction: column;
       justify-content: center;
       padding: 64px 56px;
@@ -267,15 +266,11 @@
       letter-spacing: 0.15em;
       text-transform: uppercase;
     }
-    .login-tabs {
-      display: flex;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 14px;
-      padding: 4px;
-      margin-bottom: 28px;
-      gap: 3px;
-    }
+    /* Ya no se muestra: se llega a cada panel directo desde la home
+       (botón de administrador aparte, prestador aparte) — mostrar acá
+       la opción de "Administrador" en medio del registro de prestador
+       mezclaba los dos accesos otra vez. */
+    .login-tabs { display: none; }
     .login-tab {
       flex: 1;
       padding: 10px 6px;
