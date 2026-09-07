@@ -2825,6 +2825,7 @@
   }
 
   function goToLoginFromHome(target) {
+    closeModal();
     document.getElementById('homeScreen').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'flex';
     if (target === 'admin') switchLoginTab('admin');
@@ -2836,29 +2837,58 @@
   // necesidad de sesión (política de RLS pública para este caso) y
   // los muestra como vidriera. "Postularme" manda a crear cuenta /
   // iniciar sesión — postularse de verdad requiere estar logueado.
+  // "Ver detalle" abre la descripción completa (acá se la recorta para
+  // que las tarjetas no queden desparejas) en un modal, sin login.
+  let homeModulosCache = [];
+  let homeModulosOrgNombre = {};
   async function cargarModulosDisponiblesHome() {
     const grid = document.getElementById('homeModulosGrid');
     if (!grid) return;
     try {
       const [serv, orgs] = await Promise.all([ sbSelect(DB.servicios, 'created_at.desc'), sbSelect('organizations', 'name') ]);
       const activos = (serv.data||[]).filter(s => s.estado === 'activo');
+      homeModulosCache = activos;
+      homeModulosOrgNombre = {};
+      (orgs.data||[]).forEach(o => { homeModulosOrgNombre[o.id] = o.name; });
       if (!activos.length) {
         grid.innerHTML = '<div class="empty">Por ahora no hay módulos disponibles — volvé a mirar pronto.</div>';
         return;
       }
-      const orgNombre = {};
-      (orgs.data||[]).forEach(o => { orgNombre[o.id] = o.name; });
       grid.innerHTML = activos.map(s => (
         '<div class="card">' +
           '<div style="font-weight:700;margin-bottom:4px">'+(s.titulo||'Módulo')+'</div>' +
-          '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">🏢 '+(orgNombre[s.organization_id]||'Organización')+(s.frecuencia?' · '+s.frecuencia:'')+'</div>' +
+          '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">🏢 '+(homeModulosOrgNombre[s.organization_id]||'Organización')+(s.frecuencia?' · '+s.frecuencia:'')+'</div>' +
           (s.descripcion ? '<div style="font-size:13px;margin-bottom:10px">'+s.descripcion.slice(0,140)+(s.descripcion.length>140?'…':'')+'</div>' : '') +
-          '<button class="btn primary small" onclick="goToLoginFromHome(\'prestador-signup\')">Postularme →</button>' +
+          '<div style="display:flex;gap:8px">' +
+            '<button class="btn secondary small" onclick="verDetalleModuloHome(\''+s.id+'\')">Ver detalle</button>' +
+            '<button class="btn primary small" onclick="goToLoginFromHome(\'prestador-signup\')">Postularme →</button>' +
+          '</div>' +
         '</div>'
       )).join('');
     } catch(e) {
       grid.innerHTML = '<div class="empty">No se pudieron cargar los módulos disponibles ahora.</div>';
     }
+  }
+
+  function verDetalleModuloHome(servicioId) {
+    const s = homeModulosCache.find(x => x.id === servicioId);
+    if (!s) return;
+    const orgNombre = homeModulosOrgNombre[s.organization_id] || 'Organización';
+    const pagoMensual = (s.horas_modulo||0) * (s.precio_hora||0) * (s.cantidad_por_periodo||1);
+    openModal(s.titulo || 'Módulo', '🏢 ' + orgNombre, `
+      ${s.descripcion ? '<p style="white-space:pre-wrap;line-height:1.6;margin-top:0">'+s.descripcion+'</p>' : '<p style="color:var(--muted)">Sin descripción.</p>'}
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+        <span class="challenge-meta-tag">📦 ${s.horas_modulo||0} hs/módulo</span>
+        <span class="challenge-meta-tag">${FRECUENCIA_LABEL[s.frecuencia]||s.frecuencia||''} × ${s.cantidad_por_periodo||1}</span>
+        <span class="challenge-meta-tag">👤 ${s.cupos||1} cupo(s)</span>
+        ${pagoMensual ? '<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534">≈ $'+pagoMensual+'/mes c/u</span>' : ''}
+        ${s.fecha_inicio ? '<span class="challenge-meta-tag">📅 '+s.fecha_inicio+(s.fecha_fin?' a '+s.fecha_fin:'')+'</span>' : ''}
+        ${s.deadline ? '<span class="challenge-meta-tag">⏱ vence '+s.deadline+'</span>' : ''}
+        ${s.tipo_contrato ? '<span class="challenge-meta-tag" style="background:#fffbeb;color:#92400e">📄 '+s.tipo_contrato+'</span>' : ''}
+      </div>
+      ${s.doc_adjunto_url ? '<a href="'+s.doc_adjunto_url+'" target="_blank" style="display:inline-block;margin-bottom:14px;font-size:13px;color:#1a73e8">📎 Ver documento del contrato</a><br>' : ''}
+      <button class="btn primary" onclick="goToLoginFromHome('prestador-signup')">Crear mi cuenta y postularme →</button>
+    `);
   }
 
   function showPrestadorSignupPanel() {
