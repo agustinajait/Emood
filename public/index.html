@@ -10383,7 +10383,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     if (ya) { alert('Ya te postulaste a este módulo.'); return; }
     const prest = prestadorById(prestadorId);
     if (!perfilPrestadorCompleto(prest)) {
-      alert('Para postularte primero completá tu perfil (te falta: ' + camposPerfilFaltantes(prest).join(', ') + ').');
+      // Sin alert() nativo: "Mis datos" ya muestra arriba, con la
+      // estética de la plataforma, qué le falta completar.
       openMisDatosModal(prestadorId);
       return;
     }
