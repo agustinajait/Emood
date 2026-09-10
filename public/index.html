@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>E-Mood Huehaci · Planner</title>
+  <link rel="icon" type="image/png" href="3.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -1612,6 +1613,7 @@
   <div class="login-right">
     <div class="login-card">
       <div class="login-brand">
+        <img src="3.png" style="width:44px;height:44px;object-fit:cover;border-radius:12px;margin-bottom:10px">
         <div class="wordmark">E-Mood Huehaci</div>
         <div class="sub">E-mood operativo y dinámico</div>
       </div>
@@ -1798,7 +1800,7 @@
 ═══════════════════════════════════════════════════════ -->
 <div id="homeScreen" style="display:none">
   <nav class="home-nav">
-    <div class="home-nav-brand">🌿 E-Mood Huehaci</div>
+    <div class="home-nav-brand"><img src="3.png" style="width:18px;height:18px;object-fit:cover;border-radius:5px;vertical-align:-4px;margin-right:5px">E-Mood Huehaci</div>
     <div class="home-nav-links">
       <a onclick="scrollToHomeSection('homeComoFunciona')">Cómo funciona</a>
       <a onclick="scrollToHomeSection('homeModulosSection')">Módulos disponibles</a>
@@ -1833,7 +1835,7 @@
   </section>
 
   <footer class="home-footer">
-    <div style="margin-bottom:8px;font-weight:700;color:var(--text)">🌿 E-Mood Huehaci</div>
+    <div style="margin-bottom:8px;font-weight:700;color:var(--text)"><img src="3.png" style="width:18px;height:18px;object-fit:cover;border-radius:5px;vertical-align:-4px;margin-right:5px">E-Mood Huehaci</div>
     ¿Sos administrador/a de una organización? <a onclick="goToLoginFromHome('admin')">Ingresá acá →</a>
   </footer>
 </div>
@@ -1857,7 +1859,7 @@
   <aside class="sidebar">
     <div class="sidebar-top">
       <div class="brand">
-        <div class="brand-icon" id="sidebarBrandIcon">🌿</div>
+        <div class="brand-icon" id="sidebarBrandIcon"><img src="3.png" style="width:100%;height:100%;object-fit:cover;border-radius:9px"></div>
         <img id="sidebarOrgLogo" style="display:none;width:34px;height:34px;border-radius:9px;object-fit:cover;flex-shrink:0">
         <h1>E-Mood Huehaci</h1>
       </div>
@@ -4797,7 +4799,7 @@ ${renderBeforeAfter(challenge, state.checkins)}
       <!-- TOPBAR -->
       <div class="owner-topbar">
         <div class="owner-topbar-brand">
-          <div class="logo-dot">🌿</div>
+          <div class="logo-dot"><img src="3.png" style="width:100%;height:100%;object-fit:cover;border-radius:8px"></div>
           <span class="brand-text">E-Mood Huehaci</span>
           <span class="brand-role-tag">Socio responsable</span>
         </div>
@@ -5423,7 +5425,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       }
       document.getElementById('ownerView').innerHTML = `
         <div class="sub-topbar">
-          <div class="sub-topbar-brand"><span>🌿 E-Mood Huehaci</span><span class="sub-role-tag">Sub responsable</span></div>
+          <div class="sub-topbar-brand"><span><img src="3.png" style="width:18px;height:18px;object-fit:cover;border-radius:5px;vertical-align:-4px;margin-right:5px">E-Mood Huehaci</span><span class="sub-role-tag">Sub responsable</span></div>
         </div>
         <div style="padding:60px;text-align:center;color:var(--muted)">
           <div style="font-size:32px;margin-bottom:16px">⚠️</div>
@@ -5449,7 +5451,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       <!-- TOPBAR -->
       <div class="sub-topbar">
         <div class="sub-topbar-brand">
-          <span>🌿 E-Mood Huehaci</span>
+          <span><img src="3.png" style="width:18px;height:18px;object-fit:cover;border-radius:5px;vertical-align:-4px;margin-right:5px">E-Mood Huehaci</span>
           <span class="sub-role-tag">Sub responsable</span>
         </div>
         <div style="color:rgba(255,255,255,0.6);font-size:13px">${subName || 'Invitado'}</div>
@@ -6958,7 +6960,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const prest2 = prestadorById(prestadorId);
       if (!prest2) {
         document.getElementById('ownerView').innerHTML = `
-          <div class="prest-topbar"><div class="prest-topbar-brand"><span>🌿 E-Mood Huehaci</span></div></div>
+          <div class="prest-topbar"><div class="prest-topbar-brand"><span><img src="3.png" style="width:18px;height:18px;object-fit:cover;border-radius:5px;vertical-align:-4px;margin-right:5px">E-Mood Huehaci</span></div></div>
           <div style="padding:60px;text-align:center;color:var(--muted)">
             <div style="font-size:32px;margin-bottom:12px">⚠️</div>
             <div style="font-weight:600">No se encontró el prestador</div>
@@ -6983,7 +6985,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     document.getElementById('ownerView').innerHTML = `
       <div class="prest-topbar">
         <div class="prest-topbar-brand">
-          <span>🌿 E-Mood Huehaci</span>
+          <span><img src="3.png" style="width:18px;height:18px;object-fit:cover;border-radius:5px;vertical-align:-4px;margin-right:5px">E-Mood Huehaci</span>
           <span class="prest-role-tag">Prestador</span>
         </div>
         <div style="color:rgba(255,255,255,0.6);font-size:13px">${prest.nombre}</div>
@@ -7209,7 +7211,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     document.getElementById('remitoContent').innerHTML =
       '<div class="remito-header">' +
-        '<div><div class="remito-org">🌿 E-Mood Huehaci</div><div class="remito-org-sub">Holding · Planificación operativa</div></div>' +
+        '<div><div class="remito-org"><img src="3.png" style="width:18px;height:18px;object-fit:cover;border-radius:5px;vertical-align:-4px;margin-right:5px">E-Mood Huehaci</div><div class="remito-org-sub">Holding · Planificación operativa</div></div>' +
         '<div class="remito-num"><div class="remito-num-label">Remito de módulos</div><div class="remito-num-val">#'+remitoNum+'</div><div style="font-size:11px;color:#6b7280">'+mesUpper+'</div></div>' +
       '</div>' +
 
@@ -7289,7 +7291,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     document.getElementById('calendarioContent').innerHTML =
       '<div class="calendario-header">' +
         '<div>' +
-          '<div class="calendario-org">🌿 E-Mood Huehaci</div>' +
+          '<div class="calendario-org"><img src="3.png" style="width:18px;height:18px;object-fit:cover;border-radius:5px;vertical-align:-4px;margin-right:5px">E-Mood Huehaci</div>' +
           '<div class="calendario-title">Holding · Planificación operativa</div>' +
         '</div>' +
         '<div style="text-align:right">' +
@@ -8554,7 +8556,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     ov.innerHTML = `
       <div class="owner-topbar">
         <div class="owner-topbar-brand">
-          <div class="logo-dot">🌿</div>
+          <div class="logo-dot"><img src="3.png" style="width:100%;height:100%;object-fit:cover;border-radius:8px"></div>
           <span class="brand-text">E-Mood Huehaci</span>
           <span class="brand-role-tag">Prestador</span>
         </div>
@@ -9007,7 +9009,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     document.getElementById('remitoContent').innerHTML =
       '<div class="remito-header">' +
-        '<div><div class="remito-org">🌿 E-Mood Huehaci</div><div class="remito-org-sub">Holding · Planificación operativa</div></div>' +
+        '<div><div class="remito-org"><img src="3.png" style="width:18px;height:18px;object-fit:cover;border-radius:5px;vertical-align:-4px;margin-right:5px">E-Mood Huehaci</div><div class="remito-org-sub">Holding · Planificación operativa</div></div>' +
         '<div class="remito-num"><div class="remito-num-label">Remito de módulos</div><div class="remito-num-val">#'+remitoNum+'</div><div style="font-size:11px;color:#6b7280">'+mesUpper+'</div></div>' +
       '</div>' +
 
@@ -9095,7 +9097,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     document.getElementById('calendarioContent').innerHTML =
       '<div class="calendario-header">' +
         '<div>' +
-          '<div class="calendario-org">🌿 E-Mood Huehaci</div>' +
+          '<div class="calendario-org"><img src="3.png" style="width:18px;height:18px;object-fit:cover;border-radius:5px;vertical-align:-4px;margin-right:5px">E-Mood Huehaci</div>' +
           '<div class="calendario-title">Holding · Planificación operativa</div>' +
         '</div>' +
         '<div style="text-align:right">' +
@@ -10299,7 +10301,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     document.getElementById('remitoContent').innerHTML =
       '<div class="remito-header">' +
-        '<div><div class="remito-org">🌿 E-Mood</div><div class="remito-org-sub">Remito de módulo — '+periodoLabel(ciclo.periodo)+'</div></div>' +
+        '<div><div class="remito-org"><img src="3.png" style="width:16px;height:16px;object-fit:cover;border-radius:4px;vertical-align:-3px;margin-right:4px">E-Mood</div><div class="remito-org-sub">Remito de módulo — '+periodoLabel(ciclo.periodo)+'</div></div>' +
         '<div class="remito-num"><div class="remito-num-label">Remito</div><div class="remito-num-val">#'+remitoNum+'</div></div>' +
       '</div>' +
       '<div class="remito-prest-section">' +
@@ -10353,7 +10355,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     document.getElementById('remitoContent').innerHTML =
       '<div class="remito-header">' +
-        '<div><div class="remito-org">🌿 E-Mood</div><div class="remito-org-sub">Remito combinado de dupla — '+periodoLabel(ciclo.periodo)+'</div></div>' +
+        '<div><div class="remito-org"><img src="3.png" style="width:16px;height:16px;object-fit:cover;border-radius:4px;vertical-align:-3px;margin-right:4px">E-Mood</div><div class="remito-org-sub">Remito combinado de dupla — '+periodoLabel(ciclo.periodo)+'</div></div>' +
         '<div class="remito-num"><div class="remito-num-label">Remito</div><div class="remito-num-val">#'+remitoNum+'</div></div>' +
       '</div>' +
       '<div class="remito-prest-section">' +
@@ -10771,7 +10773,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       // Show loading while state loads
       document.getElementById('ownerView').innerHTML = `
         <div class="sub-topbar">
-          <div class="sub-topbar-brand"><span>🌿 E-Mood Huehaci</span><span class="sub-role-tag">Sub responsable</span></div>
+          <div class="sub-topbar-brand"><span><img src="3.png" style="width:18px;height:18px;object-fit:cover;border-radius:5px;vertical-align:-4px;margin-right:5px">E-Mood Huehaci</span><span class="sub-role-tag">Sub responsable</span></div>
         </div>
         <div style="padding:60px;text-align:center;color:var(--muted)">
           <div style="font-size:32px;margin-bottom:16px">⏳</div>
