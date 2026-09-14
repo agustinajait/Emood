@@ -5674,6 +5674,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='invitar-prestador') { const p=prestadorById(id); if(p) await openInvitarPrestadorModal(p); }
     else if (action==='edit-servicio') { const s=servicioById(id); if(s) openServicioModal(s); }
     else if (action==='toggle-servicio') await toggleServicioEstado(id);
+    else if (action==='asignar-prestador-directo') openAsignarPrestadorDirectoModal(id);
     else if (action==='delete-servicio') await deleteServicio(id);
     else if (action==='accept-postulacion') await acceptPostulacion(id);
     else if (action==='reject-postulacion') await rejectPostulacion(id);
@@ -6272,7 +6273,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     const p = {
       id: uid(), organizationId: servicio.organizationId, servicioId: servicio.id, prestadorId: prestador.id,
-      mensaje: 'Asignación directa por administrador (importación de nómina)', docsConfirmados: [], estado: 'aceptada', createdAt: nowISO(),
+      mensaje: 'Asignación directa por administrador', docsConfirmados: [], estado: 'aceptada', createdAt: nowISO(),
     };
     const okPost = await saveOne(DB.postulaciones, postulacionToRow(p));
     if (!okPost) return { ok: false, motivo: 'falló al crear la postulación (revisá la consola)' };
@@ -6289,6 +6290,57 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     await ensureCicloForPeriodo(modulo.id, periodoActual());
     return { ok: true };
+  }
+
+  // Asignar un módulo a un prestador YA cargado, sin pasar por
+  // postulación — sobre todo pensado para módulos "privados"
+  // (visibilidad='privado'): el admin ya sabe a quién quiere, no
+  // hace falta abrir convocatoria pública. Reusa asignarPrestadorDirecto,
+  // la misma lógica que ya usa "Importar nómina".
+  function openAsignarPrestadorDirectoModal(servicioId) {
+    const s = servicioById(servicioId);
+    if (!s) return;
+    const libres = (s.cupos||1) - cuposOcupados(s.id);
+    if (libres <= 0) { alert('Este módulo no tiene cupos disponibles.'); return; }
+    const prestadoresOrdenados = [...(state.prestadores||[])].sort((a,b) => a.nombre.localeCompare(b.nombre));
+    openModal('Asignar prestador a ' + s.titulo, 'Lo deja asignado directo, como si ya se hubiera postulado y lo hubieras aceptado — no pasa por convocatoria pública.', `
+      <form id="asignarPrestadorDirectoForm" class="form-grid">
+        <div class="field full"><label>Buscar</label><input id="asignarPrestadorSearch" placeholder="Escribí para filtrar por nombre…" oninput="filtrarAsignarPrestadorSelect()"></div>
+        <div class="field full"><label>Prestador (${libres} cupo${libres===1?'':'s'} libre${libres===1?'':'s'})</label>
+          <select id="asignarPrestadorSelect" name="prestadorId" required size="8" style="height:auto">
+            ${prestadoresOrdenados.map(p => '<option value="'+p.id+'">'+p.nombre+(p.rol?' — '+p.rol:'')+'</option>').join('')}
+          </select>
+        </div>
+        <div class="field full"><button class="btn primary" type="submit">Asignar</button></div>
+      </form>
+      <div id="asignarPrestadorDirectoError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>
+    `);
+    document.getElementById('asignarPrestadorDirectoForm').onsubmit = async e => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button[type="submit"]');
+      const errEl = document.getElementById('asignarPrestadorDirectoError');
+      errEl.style.display = 'none';
+      const prestadorId = document.getElementById('asignarPrestadorSelect').value;
+      const prest = prestadorById(prestadorId);
+      if (!prest) { errEl.textContent = 'Elegí un prestador de la lista.'; errEl.style.display = 'block'; return; }
+      btn.disabled = true; btn.textContent = 'Asignando…';
+      const res = await asignarPrestadorDirecto(prest, s);
+      if (!res.ok) {
+        errEl.textContent = 'No se pudo asignar: ' + res.motivo;
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Asignar';
+        return;
+      }
+      closeModal();
+      renderServicios();
+      alert(prest.nombre + ' quedó asignado a "' + s.titulo + '".');
+    };
+  }
+  function filtrarAsignarPrestadorSelect() {
+    const q = (document.getElementById('asignarPrestadorSearch').value||'').trim().toLowerCase();
+    document.querySelectorAll('#asignarPrestadorSelect option').forEach(opt => {
+      opt.hidden = q && !opt.textContent.toLowerCase().includes(q);
+    });
   }
 
   function descargarPlantillaNomina() {
@@ -9805,8 +9857,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           (s.tipoContrato?'<span class="challenge-meta-tag" style="background:#fffbeb;color:#92400e">📄 '+s.tipoContrato+'</span>':'') +
           (s.docAdjuntoUrl?'<a href="'+s.docAdjuntoUrl+'" target="_blank" class="challenge-meta-tag" style="background:#e8f0fe;color:#1a73e8;text-decoration:none">📎 Documento</a>':'') +
         '</div>' +
-        '<div style="display:flex;gap:8px">' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
           '<button class="btn secondary small" data-action="edit-servicio" data-id="'+s.id+'">Editar</button>' +
+          '<button class="btn secondary small" data-action="asignar-prestador-directo" data-id="'+s.id+'">➕ Asignar prestador</button>' +
           '<button class="btn secondary small" data-action="toggle-servicio" data-id="'+s.id+'">'+(s.estado==='activo'?'⏸ Pausar':'▶ Reactivar')+'</button>' +
           '<button class="btn danger small" data-action="delete-servicio" data-id="'+s.id+'">Eliminar</button>' +
         '</div>' +
