@@ -6303,15 +6303,24 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const libres = (s.cupos||1) - cuposOcupados(s.id);
     if (libres <= 0) { alert('Este módulo no tiene cupos disponibles.'); return; }
     const prestadoresOrdenados = [...(state.prestadores||[])].sort((a,b) => a.nombre.localeCompare(b.nombre));
-    openModal('Asignar prestador a ' + s.titulo, 'Lo deja asignado directo, como si ya se hubiera postulado y lo hubieras aceptado — no pasa por convocatoria pública.', `
+    openModal('Asignar prestadores a ' + s.titulo, 'Los deja asignados directo, como si ya se hubieran postulado y los hubieras aceptado — no pasa por convocatoria pública. Podés elegir varios a la vez.', `
       <form id="asignarPrestadorDirectoForm" class="form-grid">
-        <div class="field full"><label>Buscar</label><input id="asignarPrestadorSearch" placeholder="Escribí para filtrar por nombre…" oninput="filtrarAsignarPrestadorSelect()"></div>
-        <div class="field full"><label>Prestador (${libres} cupo${libres===1?'':'s'} libre${libres===1?'':'s'})</label>
-          <select id="asignarPrestadorSelect" name="prestadorId" required size="8" style="height:auto">
-            ${prestadoresOrdenados.map(p => '<option value="'+p.id+'">'+p.nombre+(p.rol?' — '+p.rol:'')+'</option>').join('')}
-          </select>
+        <div class="field full"><label>Buscar</label><input id="asignarPrestadorSearch" placeholder="Escribí para filtrar por nombre…" oninput="filtrarAsignarPrestadorLista()"></div>
+        <div class="field full" style="display:flex;justify-content:space-between;align-items:center">
+          <label style="margin:0">Prestadores (${libres} cupo${libres===1?'':'s'} libre${libres===1?'':'s'})</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--primary);cursor:pointer">
+            <input type="checkbox" id="asignarPrestadorTodos" onchange="toggleAsignarPrestadorTodos(this.checked)"> Seleccionar todos
+          </label>
         </div>
-        <div class="field full"><button class="btn primary" type="submit">Asignar</button></div>
+        <div class="field full" id="asignarPrestadorLista" style="max-height:280px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:4px">
+          ${prestadoresOrdenados.map(p => `
+            <label data-nombre="${p.nombre.toLowerCase()}" style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;cursor:pointer;font-size:13px">
+              <input type="checkbox" class="asignarPrestadorCheck" value="${p.id}">
+              ${p.nombre}${p.rol?' <span style="color:var(--muted)">— '+p.rol+'</span>':''}
+            </label>
+          `).join('')}
+        </div>
+        <div class="field full"><button class="btn primary" type="submit">Asignar seleccionados</button></div>
       </form>
       <div id="asignarPrestadorDirectoError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>
     `);
@@ -6320,27 +6329,34 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const btn = e.target.querySelector('button[type="submit"]');
       const errEl = document.getElementById('asignarPrestadorDirectoError');
       errEl.style.display = 'none';
-      const prestadorId = document.getElementById('asignarPrestadorSelect').value;
-      const prest = prestadorById(prestadorId);
-      if (!prest) { errEl.textContent = 'Elegí un prestador de la lista.'; errEl.style.display = 'block'; return; }
-      btn.disabled = true; btn.textContent = 'Asignando…';
-      const res = await asignarPrestadorDirecto(prest, s);
-      if (!res.ok) {
-        errEl.textContent = 'No se pudo asignar: ' + res.motivo;
-        errEl.style.display = 'block';
-        btn.disabled = false; btn.textContent = 'Asignar';
-        return;
+      const ids = Array.from(document.querySelectorAll('.asignarPrestadorCheck:checked')).map(c => c.value);
+      if (!ids.length) { errEl.textContent = 'Elegí al menos un prestador.'; errEl.style.display = 'block'; return; }
+      btn.disabled = true;
+      const okNombres = [], fallidos = [];
+      for (const id of ids) {
+        const prest = prestadorById(id);
+        if (!prest) continue;
+        btn.textContent = 'Asignando ' + (okNombres.length + fallidos.length + 1) + '/' + ids.length + '…';
+        const res = await asignarPrestadorDirecto(prest, s);
+        if (res.ok) okNombres.push(prest.nombre);
+        else fallidos.push(prest.nombre + ' (' + res.motivo + ')');
       }
       closeModal();
       renderServicios();
-      alert(prest.nombre + ' quedó asignado a "' + s.titulo + '".');
+      alert(
+        (okNombres.length ? 'Asignados a "'+s.titulo+'": '+okNombres.join(', ')+'.' : 'No se asignó a nadie.') +
+        (fallidos.length ? '\n\nNo se pudieron asignar:\n- ' + fallidos.join('\n- ') : '')
+      );
     };
   }
-  function filtrarAsignarPrestadorSelect() {
+  function filtrarAsignarPrestadorLista() {
     const q = (document.getElementById('asignarPrestadorSearch').value||'').trim().toLowerCase();
-    document.querySelectorAll('#asignarPrestadorSelect option').forEach(opt => {
-      opt.hidden = q && !opt.textContent.toLowerCase().includes(q);
+    document.querySelectorAll('#asignarPrestadorLista label').forEach(label => {
+      label.hidden = q && !label.dataset.nombre.includes(q);
     });
+  }
+  function toggleAsignarPrestadorTodos(checked) {
+    document.querySelectorAll('#asignarPrestadorLista label:not([hidden]) .asignarPrestadorCheck').forEach(c => { c.checked = checked; });
   }
 
   function descargarPlantillaNomina() {
