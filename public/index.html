@@ -6288,6 +6288,16 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     if (!okModulo) return { ok: false, motivo: 'la postulación se creó pero falló al crear el módulo asignado' };
     state.modulosAsignados.push(modulo);
 
+    // El prestador hereda el ecosistema del módulo al que queda
+    // asignado — si no, el filtro por ecosistema de "Prestadores" no
+    // lo encuentra (esto ya lo hacía "Importar nómina" al crearlo,
+    // pero un prestador asignado directo desde acá podía no tener
+    // ecosistema cargado todavía).
+    if (servicio.ecosistemaId && prestador.ecosistemaId !== servicio.ecosistemaId) {
+      prestador.ecosistemaId = servicio.ecosistemaId;
+      await saveOne(DB.prestadores, prestadorToRow(prestador));
+    }
+
     await ensureCicloForPeriodo(modulo.id, periodoActual());
     return { ok: true };
   }
