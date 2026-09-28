@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Chules · Productos</title>
+<style>
+  @font-face { font-family: "Montserrat"; src: url("fonts/Montserrat.woff2") format("woff2"); font-weight: 300 800; }
+  :root {
+    --bg: #f3f0e9;
+    --card: #ffffff;
+    --ink: #1f1f1f;
+    --price: #6b5d57;
+    --label: #a39a93;
+    --dot-bg: #eadbd0;
+    --teal: #146565;
+    --teal-soft: #4f8580;
+    --mint: #6fdcb4;
+    --brown: #7a6660;
+  }
+  @page { size: 1200px 1680px; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); }
+  body {
+    width: 1200px; height: 1680px; overflow: hidden;
+    font-family: "Montserrat", Arial, sans-serif; color: var(--ink);
+    padding: 44px 80px 0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+
+  /* Header */
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; }
+  header .titles h1 {
+    font-weight: 800; font-size: 44px; line-height: 1; color: var(--brown); letter-spacing: -.5px;
+  }
+  header .titles p {
+    margin-top: 10px; font-size: 13px; letter-spacing: 6px; color: var(--label); text-transform: uppercase;
+  }
+  header img { width: 150px; height: 150px; object-fit: cover; border-radius: 50%; mix-blend-mode: multiply; }
+
+  /* Grid */
+  .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: 28px; row-gap: 30px; }
+  .span2 { grid-column: span 2; }
+
+  .item { display: flex; flex-direction: column; align-items: center; }
+  .card {
+    position: relative; width: 100%; background: var(--card);
+    box-shadow: 0 6px 18px rgba(80, 60, 40, .08);
+  }
+  .card .cat {
+    height: 26px; padding: 9px 12px 0; font-size: 8px; font-weight: 500;
+    letter-spacing: 3px; text-transform: uppercase; color: var(--label);
+  }
+  .card .dots {
+    position: absolute; top: -8px; right: -8px; width: 46px; height: 46px; border-radius: 50%;
+    background: #fff; display: grid; place-items: center; z-index: 2;
+    box-shadow: 0 2px 6px rgba(0,0,0,.06);
+  }
+  .card .dots::before {
+    content: "•••"; width: 30px; height: 30px; border-radius: 50%; background: var(--dot-bg);
+    display: grid; place-items: center; font-size: 9px; letter-spacing: 1px; color: #2a2a2a;
+  }
+  .card .photo { display: block; width: 100%; height: 196px; object-fit: cover; }
+  .card .photos { display: flex; height: 196px; }
+  .card .photos img { flex: 1; min-width: 0; height: 100%; object-fit: cover; object-position: 12% 50%; }
+  .card.wide .photo { height: 150px; }
+  .card.side { display: grid; grid-template-columns: 250px 1fr; grid-template-rows: 26px 1fr; }
+  .card.side .cat { grid-column: 1 / -1; }
+  .card.side .photo { height: 100%; min-height: 286px; }
+  .card.side .info { margin: 0; border-radius: 0; display: flex; flex-direction: column; justify-content: center; padding: 16px 18px; }
+  .card.side .name { font-size: 20px; }
+  .card.side .price { font-size: 16px; }
+  .card.side .chips { margin-top: 16px; }
+  .card .info {
+    position: relative; margin-top: -14px; background: #fff; border-radius: 12px 12px 0 0;
+    padding: 12px 10px 12px; text-align: center; min-height: 66px;
+  }
+  .card .name { font-size: 15px; font-weight: 500; text-transform: uppercase; line-height: 1.2; }
+  .card .price { margin-top: 3px; font-size: 13px; font-weight: 700; color: var(--price); }
+  .card .price small { font-weight: 600; font-size: 11px; }
+
+  .tag {
+    margin-top: 10px; background: var(--mint); color: var(--teal); padding: 5px 0;
+    width: 88%; text-align: center; font-size: 12px; font-weight: 500;
+    letter-spacing: 3px; text-transform: uppercase; border-radius: 3px; white-space: nowrap;
+  }
+  .new {
+    position: absolute; top: 34px; left: 12px; z-index: 2; background: var(--mint); color: var(--teal);
+    font-size: 11px; font-weight: 700; letter-spacing: 4px; padding: 5px 10px; border-radius: 3px;
+  }
+  .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 10px; }
+  .chips span { white-space: nowrap;
+    border: 1.5px solid var(--teal-soft); color: var(--teal); border-radius: 20px;
+    padding: 3px 10px; font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
+  }
+
+  /* Footer */
+  footer { display: flex; align-items: center; gap: 34px; margin-top: 38px; }
+  .wa {
+    display: flex; align-items: center; gap: 12px; background: var(--teal); color: #fff;
+    border-radius: 16px; padding: 30px 30px; font-size: 30px; font-weight: 700; letter-spacing: -.3px;
+  }
+  .wa svg { width: 40px; height: 40px; }
+  .cta h2 { font-size: 30px; font-weight: 800; color: var(--brown); line-height: 1; }
+  .cta p { margin-top: 16px; font-size: 15px; letter-spacing: 1px; color: var(--brown); }
+  .cta p + p { margin-top: 6px; font-size: 12px; letter-spacing: 3px; color: var(--label); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="titles">
+    <h1>Nuestras delicias</h1>
+    <p>100% artesanales · Hechas con amor</p>
+  </div>
+  <img src="img/logo.jpg" alt="Chules">
+</header>
+
+<main class="grid">
+  <!-- Tortas -->
+  <div class="item"><div class="card"><div class="cat">Torta</div><span class="dots"></span>
+    <img class="photo" src="img/merengue-choco.jpg" alt="">
+    <div class="info"><div class="name">Merengue y choco</div><div class="price">$3.500</div></div></div></div>
+  <div class="item"><div class="card"><div class="cat">Torta</div><span class="dots"></span>
+    <img class="photo" src="img/coco-ddl.jpg" alt="">
+    <div class="info"><div class="name">Coco y DDL</div><div class="price">$3.700</div></div></div></div>
+  <div class="item"><div class="card"><div class="cat">Torta</div><span class="dots"></span>
+    <img class="photo" src="img/pastafrola.jpg" alt="">
+    <div class="info"><div class="name">Pastafrola</div><div class="price">$3.400</div></div></div></div>
+  <div class="item"><div class="card"><div class="cat">Torta</div><span class="dots"></span>
+    <img class="photo" src="img/pastafrola-ddl.jpg" alt="">
+    <div class="info"><div class="name">Pastafrola DDL</div><div class="price">$3.400</div></div></div></div>
+
+  <!-- Delicias -->
+  <div class="item"><div class="card"><div class="cat">Delicias</div><span class="dots"></span>
+    <img class="photo" src="img/canoncitos-ddl-choco.jpg" alt="">
+    <div class="info"><div class="name">Cañoncitos DDL y choco</div><div class="price">$2.500</div></div></div></div>
+  <div class="item"><div class="card"><div class="cat">Delicias</div><span class="dots"></span>
+    <img class="photo" src="img/canoncitos-ddl.jpg" alt="">
+    <div class="info"><div class="name">Cañoncitos DDL</div><div class="price">$2.500</div></div></div></div>
+  <div class="item"><div class="card"><div class="cat">Delicias</div><span class="dots"></span>
+    <img class="photo" src="img/palmeritas.jpg" alt="">
+    <div class="info"><div class="name">Palmeritas</div><div class="price">$2.500</div></div></div></div>
+  <div class="item"><div class="card"><div class="cat">Delicias</div><span class="dots"></span>
+    <img class="photo" src="img/alfajores.jpg" alt="">
+    <div class="info"><div class="name">Alfajores (CH, DDL, MAI)</div><div class="price">$2.500 <small>(6u)</small></div></div></div></div>
+
+  <!-- Masas + alfajores medianos -->
+  <div class="item"><div class="card"><div class="cat">Delicias</div><span class="dots"></span>
+    <img class="photo" src="img/masas-banadas.jpg" alt="">
+    <div class="info"><div class="name">Masas bañadas</div><div class="price">$3.000</div></div></div>
+    <div class="tag">Pack x 6 surtidas</div></div>
+  <div class="item"><div class="card"><div class="cat">Delicias</div><span class="dots"></span>
+    <img class="photo" src="img/anillos-ddl.jpg" alt="">
+    <div class="info"><div class="name">Anillos rellenos DDL</div><div class="price">$3.000</div></div></div>
+    <div class="tag">Pack x 6 surtidas</div></div>
+  <div class="item"><div class="card"><div class="cat">Delicias</div><span class="dots"></span>
+    <img class="photo" src="img/masas-glaseadas.jpg" alt="">
+    <div class="info"><div class="name">Masas glaseadas</div><div class="price">$3.000</div></div></div>
+    <div class="tag">Pack x 6 surtidas</div></div>
+  <div class="item"><div class="card"><div class="cat">Alfajores</div><span class="dots"></span>
+    <div class="photos"><img src="img/alfajor-mediano-choco.jpg" alt=""><img src="img/alfajor-mediano-maicena.jpg" alt=""></div>
+    <div class="info"><div class="name">Alfajores medianos</div><div class="price">$2.500 <small>(tubo x 5)</small></div></div></div>
+    <div class="tag">Choco o maicena</div></div>
+
+  <!-- Nuevos -->
+  <div class="item span2"><div class="card wide"><div class="cat">Alfajores</div><span class="dots"></span>
+    <span class="new">NUEVO</span>
+    <img class="photo" src="img/potes.jpg" alt="">
+    <div class="info">
+      <div class="name">Potes de alfajores · 240 g</div><div class="price">$3.300 <small>el pote</small></div>
+      <div class="chips"><span>Maicena</span><span>Chocolate</span><span>Dulce de leche</span></div>
+    </div></div></div>
+  <div class="item span2"><div class="card side"><div class="cat">Postres</div><span class="dots"></span>
+    <span class="new">NUEVO</span>
+    <img class="photo" src="img/postres.jpg" alt="">
+    <div class="info">
+      <div class="name">Postres en vaso</div><div class="price">$3.800 <small>cada uno</small></div>
+      <div class="chips" style="justify-content:flex-start"><span>Tiramisú</span><span>Chocotorta</span><span>Oreo</span><span>Limón pie</span><span>Mousse de chocolate</span><span>Marquise</span></div>
+    </div></div></div>
+</main>
+
+<footer>
+  <div class="wa">
+    <svg viewBox="0 0 32 32" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round">
+      <path d="M16 3a13 13 0 0 0-11.2 19.6L3 29l6.6-1.7A13 13 0 1 0 16 3z"/>
+      <path d="M11.5 9.5c-.6 0-1.6.7-1.6 2.2 0 3.3 4.7 8.9 9.6 9.9 1.6.3 2.8-.8 2.9-1.8l-2.6-1.4c-.4.5-.9 1.2-1.5 1-1.6-.6-3.5-2.4-4.2-4-.2-.6.5-1.1 1-1.5l-1.2-2.7c-.2-.4-.8-1.7-2.4-1.7z" fill="#fff" stroke="none"/>
+    </svg>
+    11 3344-2447
+  </div>
+  <div class="cta">
+    <h2>¡Hacé tu pedido ahora!</h2>
+    <p>ENTREGAS EN ZONA NORTE</p>
+    <p>¡GRACIAS POR ELEGIR LO ARTESANAL!</p>
+  </div>
+</footer>
+
+</body>
+</html>
