@@ -1885,7 +1885,8 @@
         <div class="nav-section-label">Prestadores</div>
         <button data-page="ecosistemas"><span class="nav-icon">🌿</span>Ecosistemas</button>
         <button data-page="prestadores"><span class="nav-icon">👥</span>Prestadores</button>
-        <button data-page="servicios"><span class="nav-icon">📦</span>Módulos<span class="nav-badge" id="postulacionesBadge" style="display:none"></span></button>
+        <button data-page="servicios"><span class="nav-icon">📦</span>Módulos</button>
+        <button data-page="postulaciones"><span class="nav-icon">📝</span>Postulaciones<span class="nav-badge" id="postulacionesBadge" style="display:none"></span></button>
 
         <button data-page="seguimiento"><span class="nav-icon">✅</span>Seguimiento mensual</button>
         <button data-page="liquidacion"><span class="nav-icon">💰</span>Liquidación</button>
@@ -2032,7 +2033,6 @@
       </div>
       <div class="sv-tabs">
         <button class="sv-tab active" data-svtab="servicios" onclick="switchServiciosTab('servicios')">Módulos</button>
-        <button class="sv-tab" data-svtab="postulaciones" onclick="switchServiciosTab('postulaciones')">Postulaciones <span id="postulacionesTabCount" class="sv-tab-count" style="display:none">0</span></button>
         <button class="sv-tab" data-svtab="asignados" onclick="switchServiciosTab('asignados')">Módulos asignados <span id="asignadosTabCount" class="sv-tab-count" style="display:none">0</span></button>
       </div>
       <div id="serviciosTabServicios">
@@ -2049,8 +2049,18 @@
         </div>
         <div id="serviciosListContent"></div>
       </div>
-      <div id="serviciosTabPostulaciones" style="display:none"><div id="postulacionesListContent"></div></div>
       <div id="serviciosTabAsignados" style="display:none"><div id="modulosAsignadosListContent"></div></div>
+    </section>
+
+    <!-- POSTULACIONES -->
+    <section class="page" id="page-postulaciones">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h2>Postulaciones</h2>
+          <p>Revisá las postulaciones agrupadas por módulo y aceptalas o rechazalas.</p>
+        </div>
+      </div>
+      <div id="postulacionesListContent"></div>
     </section>
 
     <!-- PROTOCOLOS -->
@@ -9719,7 +9729,6 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function switchServiciosTab(tab) {
     document.querySelectorAll('#page-servicios .sv-tab').forEach(b => b.classList.toggle('active', b.dataset.svtab===tab));
     document.getElementById('serviciosTabServicios').style.display = tab==='servicios' ? 'block' : 'none';
-    document.getElementById('serviciosTabPostulaciones').style.display = tab==='postulaciones' ? 'block' : 'none';
     document.getElementById('serviciosTabAsignados').style.display = tab==='asignados' ? 'block' : 'none';
   }
 
@@ -10101,11 +10110,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const pendientes = (state.postulaciones||[]).filter(p => p.estado === 'pendiente').length;
     const porValidar = itemsPendientesValidacion().length;
     const navBadge = document.getElementById('postulacionesBadge');
-    const tabCount = document.getElementById('postulacionesTabCount');
     const asignadosTabCount = document.getElementById('asignadosTabCount');
     const total = pendientes + porValidar;
     if (navBadge) { navBadge.style.display = total ? 'inline-flex' : 'none'; navBadge.textContent = total; }
-    if (tabCount) { tabCount.style.display = pendientes ? 'inline-flex' : 'none'; tabCount.textContent = pendientes; }
     if (asignadosTabCount) { asignadosTabCount.style.display = porValidar ? 'inline-flex' : 'none'; asignadosTabCount.textContent = porValidar; }
   }
 
@@ -10113,13 +10120,12 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const el = document.getElementById('postulacionesListContent');
     updatePostulacionesBadge();
     if (!el) return;
-    const postulaciones = [...(state.postulaciones||[])].sort((a,b) => (a.estado==='pendiente'?0:1)-(b.estado==='pendiente'?0:1));
+    const postulaciones = state.postulaciones||[];
     if (!postulaciones.length) {
       el.innerHTML = '<div class="empty">Todavía no hay postulaciones.</div>';
       return;
     }
-    el.innerHTML = postulaciones.map(p => {
-      const s = servicioById(p.servicioId);
+    function cardPostulacion(p) {
       const prest = prestadorById(p.prestadorId);
       // Caso raro pero posible: quedó marcada "aceptada" pero el módulo
       // asignado nunca se llegó a crear (falló el guardado a mitad de
@@ -10129,7 +10135,6 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       return '<div class="card" style="margin-bottom:10px">' +
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
           '<div><div style="font-weight:700">'+(prest?.nombre||'Prestador eliminado')+'</div>' +
-          '<div style="font-size:13px;color:var(--muted)">postula a: '+(s?.titulo||'Módulo eliminado')+'</div>' +
           (p.mensaje?'<div style="font-size:13px;margin-top:6px">"'+p.mensaje+'"</div>':'') +
           (p.numeroDupla?'<div style="font-size:12px;color:#5b21b6;margin-top:6px">🤝 Número de dupla: <strong>'+p.numeroDupla+'</strong></div>':'') +
           (p.docsConfirmados?.length?'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+p.docsConfirmados.map(d=>'<a href="'+d.url+'" target="_blank" style="font-size:11px;color:#1a73e8;background:#e8f0fe;padding:3px 8px;border-radius:6px;text-decoration:none">📎 '+d.doc+'</a>').join('')+'</div>':'') +
@@ -10143,6 +10148,28 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '<div style="font-size:11px;color:#dc2626;margin-bottom:6px">⚠️ Se aceptó pero no se pudo crear el módulo asignado.</div>' +
           '<button class="btn secondary small" data-action="accept-postulacion" data-id="'+p.id+'">🔄 Reintentar creación de módulo</button>' +
         '</div>' : '') +
+      '</div>';
+    }
+    // Agrupadas por módulo — si no, quedan todas las postulaciones de
+    // la organización mezcladas en una sola lista sin poder distinguir
+    // a qué módulo corresponde cada una.
+    const porServicio = {};
+    postulaciones.forEach(p => { (porServicio[p.servicioId] = porServicio[p.servicioId]||[]).push(p); });
+    const servicioIds = Object.keys(porServicio).sort((a,b) => {
+      const pendA = porServicio[a].some(p=>p.estado==='pendiente') ? 0 : 1;
+      const pendB = porServicio[b].some(p=>p.estado==='pendiente') ? 0 : 1;
+      return pendA - pendB;
+    });
+    el.innerHTML = servicioIds.map(sid => {
+      const s = servicioById(sid);
+      const grupo = [...porServicio[sid]].sort((a,b) => (a.estado==='pendiente'?0:1)-(b.estado==='pendiente'?0:1));
+      const pendientes = grupo.filter(p=>p.estado==='pendiente').length;
+      return '<div style="margin-bottom:20px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
+          '<h3 style="margin:0;font-size:15px">'+(s?.titulo||'Módulo eliminado')+'</h3>' +
+          (pendientes?'<span class="badge blue">'+pendientes+' pendiente(s)</span>':'') +
+        '</div>' +
+        grupo.map(cardPostulacion).join('') +
       '</div>';
     }).join('');
   }
@@ -10299,8 +10326,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     function tienePorValidar(moduloId) {
       return itemsPendientesValidacion().some(it => it.moduloAsignadoId === moduloId);
     }
-    modulos.sort((a,b) => (tienePorValidar(b.id)?1:0) - (tienePorValidar(a.id)?1:0));
-    el.innerHTML = modulos.map(m => {
+    function cardModuloAsignado(m) {
       const s = servicioById(m.servicioId);
       const prest = prestadorById(m.prestadorId);
       const post = (state.postulaciones||[]).find(po => po.id === m.postulacionId);
@@ -10349,6 +10375,30 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             (c.estado==='aprobado' ? '<div style="margin-top:10px;font-size:12px;color:var(--muted)">Remito #'+c.remitoNumero+'</div>' : '') +
           '</div>';
         }).join('') : '<div class="empty">Todavía no se abrió el primer ciclo.</div>') +
+      '</div>';
+    }
+    // Agrupados por ecosistema del módulo al que pertenecen — si no,
+    // quedan todos los módulos asignados de la organización mezclados
+    // sin poder distinguir de qué programa es cada uno.
+    const porEco = {};
+    modulos.forEach(m => {
+      const s = servicioById(m.servicioId);
+      const ecoId = s?.ecosistemaId || '_sin';
+      (porEco[ecoId] = porEco[ecoId]||[]).push(m);
+    });
+    const ecoIds = Object.keys(porEco).sort((a,b) => {
+      if (a==='_sin') return 1;
+      if (b==='_sin') return -1;
+      const nombreA = (state.ecosistemas||[]).find(e=>e.id===a)?.nombre||'';
+      const nombreB = (state.ecosistemas||[]).find(e=>e.id===b)?.nombre||'';
+      return nombreA.localeCompare(nombreB);
+    });
+    el.innerHTML = ecoIds.map(ecoId => {
+      const nombre = ecoId==='_sin' ? 'Sin ecosistema' : ((state.ecosistemas||[]).find(e=>e.id===ecoId)?.nombre || 'Ecosistema');
+      const grupo = [...porEco[ecoId]].sort((a,b) => (tienePorValidar(b.id)?1:0) - (tienePorValidar(a.id)?1:0));
+      return '<div style="margin-bottom:24px">' +
+        '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px">🌿 '+nombre+' ('+grupo.length+' módulo'+(grupo.length===1?'':'s')+')</div>' +
+        grupo.map(cardModuloAsignado).join('') +
       '</div>';
     }).join('');
   }
