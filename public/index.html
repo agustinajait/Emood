@@ -2149,7 +2149,14 @@
         </div>
         <div id="serviciosListContent"></div>
       </div>
-      <div id="serviciosTabAsignados" style="display:none"><div id="modulosAsignadosListContent"></div></div>
+      <div id="serviciosTabAsignados" style="display:none">
+        <div class="toolbar">
+          <select id="asignadosServicioFilter" onchange="renderModulosAsignados()">
+            <option value="all">Todos los módulos</option>
+          </select>
+        </div>
+        <div id="modulosAsignadosListContent"></div>
+      </div>
     </section>
 
     <!-- POSTULACIONES -->
@@ -10418,9 +10425,20 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const el = document.getElementById('modulosAsignadosListContent');
     updatePostulacionesBadge();
     if (!el) return;
-    const modulos = [...(state.modulosAsignados || [])];
-    if (!modulos.length) {
+    const servicioFilter = document.getElementById('asignadosServicioFilter');
+    if (servicioFilter && servicioFilter.options.length <= 1) {
+      servicioFilter.innerHTML = '<option value="all">Todos los módulos</option>' +
+        (state.servicios||[]).map(s => '<option value="'+s.id+'">'+s.titulo+'</option>').join('');
+    }
+    const servicioVal = servicioFilter?.value || 'all';
+    const todosLosModulos = [...(state.modulosAsignados || [])];
+    if (!todosLosModulos.length) {
       el.innerHTML = '<div class="empty">Todavía no hay módulos asignados (se crean al aceptar una postulación).</div>';
+      return;
+    }
+    const modulos = servicioVal === 'all' ? todosLosModulos : todosLosModulos.filter(m => m.servicioId === servicioVal);
+    if (!modulos.length) {
+      el.innerHTML = '<div class="empty">Ningún prestador asignado a ese módulo todavía.</div>';
       return;
     }
     function tienePorValidar(moduloId) {
