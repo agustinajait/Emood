@@ -9047,6 +9047,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           </div>
         </div>
 
+        ${buildPrestPagosSection(prest)}
+
         <!-- MÓDULOS FIJOS -->
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px;margin-top:8px">📦 Mis tareas asignadas</div>
         ${mods.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:24px">
@@ -9145,6 +9147,42 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
       </div>
     `;
+  }
+
+  // "Mis pagos" del prestador — pendiente de cobro vs. ya cobrado,
+  // a partir de los mismos remitos aprobados que usa el admin en
+  // "Órdenes de pago" (ver renderOrdenesPago). E-Mood no mueve la
+  // plata; esto es solo el resumen de cuánto le deben y cuánto ya
+  // le pagaron, al estilo "ingresos" de Workana.
+  function buildPrestPagosSection(prest) {
+    const misCiclos = (state.moduloCiclos||[]).filter(c => {
+      if (c.estado !== 'aprobado') return false;
+      const m = moduloAsignadoById(c.moduloAsignadoId);
+      return m && m.prestadorId === prest.id;
+    });
+    if (!misCiclos.length) return '';
+    const pendientes = misCiclos.filter(c => !c.pagado).sort((a,b)=>b.periodo.localeCompare(a.periodo));
+    const pagados = misCiclos.filter(c => c.pagado).sort((a,b)=>b.periodo.localeCompare(a.periodo));
+    const totalPendiente = pendientes.reduce((s,c)=>s+montoCiclo(c),0);
+    const totalCobrado = pagados.reduce((s,c)=>s+montoCiclo(c),0);
+    const fila = c => {
+      const m = moduloAsignadoById(c.moduloAsignadoId);
+      const s = m && servicioById(m.servicioId);
+      return '<div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding:10px 0">' +
+        '<div><strong style="font-size:13px">'+(s?.titulo||'—')+'</strong><div style="font-size:12px;color:var(--muted);text-transform:capitalize">'+periodoLabel(c.periodo)+'</div></div>' +
+        '<div style="text-align:right"><strong style="font-size:14px">$'+montoCiclo(c).toLocaleString()+'</strong><div style="margin-top:2px">'+
+          (c.pagado ? '<span class="badge green">✓ Pagado'+(c.fechaPago?' · '+new Date(c.fechaPago).toLocaleDateString('es-AR'):'')+'</span>' : '<span class="badge blue">Pendiente de pago</span>') +
+        '</div></div>' +
+      '</div>';
+    };
+    return '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px;margin-top:8px">💰 Mis pagos</div>' +
+      '<div class="owner-stats" style="grid-template-columns:repeat(2,1fr);margin-bottom:16px">' +
+        '<div class="owner-stat"><div class="owner-stat-val" style="color:#92400e">$'+totalPendiente.toLocaleString()+'</div><div class="owner-stat-label">Pendiente de cobro</div></div>' +
+        '<div class="owner-stat"><div class="owner-stat-val" style="color:#166534">$'+totalCobrado.toLocaleString()+'</div><div class="owner-stat-label">Cobrado acumulado</div></div>' +
+      '</div>' +
+      '<div class="owner-card" style="margin-bottom:24px">' +
+        [...pendientes, ...pagados].map(fila).join('') +
+      '</div>';
   }
 
   function buildPrestServiciosSection(prest) {
