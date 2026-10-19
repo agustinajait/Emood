@@ -10964,15 +10964,38 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const s = servicioById(servicioId);
     if (!s) return;
     const docs = s.docsRequeridos || [];
+    // Si el documento pedido ya está cargado en el perfil del prestador
+    // (CUIL, CBU/CVU, Foto), no se lo volvemos a pedir: se reutiliza el
+    // que ya tiene, con opción de reemplazarlo si quiere.
+    const perfilDocMatch = d => {
+      const n = (d||'').toLowerCase();
+      if (/cuil/.test(n)) return prest.cuilComprobanteUrl ? prest.cuilComprobanteUrl : null;
+      if (/cbu|cvu/.test(n)) return prest.cbuComprobanteUrl ? prest.cbuComprobanteUrl : null;
+      if (/foto/.test(n)) return prest.fotoUrl ? prest.fotoUrl : null;
+      return null;
+    };
 
     openModal('Postularme a ' + s.titulo, docs.length ? 'Adjuntá cada documento pedido para poder enviar tu postulación.' : 'Confirmá tu postulación.', `
       <form id="postularForm" class="form-grid">
-        ${docs.map((d,i) => `
-          <div class="field full">
-            <label>📄 ${d}</label>
-            <input type="file" name="doc_${i}" data-docname="${d}" accept="image/*,application/pdf" required>
-          </div>
-        `).join('')}
+        ${docs.map((d,i) => {
+          const yaUrl = perfilDocMatch(d);
+          if (yaUrl) {
+            return `
+              <div class="field full">
+                <label>📄 ${d}</label>
+                <div style="font-size:12px;color:#15803d;background:#f0fdf4;border-radius:8px;padding:8px 10px;margin-bottom:6px">✓ Ya está cargado en tu perfil — <a href="${yaUrl}" target="_blank" style="color:#15803d;text-decoration:underline">verlo</a></div>
+                <input type="file" name="doc_${i}" data-docname="${d}" data-perfil-url="${yaUrl}" accept="image/*,application/pdf">
+                <div style="font-size:11px;color:var(--muted);margin-top:4px">Opcional: subí uno nuevo solo si querés reemplazarlo.</div>
+              </div>
+            `;
+          }
+          return `
+            <div class="field full">
+              <label>📄 ${d}</label>
+              <input type="file" name="doc_${i}" data-docname="${d}" accept="image/*,application/pdf" required>
+            </div>
+          `;
+        }).join('')}
         ${s.tipoContrato ? `
           <div class="field full" style="background:#fffbeb;border-radius:10px;padding:12px 14px">
             <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;font-weight:500">
@@ -11003,7 +11026,11 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         for (const input of fileInputs) {
           const file = input.files?.[0];
           const docName = input.dataset.docname;
-          if (!file) throw new Error('Falta adjuntar: ' + docName);
+          const perfilUrl = input.dataset.perfilUrl;
+          if (!file) {
+            if (perfilUrl) { docsConfirmados.push({ doc: docName, url: perfilUrl }); continue; }
+            throw new Error('Falta adjuntar: ' + docName);
+          }
           const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
           const url = await sbUpload('prestador-docs', prestadorId + '/postulacion_' + servicioId + '/' + uid() + '.' + ext, file);
           if (!url) throw new Error('No se pudo subir "' + docName + '". Probá de nuevo.');
