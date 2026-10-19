@@ -2792,6 +2792,7 @@
       doc_contrato_url: p.docContratoUrl||'',
       cbu: p.cbu||'',
       alias_cbu: p.aliasCbu||'',
+      cbu_comprobante_url: p.cbuComprobanteUrl||'',
       created_by_org_id: p.createdByOrgId||null,
       created_at: p.createdAt||new Date().toISOString(),
     };
@@ -2822,6 +2823,7 @@
       docContratoUrl: r.doc_contrato_url||'',
       cbu: r.cbu||'',
       aliasCbu: r.alias_cbu||'',
+      cbuComprobanteUrl: r.cbu_comprobante_url||'',
       createdByOrgId: r.created_by_org_id||null,
       createdAt: r.created_at||'',
     };
@@ -3986,6 +3988,7 @@
       estado: p.estado||'pendiente',
       dupla_prestador_id: p.duplaPrestadorId||null, dupla_rol_propio: p.duplaRolPropio||'', dupla_rol_companero: p.duplaRolCompanero||'',
       numero_dupla: p.numeroDupla||'',
+      tipo_contrato_aceptado: p.tipoContratoAceptado||'',
       created_at: p.createdAt||nowISO(), updated_at: nowISO(),
     };
   }
@@ -3997,6 +4000,7 @@
       estado: r.estado||'pendiente',
       duplaPrestadorId: r.dupla_prestador_id||null, duplaRolPropio: r.dupla_rol_propio||'', duplaRolCompanero: r.dupla_rol_companero||'',
       numeroDupla: r.numero_dupla||'',
+      tipoContratoAceptado: r.tipo_contrato_aceptado||'',
       createdAt: r.created_at||'', updatedAt: r.updated_at||'',
     };
   }
@@ -7349,7 +7353,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
               <td><strong>${f.prestador.nombre}</strong></td>
               <td>${f.servicio?.titulo||'—'}</td>
               <td style="text-transform:capitalize">${periodoLabel(f.ciclo.periodo)}</td>
-              <td style="font-size:12.5px">${f.prestador.cbu ? f.prestador.cbu : (f.prestador.aliasCbu ? '' : '<span style="color:var(--danger)">⚠️ Sin CBU/alias cargado</span>')}${f.prestador.aliasCbu ? (f.prestador.cbu?' · ':'')+f.prestador.aliasCbu : ''}</td>
+              <td style="font-size:12.5px">${f.prestador.cbu ? f.prestador.cbu : (f.prestador.aliasCbu ? '' : '<span style="color:var(--danger)">⚠️ Sin CBU/alias cargado</span>')}${f.prestador.aliasCbu ? (f.prestador.cbu?' · ':'')+f.prestador.aliasCbu : ''}${f.prestador.cbuComprobanteUrl ? ' · <a href="'+f.prestador.cbuComprobanteUrl+'" target="_blank">📎 constancia</a>' : ''}</td>
               <td><strong>$${f.monto.toLocaleString()}</strong></td>
               <td><button class="btn secondary xs" data-action="marcar-pagado" data-id="${f.ciclo.id}">✓ Marcar pagado</button></td>
             </tr>`).join('')}
@@ -10896,6 +10900,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             <input type="file" name="doc_${i}" data-docname="${d}" accept="image/*,application/pdf" required>
           </div>
         `).join('')}
+        ${s.tipoContrato ? `
+          <div class="field full" style="background:#fffbeb;border-radius:10px;padding:12px 14px">
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;font-weight:500">
+              <input type="checkbox" name="aceptaTipoContrato" required style="width:18px;height:18px;margin-top:1px;accent-color:var(--primary);flex-shrink:0">
+              <span>Acepto postularme bajo la modalidad de contratación que pide este módulo: <strong>📄 ${s.tipoContrato}</strong>.</span>
+            </label>
+          </div>
+        ` : ''}
         <div class="field full"><label>¿Algo que quieras contarle a la organización? (opcional)</label><textarea name="mensaje"></textarea></div>
         <div class="field full"><label>Número de dupla (opcional)</label><input name="numeroDupla" placeholder="Ej: 14 — completalo solo si ya tenés uno asignado"></div>
         <div class="field full"><button class="btn primary" type="submit">Enviar postulación</button></div>
@@ -10924,7 +10936,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           if (!url) throw new Error('No se pudo subir "' + docName + '". Probá de nuevo.');
           docsConfirmados.push({ doc: docName, url });
         }
-        const p = { id: uid(), organizationId: s.organizationId, servicioId, prestadorId, mensaje, docsConfirmados, estado: 'pendiente', numeroDupla, createdAt: nowISO() };
+        const p = { id: uid(), organizationId: s.organizationId, servicioId, prestadorId, mensaje, docsConfirmados, estado: 'pendiente', numeroDupla, tipoContratoAceptado: s.tipoContrato||'', createdAt: nowISO() };
         const ok = await saveOne(DB.postulaciones, postulacionToRow(p));
         if (!ok) throw new Error('No se pudo guardar la postulación. Probá de nuevo.');
         state.postulaciones.push(p);
@@ -11093,21 +11105,17 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         <div class="field"><label>Apellido</label><input name="apellido" value="${p.apellido||''}" required></div>
         <div class="field full"><label>Dirección</label><input name="direccion" value="${p.direccion||''}" required></div>
         <div class="field"><label>Teléfono</label><input name="telefono" value="${p.telefono||''}" required></div>
-        <div class="field"><label>Email</label><input type="email" name="email" value="${p.email||''}" required></div>
+        <div class="field"><label>Email</label><input type="email" name="email" value="${p.email||authSession?.user?.email||''}" readonly style="background:var(--bg2);color:var(--muted);cursor:not-allowed"></div>
         <div class="field"><label>Fecha de nacimiento</label><input type="date" name="fechaNacimiento" value="${p.fechaNacimiento||''}" required></div>
         <div class="field full"><label>Contacto adicional (opcional)</label><input name="contacto" value="${p.contacto||''}"></div>
         <div class="field"><label>CBU/CVU (para cobrar)</label><input name="cbu" value="${p.cbu||''}" placeholder="22 dígitos"></div>
         <div class="field"><label>Alias</label><input name="aliasCbu" value="${p.aliasCbu||''}" placeholder="ej: juan.perez.mp"></div>
-        <div class="field full"><label>🔗 Perfil en OportunAI</label><input type="url" name="oportunaiLink" value="${p.oportunaiLink||''}" placeholder="https://oportunai.com/…"></div>
-        <div class="field full"><label>Tipo de contrato</label><select name="tipoContrato">
-          <option value="">Sin especificar</option>
-          ${['Monotributo','Relación de dependencia','Autónomo','Prestación de servicios','Otro'].map(t=>'<option value="'+t+'"'+(p.tipoContrato===t?' selected':'')+'>'+t+'</option>').join('')}
-        </select></div>
         <div class="field full">
-          <label>📎 Documento de contrato (ej: constancia de monotributo)</label>
-          <input type="file" name="docContrato" accept="image/*,application/pdf">
-          ${p.docContratoUrl ? '<div style="margin-top:6px"><a href="'+p.docContratoUrl+'" target="_blank" style="font-size:12px;color:#1a73e8">🔗 Ver documento actual</a></div>' : ''}
+          <label>📎 Constancia de CBU/CVU (opcional — captura de tu banco o billetera)</label>
+          <input type="file" name="cbuComprobante" accept="image/*,application/pdf">
+          ${p.cbuComprobanteUrl ? '<div style="margin-top:6px"><a href="'+p.cbuComprobanteUrl+'" target="_blank" style="font-size:12px;color:#1a73e8">🔗 Ver constancia actual</a></div>' : ''}
         </div>
+        <div class="field full"><label>🔗 Perfil en OportunAI</label><input type="url" name="oportunaiLink" value="${p.oportunaiLink||''}" placeholder="https://oportunai.com/…"></div>
         <div class="field full"><button class="btn primary" type="submit">Guardar</button></div>
       </form>
       <div id="misDatosError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>
@@ -11118,28 +11126,27 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const errEl = document.getElementById('misDatosError');
       errEl.style.display = 'none';
       const data = Object.fromEntries(new FormData(e.target).entries());
-      const docFile = e.target.querySelector('[name="docContrato"]')?.files?.[0];
+      const cbuFile = e.target.querySelector('[name="cbuComprobante"]')?.files?.[0];
       btn.disabled = true; btn.textContent = 'Guardando…';
       try {
-        let docContratoUrl = p.docContratoUrl || '';
-        if (docFile) {
-          const ext = (docFile.name.split('.').pop() || 'pdf').toLowerCase();
-          const uploaded = await sbUpload('prestador-docs', p.id + '/contrato_' + Date.now() + '.' + ext, docFile);
-          if (!uploaded) throw new Error('No se pudo subir el archivo. Probá de nuevo.');
-          docContratoUrl = uploaded;
+        let cbuComprobanteUrl = p.cbuComprobanteUrl || '';
+        if (cbuFile) {
+          const ext = (cbuFile.name.split('.').pop() || 'pdf').toLowerCase();
+          const uploaded = await sbUpload('prestador-docs', p.id + '/cbu_' + Date.now() + '.' + ext, cbuFile);
+          if (!uploaded) throw new Error('No se pudo subir la constancia de CBU. Probá de nuevo.');
+          cbuComprobanteUrl = uploaded;
         }
         p.nombre = (data.nombre||'').trim();
         p.apellido = (data.apellido||'').trim();
         p.direccion = (data.direccion||'').trim();
         p.telefono = (data.telefono||'').trim();
-        p.email = (data.email||'').trim();
+        p.email = (data.email||authSession?.user?.email||'').trim();
         p.fechaNacimiento = data.fechaNacimiento||'';
         p.contacto = (data.contacto||'').trim();
         p.cbu = (data.cbu||'').trim();
         p.aliasCbu = (data.aliasCbu||'').trim();
+        p.cbuComprobanteUrl = cbuComprobanteUrl;
         p.oportunaiLink = (data.oportunaiLink||'').trim();
-        p.tipoContrato = data.tipoContrato||'';
-        p.docContratoUrl = docContratoUrl;
         await saveOne(DB.prestadores, prestadorToRow(p));
         closeModal();
         renderPrestadorPublicView(p.id);
