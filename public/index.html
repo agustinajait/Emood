@@ -1101,6 +1101,7 @@
       color: #fff;
       font-weight: 700;
       font-size: 13px;
+      overflow: hidden;
     }
     .owner-name { font-weight: 600; font-size: 14px; }
 
@@ -2793,6 +2794,7 @@
       cbu: p.cbu||'',
       alias_cbu: p.aliasCbu||'',
       cbu_comprobante_url: p.cbuComprobanteUrl||'',
+      foto_url: p.fotoUrl||'',
       created_by_org_id: p.createdByOrgId||null,
       created_at: p.createdAt||new Date().toISOString(),
     };
@@ -2824,6 +2826,7 @@
       cbu: r.cbu||'',
       aliasCbu: r.alias_cbu||'',
       cbuComprobanteUrl: r.cbu_comprobante_url||'',
+      fotoUrl: r.foto_url||'',
       createdByOrgId: r.created_by_org_id||null,
       createdAt: r.created_at||'',
     };
@@ -6770,9 +6773,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         p.tipoContrato ? '<span class="badge blue" style="font-size:10px">📄 '+p.tipoContrato+'</span>' : '',
       ].join(' ');
 
+      const avatar = p.fotoUrl
+        ? '<img src="'+p.fotoUrl+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0">'
+        : '<div style="width:36px;height:36px;border-radius:50%;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">'+initials(p.nombre||'?')+'</div>';
+
       return [
         '<div class="challenge-card" style="margin-bottom:12px;cursor:pointer" onclick="if(event.target.closest(\'[data-action]\'))return;openPrestadorDetail(\''+p.id+'\')">',
           '<div class="challenge-card-top">',
+            avatar,
             '<div style="flex:1">',
               '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">',
                 '<strong style="font-size:16px">'+p.nombre+'</strong>',
@@ -9009,7 +9017,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           <span class="brand-role-tag">Prestador</span>
         </div>
         <div class="owner-topbar-user">
-          <div class="owner-avatar">${initials(prest.nombre)}</div>
+          <div class="owner-avatar">${prest.fotoUrl ? '<img src="'+prest.fotoUrl+'" style="width:100%;height:100%;object-fit:cover">' : initials(prest.nombre)}</div>
           <span class="owner-name">${prest.nombre}</span>
           <button class="btn secondary small" onclick="scrollToMiPerfil()">👤 Mi perfil</button>
           <button class="btn secondary small" onclick="doLogout()">Salir</button>
@@ -9037,13 +9045,16 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">👤 Mi perfil</div>
             <button class="btn secondary xs" onclick="openMisDatosModal('${prest.id}')">✏️ Editar</button>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px">
+          <div style="display:flex;gap:16px;align-items:flex-start">
+          ${prest.fotoUrl ? '<img src="'+prest.fotoUrl+'" style="width:64px;height:64px;border-radius:50%;object-fit:cover;flex-shrink:0">' : '<div style="width:64px;height:64px;border-radius:50%;background:var(--owner-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;flex-shrink:0">'+initials(prest.nombre||'?')+'</div>'}
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;flex:1">
             <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Nombre completo</div><div style="font-size:14px;font-weight:600">${prest.nombre||'—'} ${prest.apellido||''}</div></div>
             <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Email</div><div style="font-size:14px;font-weight:600">${prest.email||'—'}</div></div>
             <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Teléfono</div><div style="font-size:14px;font-weight:600">${prest.telefono||'—'}</div></div>
             <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Dirección</div><div style="font-size:14px;font-weight:600">${prest.direccion||'—'}</div></div>
             <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Fecha de nacimiento</div><div style="font-size:14px;font-weight:600">${prest.fechaNacimiento?new Date(prest.fechaNacimiento+'T00:00:00').toLocaleDateString('es-AR'):'—'}</div></div>
             <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">CBU / Alias</div><div style="font-size:14px;font-weight:600">${(prest.cbu||prest.aliasCbu) ? [prest.cbu,prest.aliasCbu].filter(Boolean).join(' · ') : '<span style="color:#dc2626;font-weight:600">Sin cargar</span>'}</div></div>
+          </div>
           </div>
         </div>
 
@@ -11158,6 +11169,13 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     openModal('Mi perfil', 'Completá tu perfil para poder postularte a cualquier módulo disponible.', `
       <form id="misDatosForm" class="form-grid">
         ${faltan.length ? '<div class="field full" style="background:#fffbeb;border-radius:10px;padding:10px 12px;font-size:12px;color:#92400e">⚠️ Te falta completar: '+faltan.join(', ')+'.</div>' : '<div class="field full" style="background:#f0fdf4;border-radius:10px;padding:10px 12px;font-size:12px;color:#166534">✓ Tu perfil está completo — ya podés postularte a cualquier módulo.</div>'}
+        <div class="field full" style="display:flex;flex-direction:row;align-items:center;gap:14px">
+          ${p.fotoUrl ? '<img src="'+p.fotoUrl+'" style="width:56px;height:56px;border-radius:50%;object-fit:cover;flex-shrink:0">' : '<div style="width:56px;height:56px;border-radius:50%;background:var(--owner-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">'+initials(p.nombre||'?')+'</div>'}
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+            <label>📷 Foto de perfil</label>
+            <input type="file" name="foto" accept="image/*">
+          </div>
+        </div>
         <div class="field"><label>Nombre</label><input name="nombre" value="${p.nombre||''}" required></div>
         <div class="field"><label>Apellido</label><input name="apellido" value="${p.apellido||''}" required></div>
         <div class="field full"><label>Dirección</label><input name="direccion" value="${p.direccion||''}" required></div>
@@ -11184,6 +11202,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       errEl.style.display = 'none';
       const data = Object.fromEntries(new FormData(e.target).entries());
       const cbuFile = e.target.querySelector('[name="cbuComprobante"]')?.files?.[0];
+      const fotoFile = e.target.querySelector('[name="foto"]')?.files?.[0];
       btn.disabled = true; btn.textContent = 'Guardando…';
       try {
         let cbuComprobanteUrl = p.cbuComprobanteUrl || '';
@@ -11192,6 +11211,13 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           const uploaded = await sbUpload('prestador-docs', p.id + '/cbu_' + Date.now() + '.' + ext, cbuFile);
           if (!uploaded) throw new Error('No se pudo subir la constancia de CBU. Probá de nuevo.');
           cbuComprobanteUrl = uploaded;
+        }
+        let fotoUrl = p.fotoUrl || '';
+        if (fotoFile) {
+          const ext = (fotoFile.name.split('.').pop() || 'jpg').toLowerCase();
+          const uploaded = await sbUpload('prestador-docs', p.id + '/foto_' + Date.now() + '.' + ext, fotoFile);
+          if (!uploaded) throw new Error('No se pudo subir la foto. Probá de nuevo.');
+          fotoUrl = uploaded;
         }
         p.nombre = (data.nombre||'').trim();
         p.apellido = (data.apellido||'').trim();
@@ -11203,6 +11229,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         p.cbu = (data.cbu||'').trim();
         p.aliasCbu = (data.aliasCbu||'').trim();
         p.cbuComprobanteUrl = cbuComprobanteUrl;
+        p.fotoUrl = fotoUrl;
         p.oportunaiLink = (data.oportunaiLink||'').trim();
         await saveOne(DB.prestadores, prestadorToRow(p));
         closeModal();
