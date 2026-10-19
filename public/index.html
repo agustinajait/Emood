@@ -10412,15 +10412,11 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     // Caso normal: todavía pendiente. Caso reintento: ya está "aceptada"
     // pero sin módulo (falló la creación en un intento anterior) — en
-    // ese caso saltamos los chequeos de cupos/protocolo, porque el cupo
-    // de esta postulación ya se consideró ocupado desde que se aceptó.
+    // ese caso saltamos el chequeo de cupos, porque el cupo de esta
+    // postulación ya se consideró ocupado desde que se aceptó.
     if (p.estado === 'pendiente') {
       if (cuposOcupados(s.id) >= (s.cupos||1)) {
         alert('No hay cupos disponibles para "'+s.titulo+'" ('+(s.cupos||1)+' cupo(s), ya cubiertos). Cerrá otra postulación o aumentá los cupos del módulo para aceptar esta.');
-        return;
-      }
-      if (!(s.protocolo||[]).length) {
-        alert('"'+s.titulo+'" no tiene ítems cargados en el Protocolo de entregables. Editá el módulo y agregá al menos uno antes de aceptar postulaciones — si no, el prestador no va a tener nada para subir.');
         return;
       }
       const estadoPrevio = p.estado;
