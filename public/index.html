@@ -2837,13 +2837,18 @@
   }
 
   // Datos mínimos para que un prestador pueda postularse a un módulo:
-  // nombre, apellido, dirección, teléfono, mail y fecha de nacimiento.
+  // identidad básica + CUIL (con constancia) + una forma de cobrar
+  // (CBU o alias) — sin esto, lo acepta una organización y no le puede
+  // pagar ni declararlo correctamente.
   function perfilPrestadorCompleto(p) {
-    return !!(p && p.nombre && p.apellido && p.direccion && p.telefono && p.email && p.fechaNacimiento);
+    return !!(p && p.nombre && p.apellido && p.direccion && p.telefono && p.email && p.fechaNacimiento &&
+      p.numeroCuil && p.cuilComprobanteUrl && (p.cbu || p.aliasCbu));
   }
   function camposPerfilFaltantes(p) {
-    const req = { nombre:'Nombre', apellido:'Apellido', direccion:'Dirección', telefono:'Teléfono', email:'Email', fechaNacimiento:'Fecha de nacimiento' };
-    return Object.keys(req).filter(k => !p?.[k]).map(k => req[k]);
+    const req = { nombre:'Nombre', apellido:'Apellido', direccion:'Dirección', telefono:'Teléfono', email:'Email', fechaNacimiento:'Fecha de nacimiento', numeroCuil:'Número de CUIL', cuilComprobanteUrl:'Constancia de CUIL' };
+    const faltan = Object.keys(req).filter(k => !p?.[k]).map(k => req[k]);
+    if (!p?.cbu && !p?.aliasCbu) faltan.push('CBU o alias (para cobrar)');
+    return faltan;
   }
 
   function moduloToRow(m) {
