@@ -9190,7 +9190,6 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const m = moduloAsignadoById(c.moduloAsignadoId);
       return m && m.prestadorId === prest.id;
     });
-    if (!misCiclos.length) return '';
     const pendientes = misCiclos.filter(c => !c.pagado).sort((a,b)=>b.periodo.localeCompare(a.periodo));
     const pagados = misCiclos.filter(c => c.pagado).sort((a,b)=>b.periodo.localeCompare(a.periodo));
     const totalPendiente = pendientes.reduce((s,c)=>s+montoCiclo(c),0);
@@ -9210,9 +9209,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '<div class="owner-stat"><div class="owner-stat-val" style="color:#92400e">$'+totalPendiente.toLocaleString()+'</div><div class="owner-stat-label">Pendiente de cobro</div></div>' +
         '<div class="owner-stat"><div class="owner-stat-val" style="color:#166534">$'+totalCobrado.toLocaleString()+'</div><div class="owner-stat-label">Cobrado acumulado</div></div>' +
       '</div>' +
-      '<div class="owner-card" style="margin-bottom:24px">' +
-        [...pendientes, ...pagados].map(fila).join('') +
-      '</div>';
+      (misCiclos.length
+        ? '<div class="owner-card" style="margin-bottom:24px">' + [...pendientes, ...pagados].map(fila).join('') + '</div>'
+        : '<div class="empty" style="margin-bottom:24px">Todavía no tenés remitos aprobados — van a aparecer acá a medida que se vayan aprobando tus módulos.</div>');
   }
 
   function buildPrestServiciosSection(prest) {
