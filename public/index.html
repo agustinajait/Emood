@@ -2795,6 +2795,8 @@
       alias_cbu: p.aliasCbu||'',
       cbu_comprobante_url: p.cbuComprobanteUrl||'',
       foto_url: p.fotoUrl||'',
+      numero_cuil: p.numeroCuil||'',
+      cuil_comprobante_url: p.cuilComprobanteUrl||'',
       created_by_org_id: p.createdByOrgId||null,
       created_at: p.createdAt||new Date().toISOString(),
     };
@@ -2827,6 +2829,8 @@
       aliasCbu: r.alias_cbu||'',
       cbuComprobanteUrl: r.cbu_comprobante_url||'',
       fotoUrl: r.foto_url||'',
+      numeroCuil: r.numero_cuil||'',
+      cuilComprobanteUrl: r.cuil_comprobante_url||'',
       createdByOrgId: r.created_by_org_id||null,
       createdAt: r.created_at||'',
     };
@@ -3275,10 +3279,6 @@
 
   function scrollToHomeSection(id) {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  function scrollToMiPerfil() {
-    document.getElementById('miPerfilSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function goToLoginFromHome(target) {
@@ -9019,7 +9019,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         <div class="owner-topbar-user">
           <div class="owner-avatar">${prest.fotoUrl ? '<img src="'+prest.fotoUrl+'" style="width:100%;height:100%;object-fit:cover">' : initials(prest.nombre)}</div>
           <span class="owner-name">${prest.nombre}</span>
-          <button class="btn secondary small" onclick="scrollToMiPerfil()">👤 Mi perfil</button>
+          <button class="btn secondary small" onclick="openMisDatosModal('${prest.id}')">👤 Mi perfil</button>
           <button class="btn secondary small" onclick="doLogout()">Salir</button>
         </div>
       </div>
@@ -9053,7 +9053,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Teléfono</div><div style="font-size:14px;font-weight:600">${prest.telefono||'—'}</div></div>
             <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Dirección</div><div style="font-size:14px;font-weight:600">${prest.direccion||'—'}</div></div>
             <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Fecha de nacimiento</div><div style="font-size:14px;font-weight:600">${prest.fechaNacimiento?new Date(prest.fechaNacimiento+'T00:00:00').toLocaleDateString('es-AR'):'—'}</div></div>
-            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">CBU / Alias</div><div style="font-size:14px;font-weight:600">${(prest.cbu||prest.aliasCbu) ? [prest.cbu,prest.aliasCbu].filter(Boolean).join(' · ') : '<span style="color:#dc2626;font-weight:600">Sin cargar</span>'}</div></div>
+            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">CUIL</div><div style="font-size:14px;font-weight:600">${prest.numeroCuil || '<span style="color:#dc2626;font-weight:600">Sin cargar</span>'}${prest.cuilComprobanteUrl ? ' <a href="'+prest.cuilComprobanteUrl+'" target="_blank" style="font-size:12px">📎</a>' : ''}</div></div>
+            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">CBU / Alias</div><div style="font-size:14px;font-weight:600">${(prest.cbu||prest.aliasCbu) ? [prest.cbu,prest.aliasCbu].filter(Boolean).join(' · ') : '<span style="color:#dc2626;font-weight:600">Sin cargar</span>'}${prest.cbuComprobanteUrl ? ' <a href="'+prest.cbuComprobanteUrl+'" target="_blank" style="font-size:12px">📎</a>' : ''}</div></div>
           </div>
           </div>
         </div>
@@ -11182,6 +11183,12 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         <div class="field"><label>Email</label><input type="email" name="email" value="${p.email||authSession?.user?.email||''}" readonly style="background:var(--bg2);color:var(--muted);cursor:not-allowed"></div>
         <div class="field"><label>Fecha de nacimiento</label><input type="date" name="fechaNacimiento" value="${p.fechaNacimiento||''}" required></div>
         <div class="field full"><label>Contacto adicional (opcional)</label><input name="contacto" value="${p.contacto||''}"></div>
+        <div class="field"><label>Número de CUIL</label><input name="numeroCuil" value="${p.numeroCuil||''}" placeholder="20-12345678-9"></div>
+        <div class="field full">
+          <label>📎 Constancia de CUIL</label>
+          <input type="file" name="cuilComprobante" accept="image/*,application/pdf">
+          ${p.cuilComprobanteUrl ? '<div style="margin-top:6px"><a href="'+p.cuilComprobanteUrl+'" target="_blank" style="font-size:12px;color:#1a73e8">🔗 Ver constancia actual</a></div>' : ''}
+        </div>
         <div class="field"><label>CBU/CVU (para cobrar)</label><input name="cbu" value="${p.cbu||''}" placeholder="22 dígitos"></div>
         <div class="field"><label>Alias</label><input name="aliasCbu" value="${p.aliasCbu||''}" placeholder="ej: juan.perez.mp"></div>
         <div class="field full">
@@ -11201,6 +11208,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       errEl.style.display = 'none';
       const data = Object.fromEntries(new FormData(e.target).entries());
       const cbuFile = e.target.querySelector('[name="cbuComprobante"]')?.files?.[0];
+      const cuilFile = e.target.querySelector('[name="cuilComprobante"]')?.files?.[0];
       const fotoFile = e.target.querySelector('[name="foto"]')?.files?.[0];
       btn.disabled = true; btn.textContent = 'Guardando…';
       try {
@@ -11210,6 +11218,13 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           const uploaded = await sbUpload('prestador-docs', p.id + '/cbu_' + Date.now() + '.' + ext, cbuFile);
           if (!uploaded) throw new Error('No se pudo subir la constancia de CBU. Probá de nuevo.');
           cbuComprobanteUrl = uploaded;
+        }
+        let cuilComprobanteUrl = p.cuilComprobanteUrl || '';
+        if (cuilFile) {
+          const ext = (cuilFile.name.split('.').pop() || 'pdf').toLowerCase();
+          const uploaded = await sbUpload('prestador-docs', p.id + '/cuil_' + Date.now() + '.' + ext, cuilFile);
+          if (!uploaded) throw new Error('No se pudo subir la constancia de CUIL. Probá de nuevo.');
+          cuilComprobanteUrl = uploaded;
         }
         let fotoUrl = p.fotoUrl || '';
         if (fotoFile) {
@@ -11225,6 +11240,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         p.email = (data.email||authSession?.user?.email||'').trim();
         p.fechaNacimiento = data.fechaNacimiento||'';
         p.contacto = (data.contacto||'').trim();
+        p.numeroCuil = (data.numeroCuil||'').trim();
+        p.cuilComprobanteUrl = cuilComprobanteUrl;
         p.cbu = (data.cbu||'').trim();
         p.aliasCbu = (data.aliasCbu||'').trim();
         p.cbuComprobanteUrl = cbuComprobanteUrl;
