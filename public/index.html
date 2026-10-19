@@ -3277,10 +3277,6 @@
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  function scrollToMiPerfil() {
-    document.getElementById('miPerfilSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
   function goToLoginFromHome(target) {
     closeModal();
     document.getElementById('homeScreen').style.display = 'none';
@@ -9019,7 +9015,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         <div class="owner-topbar-user">
           <div class="owner-avatar">${prest.fotoUrl ? '<img src="'+prest.fotoUrl+'" style="width:100%;height:100%;object-fit:cover">' : initials(prest.nombre)}</div>
           <span class="owner-name">${prest.nombre}</span>
-          <button class="btn secondary small" onclick="scrollToMiPerfil()">👤 Mi perfil</button>
+          <button class="btn secondary small" onclick="openMisDatosModal('${prest.id}')">👤 Mi perfil</button>
           <button class="btn secondary small" onclick="doLogout()">Salir</button>
         </div>
       </div>
