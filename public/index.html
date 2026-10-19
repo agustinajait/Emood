@@ -283,6 +283,41 @@
       .home-hero-visual { min-height: 260px; max-width:360px; margin:40px auto 0; }
     }
 
+    /* ── Beneficios / Pool Emprendedores (banner oscuro, como ASEA) ── */
+    .home-beneficios {
+      position: relative; overflow:hidden;
+      background: radial-gradient(ellipse 70% 80% at 85% 20%, rgba(255,212,0,0.16), transparent 60%), #15161b;
+      padding: 76px 24px;
+    }
+    .home-beneficios-inner {
+      position:relative; z-index:1;
+      max-width: 1080px; margin: 0 auto;
+      display:grid; grid-template-columns: 0.85fr 1.15fr; gap: 48px; align-items:center;
+    }
+    .beneficios-card {
+      background:#fff; border-radius:20px; padding:28px 26px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.3);
+    }
+    .beneficios-card-title { font-family: var(--font-display); font-weight:800; font-size:17px; color:var(--text); margin-bottom:18px; }
+    .beneficios-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:18px; }
+    .beneficios-item {
+      display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; color:var(--text);
+      background:var(--bg2); border-radius:10px; padding:10px 10px;
+    }
+    .beneficios-item span { font-size:16px; }
+    .beneficios-card-foot { font-size:11.5px; color:var(--muted); border-top:1px solid var(--line); padding-top:14px; }
+    .home-beneficios-text h2 {
+      font-family: var(--font-display-xl); font-weight:800; letter-spacing:-0.8px;
+      font-size: clamp(26px, 2.8vw, 36px); line-height:1.2; color:#fff; margin:0 0 16px;
+    }
+    .home-beneficios-text p { color:rgba(255,255,255,0.65); font-size:15.5px; line-height:1.7; margin:0 0 26px; max-width:520px; }
+    .home-beneficios-text p strong { color:#fff; }
+    @media (max-width: 860px) {
+      .home-beneficios-inner { grid-template-columns: 1fr; text-align:center; }
+      .home-beneficios-text p { margin-left:auto; margin-right:auto; }
+      .beneficios-card { max-width:420px; margin:0 auto; }
+    }
+
     .home-section { max-width: 1080px; margin: 0 auto; padding: 80px 24px; }
     .home-section-title { font-family: var(--font-mono); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); text-align:center; margin-bottom:36px; }
     .home-steps { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
@@ -1895,6 +1930,7 @@
     <div class="home-nav-brand"><img src="3.png" style="width:34px;height:34px;object-fit:cover;border-radius:9px"></div>
     <div class="home-nav-links">
       <a onclick="scrollToHomeSection('homeComoFunciona')">Cómo funciona</a>
+      <a onclick="scrollToHomeSection('homeBeneficios')">Beneficios</a>
       <a onclick="scrollToHomeSection('homeModulosSection')">Módulos disponibles</a>
     </div>
     <div class="home-nav-actions">
@@ -1946,6 +1982,27 @@
       <div class="home-step"><div class="home-step-num">1</div><strong>Creá tu cuenta</strong><span>Con tu email y una contraseña, en un minuto.</span></div>
       <div class="home-step"><div class="home-step-num">2</div><strong>Completá tu perfil</strong><span>Nombre, apellido, dirección, teléfono y fecha de nacimiento.</span></div>
       <div class="home-step"><div class="home-step-num">3</div><strong>Postulate a módulos</strong><span>De cualquier organización que trabaje con E-Mood.</span></div>
+    </div>
+  </section>
+
+  <section class="home-beneficios" id="homeBeneficios">
+    <div class="home-beneficios-inner">
+      <div class="beneficios-card">
+        <div class="beneficios-card-title">🫂 Pool Emprendedores</div>
+        <div class="beneficios-grid">
+          <div class="beneficios-item"><span>🏥</span>Obra social</div>
+          <div class="beneficios-item"><span>🏋️</span>Gimnasio</div>
+          <div class="beneficios-item"><span>🛡️</span>Seguro de retiro</div>
+          <div class="beneficios-item"><span>🤝</span>Respaldo por baja productividad</div>
+        </div>
+        <div class="beneficios-card-foot">Conectado con los demás programas de Huehaci</div>
+      </div>
+      <div class="home-beneficios-text">
+        <div class="home-section-title" style="text-align:left;color:var(--accent);margin-bottom:14px">🎁 Beneficios</div>
+        <h2>Sumate al Pool de Emprendedores</h2>
+        <p>La membresía de la nueva vida emprendedora: comunidad, beneficios reales —obra social, gimnasio, seguro de retiro y respaldo por falta de productividad— y conexión con el resto de los programas de Huehaci: <strong>Quiero Emprender</strong>, <strong>Aceleración con IA</strong>, <strong>Franquicias</strong> y <strong>Certificaciones</strong>.</p>
+        <button class="btn primary home-hero-cta" onclick="goToLoginFromHome('prestador-signup')">Sumate acá →</button>
+      </div>
     </div>
   </section>
 
