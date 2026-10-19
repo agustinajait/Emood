@@ -3274,6 +3274,10 @@
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  function scrollToMiPerfil() {
+    document.getElementById('miPerfilSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   function goToLoginFromHome(target) {
     closeModal();
     document.getElementById('homeScreen').style.display = 'none';
@@ -9007,7 +9011,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         <div class="owner-topbar-user">
           <div class="owner-avatar">${initials(prest.nombre)}</div>
           <span class="owner-name">${prest.nombre}</span>
-          <button class="btn secondary small" onclick="openMisDatosModal('${prest.id}')">✏️ Mis datos</button>
+          <button class="btn secondary small" onclick="scrollToMiPerfil()">👤 Mi perfil</button>
           <button class="btn secondary small" onclick="doLogout()">Salir</button>
         </div>
       </div>
@@ -9027,6 +9031,21 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           </div>
           <button class="btn primary small" onclick="openMisDatosModal('${prest.id}')">Completar ahora</button>
         </div>` : ''}
+
+        <div class="card" id="miPerfilSection" style="margin-bottom:20px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">👤 Mi perfil</div>
+            <button class="btn secondary xs" onclick="openMisDatosModal('${prest.id}')">✏️ Editar</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px">
+            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Nombre completo</div><div style="font-size:14px;font-weight:600">${prest.nombre||'—'} ${prest.apellido||''}</div></div>
+            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Email</div><div style="font-size:14px;font-weight:600">${prest.email||'—'}</div></div>
+            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Teléfono</div><div style="font-size:14px;font-weight:600">${prest.telefono||'—'}</div></div>
+            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Dirección</div><div style="font-size:14px;font-weight:600">${prest.direccion||'—'}</div></div>
+            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Fecha de nacimiento</div><div style="font-size:14px;font-weight:600">${prest.fechaNacimiento?new Date(prest.fechaNacimiento+'T00:00:00').toLocaleDateString('es-AR'):'—'}</div></div>
+            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">CBU / Alias</div><div style="font-size:14px;font-weight:600">${(prest.cbu||prest.aliasCbu) ? [prest.cbu,prest.aliasCbu].filter(Boolean).join(' · ') : '<span style="color:#dc2626;font-weight:600">Sin cargar</span>'}</div></div>
+          </div>
+        </div>
 
         <div class="owner-stats">
           <div class="owner-stat">
@@ -11136,7 +11155,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const p = (state.prestadores||[]).find(x => x.id === prestadorId);
     if (!p) return;
     const faltan = camposPerfilFaltantes(p);
-    openModal('Mis datos', 'Completá tu perfil para poder postularte a cualquier módulo disponible.', `
+    openModal('Mi perfil', 'Completá tu perfil para poder postularte a cualquier módulo disponible.', `
       <form id="misDatosForm" class="form-grid">
         ${faltan.length ? '<div class="field full" style="background:#fffbeb;border-radius:10px;padding:10px 12px;font-size:12px;color:#92400e">⚠️ Te falta completar: '+faltan.join(', ')+'.</div>' : '<div class="field full" style="background:#f0fdf4;border-radius:10px;padding:10px 12px;font-size:12px;color:#166534">✓ Tu perfil está completo — ya podés postularte a cualquier módulo.</div>'}
         <div class="field"><label>Nombre</label><input name="nombre" value="${p.nombre||''}" required></div>
