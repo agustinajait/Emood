@@ -182,6 +182,9 @@
       border-bottom: 1px solid var(--line);
     }
     .home-nav-brand { display:flex; align-items:center; gap:8px; font-family: var(--font-display); font-size: 17px; font-weight:700; color:var(--text); }
+    @keyframes logoPulse { 0%,100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.07) rotate(-3deg); } }
+    .home-nav-brand img { animation: logoPulse 4s ease-in-out infinite; transition: transform 0.2s ease; }
+    .home-nav-brand img:hover { animation-play-state: paused; transform: scale(1.1) rotate(-4deg); }
     .home-nav-links { display:flex; gap:32px; flex:1; justify-content:center; }
     .home-nav-links a { color: var(--muted); font-size: 13px; font-weight:600; cursor:pointer; text-decoration:none; transition: color 0.2s; }
     .home-nav-links a:hover { color: var(--text); }
@@ -223,10 +226,18 @@
       font-size: clamp(32px, 3.6vw, 50px); line-height:1.18; color: var(--text);
       max-width: 620px; margin: 0 0 18px;
     }
-    .home-hero h1 em {
+    @keyframes heroWordIn { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform: translateY(0); } }
+    .home-hero h1 .hero-word {
+      display:inline-block; opacity:0;
+      animation: heroWordIn 0.65s cubic-bezier(.2,.8,.2,1) forwards;
+    }
+    @keyframes heroHighlightIn { from { background-size: 0% 38%; } to { background-size: 100% 38%; } }
+    .home-hero h1 em.hero-word {
       font-style:normal; position:relative; z-index:0; color: var(--text);
       background-image: linear-gradient(rgba(255,212,0,0.5), rgba(255,212,0,0.5));
-      background-repeat: no-repeat; background-size: 100% 38%; background-position: 0 88%;
+      background-repeat: no-repeat; background-size: 0% 38%; background-position: 0 88%;
+      animation: heroWordIn 0.65s cubic-bezier(.2,.8,.2,1) forwards, heroHighlightIn 0.5s ease-out forwards;
+      animation-delay: .35s, .75s;
     }
     .home-hero-subtitle {
       font-family: var(--font-display); font-weight:700;
@@ -248,12 +259,16 @@
     .home-hero-secondary { color: var(--text); font-weight:600; font-size:14px; cursor:pointer; text-decoration:none; }
     .home-hero-secondary:hover { color: var(--accent-dark); }
     .home-hero-visual { position:relative; min-height: 360px; }
+    @keyframes mockFadeIn { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
+    @keyframes mockFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
     .home-mock-card {
       position:absolute; background:#fff; border:1px solid var(--line); border-radius:16px;
       box-shadow: 0 24px 60px rgba(10,10,10,0.1); padding:18px 20px;
+      opacity:0;
+      animation: mockFadeIn 0.7s cubic-bezier(.2,.8,.2,1) forwards, mockFloat 6s ease-in-out infinite;
     }
-    .home-mock-card-main { top:10px; right:0; width:300px; }
-    .home-mock-card-sub { bottom:20px; left:0; width:230px; }
+    .home-mock-card-main { top:10px; right:0; width:300px; animation-delay: .5s, 1.2s; }
+    .home-mock-card-sub { bottom:20px; left:0; width:230px; animation-delay: .75s, 1.45s; }
     .home-mock-card .mock-label { font-family: var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:.06em; color: var(--muted); margin-bottom:8px; }
     .home-mock-card .mock-title { font-weight:700; font-size:15px; color: var(--text); margin-bottom:10px; }
     .home-mock-card .mock-row { display:flex; justify-content:space-between; align-items:center; font-size:13px; padding:7px 0; border-top:1px solid var(--line); color: var(--muted); }
@@ -1896,7 +1911,12 @@
           <span>🔒 Pagos validados con evidencia</span>
           <span>🌎 Cualquier organización en E-Mood</span>
         </div>
-        <h1>¿Querés emprender y <em>generar impacto</em>?</h1>
+        <h1>
+          <span class="hero-word" style="animation-delay:.05s">¿Querés</span>
+          <span class="hero-word" style="animation-delay:.15s">emprender</span>
+          <span class="hero-word" style="animation-delay:.25s">y</span>
+          <em class="hero-word" style="animation-delay:.35s">generar impacto</em>?
+        </h1>
         <div class="home-hero-subtitle">Postulate a módulos de servicios.</div>
         <p>Creá tu cuenta, completá tu perfil una sola vez, y postulate a los módulos disponibles de cualquier organización que use E-Mood.</p>
         <div class="home-hero-actions">
