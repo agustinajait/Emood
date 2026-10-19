@@ -302,7 +302,7 @@
     .beneficios-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:18px; }
     .beneficios-item {
       display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; color:var(--text);
-      background:var(--bg2); border-radius:10px; padding:10px 10px;
+      background:var(--bg2); border:1px solid rgba(10,10,10,0.08); border-radius:10px; padding:10px 10px;
     }
     .beneficios-item span { font-size:16px; }
     .beneficios-card-foot { font-size:11.5px; color:var(--muted); border-top:1px solid var(--line); padding-top:14px; }
@@ -322,25 +322,26 @@
     .home-section-title { font-family: var(--font-mono); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); text-align:center; margin-bottom:36px; }
     .home-steps { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
     .home-step {
-      background: #fff; border:1px solid var(--line); border-radius:16px; padding:30px 24px; text-align:center;
-      box-shadow: 0 2px 10px rgba(10,10,10,0.04);
-      transition: box-shadow 0.2s ease, transform 0.2s ease;
+      background: #fff; border:1.5px solid rgba(10,10,10,0.15); border-radius:16px; padding:30px 24px; text-align:center;
+      box-shadow: 0 10px 26px rgba(10,10,10,0.08);
+      transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
     }
-    .home-step:hover { box-shadow: 0 10px 28px rgba(10,10,10,0.08); transform: translateY(-2px); }
+    .home-step:hover { box-shadow: 0 16px 36px rgba(10,10,10,0.14); border-color: rgba(10,10,10,0.25); transform: translateY(-3px); }
     .home-step-num {
       width:34px; height:34px; margin:0 auto 16px; border-radius:50%;
-      background: var(--accent-soft); color: #92720a; font-weight:800; font-size:14px;
+      background: var(--accent-soft); color: #7a5f08; font-weight:800; font-size:14px;
+      border: 1px solid rgba(255,212,0,0.45);
       display:flex; align-items:center; justify-content:center;
     }
     .home-step strong { display:block; font-size:15px; margin-bottom:8px; color: var(--text); }
-    .home-step span { font-size:13px; color:var(--muted); line-height:1.6; }
+    .home-step span { font-size:13px; color:#55555c; line-height:1.6; }
     .home-modulos-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:18px; }
     #homeScreen .home-modulos-grid .card {
-      background: #fff; border: 1px solid var(--line);
-      box-shadow: 0 2px 10px rgba(10,10,10,0.04);
-      transition: box-shadow 0.2s ease, transform 0.2s ease;
+      background: #fff; border: 1.5px solid rgba(10,10,10,0.15);
+      box-shadow: 0 10px 26px rgba(10,10,10,0.08);
+      transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
     }
-    #homeScreen .home-modulos-grid .card:hover { box-shadow: 0 10px 28px rgba(10,10,10,0.08); transform: translateY(-2px); }
+    #homeScreen .home-modulos-grid .card:hover { box-shadow: 0 16px 36px rgba(10,10,10,0.14); border-color: rgba(10,10,10,0.25); transform: translateY(-3px); }
     #homeScreen .home-modulos-grid .card .btn.primary { border-radius:999px; }
     #homeScreen .home-modulos-grid .card .btn.secondary { border-radius:999px; }
     .home-footer {
@@ -2311,13 +2312,28 @@
     <!-- LIQUIDACIÓN -->
     <section class="page" id="page-liquidacion">
       <div class="topbar">
-        <div class="topbar-left"><h2>Liquidación</h2><p>Cálculo de pagos por cumplimiento mensual.</p></div>
-        <div class="actions">
+        <div class="topbar-left"><h2>Liquidación</h2><p>Cálculo de pagos por cumplimiento mensual y órdenes de pago de módulos.</p></div>
+      </div>
+      <div class="sv-tabs">
+        <button class="sv-tab active" data-liqtab="seguimiento" onclick="switchLiquidacionTab('seguimiento')">Seguimiento mensual</button>
+        <button class="sv-tab" data-liqtab="ordenes" onclick="switchLiquidacionTab('ordenes')">Órdenes de pago <span id="ordenesPagoTabCount" class="sv-tab-count" style="display:none">0</span></button>
+      </div>
+      <div id="liquidacionTabSeguimiento">
+        <div class="actions" style="margin-bottom:14px">
           <select id="liquidacionMesFilter" style="border-radius:9px;padding:8px 12px;border:1px solid var(--line);font-size:13px"></select>
           <button class="btn secondary" id="exportLiquidacionBtn">⬇ Exportar CSV</button>
         </div>
+        <div id="liquidacionContent"></div>
       </div>
-      <div id="liquidacionContent"></div>
+      <div id="liquidacionTabOrdenes" style="display:none">
+        <div class="actions" style="margin-bottom:14px">
+          <select id="ordenesPagoPeriodoFilter" onchange="renderOrdenesPago()">
+            <option value="all">Todos los períodos pendientes</option>
+          </select>
+          <button class="btn secondary" id="exportOrdenesPagoBtn" onclick="exportarOrdenPago()">⬇ Descargar orden de pago (CSV)</button>
+        </div>
+        <div id="ordenesPagoContent"></div>
+      </div>
     </section>
 
     <!-- REPORTES -->
@@ -2774,6 +2790,8 @@
       oportunai_link: p.oportunaiLink||'',
       tipo_contrato: p.tipoContrato||'',
       doc_contrato_url: p.docContratoUrl||'',
+      cbu: p.cbu||'',
+      alias_cbu: p.aliasCbu||'',
       created_by_org_id: p.createdByOrgId||null,
       created_at: p.createdAt||new Date().toISOString(),
     };
@@ -2802,6 +2820,8 @@
       oportunaiLink: r.oportunai_link||'',
       tipoContrato: r.tipo_contrato||'',
       docContratoUrl: r.doc_contrato_url||'',
+      cbu: r.cbu||'',
+      aliasCbu: r.alias_cbu||'',
       createdByOrgId: r.created_by_org_id||null,
       createdAt: r.created_at||'',
     };
@@ -4024,6 +4044,7 @@
       id: c.id, organization_id: c.organizationId||null, modulo_asignado_id: c.moduloAsignadoId, periodo: c.periodo||'',
       estado: c.estado||'en_progreso',
       remito_numero: c.remitoNumero||null, remito_fecha: c.remitoFecha||null,
+      pagado: !!c.pagado, fecha_pago: c.fechaPago||null,
       created_at: c.createdAt||nowISO(), updated_at: nowISO(),
     };
   }
@@ -4032,6 +4053,7 @@
       id: r.id, organizationId: r.organization_id||null, moduloAsignadoId: r.modulo_asignado_id, periodo: r.periodo||'',
       estado: r.estado||'en_progreso',
       remitoNumero: r.remito_numero||'', remitoFecha: r.remito_fecha||'',
+      pagado: !!r.pagado, fechaPago: r.fecha_pago||'',
       createdAt: r.created_at||'', updatedAt: r.updated_at||'',
     };
   }
@@ -5356,6 +5378,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     renderProtocolos();
     renderSeguimiento();
     renderLiquidacion();
+    renderOrdenesPago();
     renderEcosistemas();
     updateUnreadBadge();
     if (currentChallengeId) renderChallengeDetail(currentChallengeId);
@@ -5902,6 +5925,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='resync-ciclo-items') await resyncCicloItems(id);
     else if (action==='admin-cargar-evidencia') openAdminEvidenciaModal(id);
     else if (action==='set-codigo-externo') await setCodigoExternoModulo(id);
+    else if (action==='marcar-pagado') await marcarCicloPagado(id);
     else if (action==='generar-remito-dupla') await generarRemitoCombinadoDupla(id);
     else if (action==='edit-dupla') { const d=duplaById(id); if(d) openDuplaModal(d); }
     else if (action==='vincular-modulos-dupla') await vincularModulosDupla(id);
@@ -7265,6 +7289,103 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     a.click();
   }
 
+  /* ─── Órdenes de pago (módulos) ──────────────────────────
+     E-Mood NO mueve plata: solo arma el listado (CBU, alias, monto,
+     concepto) a partir de los remitos aprobados y todavía no
+     marcados como pagados, para que la organización lo suba a su
+     propio home banking / Mercado Pago. Una vez que la transferencia
+     se hizo de verdad afuera, el admin la marca acá como pagada para
+     que no vuelva a aparecer en la próxima orden. ── */
+  function ciclosPendientesDePago() {
+    return (state.moduloCiclos||[]).filter(c => c.estado === 'aprobado' && !c.pagado);
+  }
+
+  function filasOrdenPago() {
+    return ciclosPendientesDePago().map(c => {
+      const m = moduloAsignadoById(c.moduloAsignadoId);
+      const s = m && servicioById(m.servicioId);
+      const prest = m && prestadorById(m.prestadorId);
+      return { ciclo: c, modulo: m, servicio: s, prestador: prest, monto: montoCiclo(c) };
+    }).filter(f => f.modulo && f.prestador);
+  }
+
+  function updateOrdenesPagoBadge() {
+    const n = ciclosPendientesDePago().length;
+    const tabCount = document.getElementById('ordenesPagoTabCount');
+    if (tabCount) { tabCount.style.display = n ? 'inline-flex' : 'none'; tabCount.textContent = n; }
+  }
+
+  function renderOrdenesPago() {
+    const el = document.getElementById('ordenesPagoContent');
+    updateOrdenesPagoBadge();
+    if (!el) return;
+    const filas = filasOrdenPago();
+    const periodoFilter = document.getElementById('ordenesPagoPeriodoFilter');
+    if (periodoFilter) {
+      const valPrevio = periodoFilter.value || 'all';
+      const periodos = [...new Set(filas.map(f => f.ciclo.periodo))].sort().reverse();
+      periodoFilter.innerHTML = '<option value="all">Todos los períodos pendientes</option>' +
+        periodos.map(p => '<option value="'+p+'">'+periodoLabel(p)+'</option>').join('');
+      periodoFilter.value = periodos.includes(valPrevio) ? valPrevio : 'all';
+    }
+    const periodoVal = periodoFilter?.value || 'all';
+    const filtradas = periodoVal === 'all' ? filas : filas.filter(f => f.ciclo.periodo === periodoVal);
+
+    if (!filtradas.length) {
+      el.innerHTML = '<div class="empty">No hay remitos aprobados pendientes de pago' + (periodoVal==='all'?'':' en ese período') + '.</div>';
+      return;
+    }
+    const total = filtradas.reduce((s,f) => s + f.monto, 0);
+    el.innerHTML = `
+      <div class="stats" style="margin-bottom:18px">
+        <div class="stat-card"><div class="stat-label">Pagos pendientes</div><div class="stat-value">${filtradas.length}</div></div>
+        <div class="stat-card accent-top"><div class="stat-label">Total a pagar</div><div class="stat-value" style="font-size:26px">$${total.toLocaleString()}</div></div>
+      </div>
+      <div class="card">
+        <div class="table-wrap"><table>
+          <thead><tr><th>Prestador</th><th>Módulo</th><th>Período</th><th>CBU / Alias</th><th>Monto</th><th></th></tr></thead>
+          <tbody>
+            ${filtradas.map(f => `<tr>
+              <td><strong>${f.prestador.nombre}</strong></td>
+              <td>${f.servicio?.titulo||'—'}</td>
+              <td style="text-transform:capitalize">${periodoLabel(f.ciclo.periodo)}</td>
+              <td style="font-size:12.5px">${f.prestador.cbu ? f.prestador.cbu : (f.prestador.aliasCbu ? '' : '<span style="color:var(--danger)">⚠️ Sin CBU/alias cargado</span>')}${f.prestador.aliasCbu ? (f.prestador.cbu?' · ':'')+f.prestador.aliasCbu : ''}</td>
+              <td><strong>$${f.monto.toLocaleString()}</strong></td>
+              <td><button class="btn secondary xs" data-action="marcar-pagado" data-id="${f.ciclo.id}">✓ Marcar pagado</button></td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>
+      </div>
+    `;
+  }
+
+  function exportarOrdenPago() {
+    const periodoVal = document.getElementById('ordenesPagoPeriodoFilter')?.value || 'all';
+    const filas = filasOrdenPago().filter(f => periodoVal === 'all' || f.ciclo.periodo === periodoVal);
+    if (!filas.length) { alert('No hay pagos pendientes para exportar.'); return; }
+    const rows = [['Prestador','CBU','Alias','Monto','Concepto']];
+    filas.forEach(f => {
+      const concepto = (f.servicio?.titulo||'Módulo') + ' — ' + periodoLabel(f.ciclo.periodo);
+      rows.push([f.prestador.nombre, f.prestador.cbu||'', f.prestador.aliasCbu||'', f.monto, concepto]);
+    });
+    const csv = rows.map(r => r.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'orden_de_pago' + (periodoVal==='all'?'':'_'+periodoVal) + '.csv';
+    a.click();
+  }
+
+  async function marcarCicloPagado(cicloId) {
+    const c = (state.moduloCiclos||[]).find(x => x.id === cicloId);
+    if (!c) return;
+    if (!confirm('¿Confirmás que ya le transferiste este pago al prestador? Esto lo saca de la orden de pago pendiente.')) return;
+    c.pagado = true;
+    c.fechaPago = nowISO();
+    await saveOne(DB.moduloCiclos, moduloCicloToRow(c));
+    renderOrdenesPago();
+  }
+
   /* ─── PRESTADOR PUBLIC VIEW ──────────────────────────── */
   async function renderPrestadorView(prestadorId, nombre) {
     const prest = prestadorById(prestadorId);
@@ -7915,6 +8036,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         ['Monotributo','Relación de dependencia','Autónomo','Prestación de servicios','Otro'].map(t=>'<option value="'+t+'"'+(existing?.tipoContrato===t?' selected':'')+'>'+t+'</option>').join('') +
       '</select></div>' +
       '<div class="field full"><label>Contacto (email o teléfono)</label><input name="contacto" value="' + (existing?.contacto||'')+'"></div>' +
+      '<div class="field"><label>CBU/CVU</label><input name="cbu" placeholder="22 dígitos" value="' + (existing?.cbu||'')+'"></div>' +
+      '<div class="field"><label>Alias</label><input name="aliasCbu" placeholder="ej: juan.perez.mp" value="' + (existing?.aliasCbu||'')+'"></div>' +
       '<div class="field full"><label>📁 Carpeta Drive (documentación)</label><input type="url" name="driveLink" value="' + (existing?.driveLink||'') + '" placeholder="https://drive.google.com/…"><div style="font-size:11px;color:var(--muted);margin-top:4px">Pegá el link de la carpeta con DNI, CUIL, seguro y demás documentos.</div></div>' +
       '<div class="field full"><label>🔗 Perfil en OportunAI</label><input type="url" name="oportunaiLink" value="' + (existing?.oportunaiLink||'') + '" placeholder="https://oportunai.com/…"></div>' +
 
@@ -8046,6 +8169,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         ecosistemaId: data.ecosistemaId||null,
         activo: data.activo==='true',
         contacto: (data.contacto||'').trim(),
+        cbu: (data.cbu||'').trim(),
+        aliasCbu: (data.aliasCbu||'').trim(),
         notas: (data.notas||'').trim(),
         tieneSeguro: !!data.tieneSeguro,
         tieneCuil: !!data.tieneCuil,
@@ -9940,6 +10065,12 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     document.getElementById('serviciosTabAsignados').style.display = tab==='asignados' ? 'block' : 'none';
   }
 
+  function switchLiquidacionTab(tab) {
+    document.querySelectorAll('#page-liquidacion .sv-tab').forEach(b => b.classList.toggle('active', b.dataset.liqtab===tab));
+    document.getElementById('liquidacionTabSeguimiento').style.display = tab==='seguimiento' ? 'block' : 'none';
+    document.getElementById('liquidacionTabOrdenes').style.display = tab==='ordenes' ? 'block' : 'none';
+  }
+
   function switchPrestadoresTab(tab) {
     document.querySelectorAll('#page-prestadores .sv-tab').forEach(b => b.classList.toggle('active', b.dataset.prtab===tab));
     document.getElementById('prestadoresTabPrestadores').style.display = tab==='prestadores' ? 'block' : 'none';
@@ -10965,6 +11096,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         <div class="field"><label>Email</label><input type="email" name="email" value="${p.email||''}" required></div>
         <div class="field"><label>Fecha de nacimiento</label><input type="date" name="fechaNacimiento" value="${p.fechaNacimiento||''}" required></div>
         <div class="field full"><label>Contacto adicional (opcional)</label><input name="contacto" value="${p.contacto||''}"></div>
+        <div class="field"><label>CBU/CVU (para cobrar)</label><input name="cbu" value="${p.cbu||''}" placeholder="22 dígitos"></div>
+        <div class="field"><label>Alias</label><input name="aliasCbu" value="${p.aliasCbu||''}" placeholder="ej: juan.perez.mp"></div>
         <div class="field full"><label>🔗 Perfil en OportunAI</label><input type="url" name="oportunaiLink" value="${p.oportunaiLink||''}" placeholder="https://oportunai.com/…"></div>
         <div class="field full"><label>Tipo de contrato</label><select name="tipoContrato">
           <option value="">Sin especificar</option>
@@ -11002,6 +11135,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         p.email = (data.email||'').trim();
         p.fechaNacimiento = data.fechaNacimiento||'';
         p.contacto = (data.contacto||'').trim();
+        p.cbu = (data.cbu||'').trim();
+        p.aliasCbu = (data.aliasCbu||'').trim();
         p.oportunaiLink = (data.oportunaiLink||'').trim();
         p.tipoContrato = data.tipoContrato||'';
         p.docContratoUrl = docContratoUrl;
