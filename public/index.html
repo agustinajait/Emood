@@ -213,6 +213,12 @@
       background: radial-gradient(ellipse 55% 60% at 12% 0%, rgba(255,212,0,0.12), transparent 60%);
       pointer-events:none;
     }
+    .home-hero-bg {
+      position:absolute; inset:0; z-index:0; pointer-events:none;
+      background-image: url('hero-bg.jpg');
+      background-size: cover; background-position: center;
+      opacity: 0.1;
+    }
     .home-hero-inner {
       position:relative; z-index:1;
       max-width: 1180px; margin: 0 auto;
@@ -1952,6 +1958,7 @@
   </nav>
 
   <header class="home-hero">
+    <div class="home-hero-bg"></div>
     <div class="home-hero-inner">
       <div class="home-hero-text">
         <div class="home-hero-badges">
