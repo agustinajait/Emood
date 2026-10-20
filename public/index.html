@@ -324,6 +324,21 @@
       .beneficios-card { max-width:420px; margin:0 auto; }
     }
 
+    .home-acaiidemia {
+      background: var(--bg2); border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+      padding: 72px 24px;
+    }
+    .home-acaiidemia-inner {
+      max-width: 760px; margin: 0 auto; text-align:center;
+    }
+    .home-acaiidemia-inner h2 {
+      font-family: var(--font-display-xl); font-weight:800; letter-spacing:-0.6px;
+      font-size: clamp(24px, 2.6vw, 32px); line-height:1.25; color:var(--text); margin:0 0 14px;
+    }
+    .home-acaiidemia-inner p {
+      color:var(--muted); font-size:15.5px; line-height:1.7; margin:0 0 28px;
+      max-width:540px; margin-left:auto; margin-right:auto;
+    }
     .home-section { max-width: 1080px; margin: 0 auto; padding: 80px 24px; }
     .home-section-title { font-family: var(--font-mono); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); text-align:center; margin-bottom:36px; }
     .home-steps { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
@@ -2029,6 +2044,15 @@
         <p>La membresía de la nueva vida emprendedora: comunidad, beneficios reales —obra social, gimnasio, seguro de retiro y respaldo por falta de productividad— y conexión con el resto de los programas de Huehaci: <strong>Quiero Emprender</strong>, <strong>Aceleración con IA</strong>, <strong>Franquicias</strong> y <strong>Certificaciones</strong>.</p>
         <button class="btn primary home-hero-cta" onclick="goToLoginFromHome('prestador-signup')">Sumate acá →</button>
       </div>
+    </div>
+  </section>
+
+  <section class="home-acaiidemia" id="homeAcaiidemia">
+    <div class="home-acaiidemia-inner">
+      <div class="home-section-title" style="margin-bottom:14px">🎓 Acaiidemia</div>
+      <h2>Aprender para generar impacto</h2>
+      <p>Formación práctica para acompañar personas, fortalecer comunidades y emprender con propósito.</p>
+      <a class="btn primary home-hero-cta" href="https://acaidemia.vercel.app/" target="_blank" rel="noopener">Conocé Acaiidemia →</a>
     </div>
   </section>
 
