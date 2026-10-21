@@ -286,7 +286,9 @@
       .home-hero-text { text-align:center; }
       .home-hero-badges, .home-hero-actions { justify-content:center; }
       .home-hero h1, .home-hero-subtitle, .home-hero p { max-width:100%; margin-left:auto; margin-right:auto; }
-      .home-hero-visual { min-height: 260px; max-width:360px; margin:40px auto 0; }
+      .home-hero-visual { min-height: 260px; max-width:360px; width:100%; margin:40px auto 0; }
+      .home-mock-card-main { width: min(300px, 82%); }
+      .home-mock-card-sub { width: min(230px, 66%); }
     }
 
     /* ── Beneficios / Pool Emprendedores (banner oscuro, como ASEA) ── */
@@ -384,6 +386,8 @@
       .home-hero { padding: 56px 24px 64px; }
       .home-nav-links { display:none; }
       .home-steps { grid-template-columns:1fr; }
+      .home-caso-uso-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -24px; padding: 0 24px 4px; }
+      .home-caso-uso-wrap img { width: auto; max-width: none; min-width: 900px; }
     }
 
     /* ── Hero del perfil público de una organización ── */
@@ -2016,6 +2020,12 @@
       <div class="home-step"><div class="home-step-num">1</div><strong>Creá tu cuenta</strong><span>Con tu email y una contraseña, en un minuto.</span></div>
       <div class="home-step"><div class="home-step-num">2</div><strong>Completá tu perfil</strong><span>Nombre, apellido, dirección, teléfono y fecha de nacimiento.</span></div>
       <div class="home-step"><div class="home-step-num">3</div><strong>Postulate a módulos</strong><span>De cualquier organización que trabaje con E-Mood.</span></div>
+    </div>
+  </section>
+
+  <section class="home-section" id="homeCasoDeUso">
+    <div class="home-caso-uso-wrap">
+      <img src="caso-de-uso-prestador.png" alt="Un prestador puede sumar módulos de distintas organizaciones a la vez en E-Mood" style="width:100%;height:auto;display:block;border-radius:16px;border:1.5px solid rgba(10,10,10,0.12);box-shadow:0 10px 26px rgba(10,10,10,0.08)">
     </div>
   </section>
 
