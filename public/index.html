@@ -3104,7 +3104,8 @@
       modulosAsignados: Array.isArray(data?.modulosAsignados) ? data.modulosAsignados : [],
       moduloItems: Array.isArray(data?.moduloItems) ? data.moduloItems : [],
       moduloCiclos: Array.isArray(data?.moduloCiclos) ? data.moduloCiclos : [],
-      duplas: Array.isArray(data?.duplas) ? data.duplas : []
+      duplas: Array.isArray(data?.duplas) ? data.duplas : [],
+      certificaciones: Array.isArray(data?.certificaciones) ? data.certificaciones : []
     };
   }
 
@@ -4084,6 +4085,7 @@
     moduloItems:      'hh_modulo_items',
     moduloCiclos:     'hh_modulo_ciclos',
     duplas:           'hh_duplas',
+    certificaciones:  'hh_certificaciones',
   };
 
   // ── Servicio → Postulación → Módulo asignado → Remito ──────
@@ -4201,6 +4203,20 @@
       remitoNumero: r.remito_numero||'', remitoFecha: r.remito_fecha||'',
       pagado: !!r.pagado, fechaPago: r.fecha_pago||'',
       createdAt: r.created_at||'', updatedAt: r.updated_at||'',
+    };
+  }
+  function certificacionToRow(c) {
+    return {
+      id: c.id, organization_id: c.organizationId||null, modulo_asignado_id: c.moduloAsignadoId,
+      ciclo_id: c.cicloId||null, fecha: c.fecha, nota: c.nota||'',
+      created_at: c.createdAt||nowISO(),
+    };
+  }
+  function rowToCertificacion(r) {
+    return {
+      id: r.id, organizationId: r.organization_id||null, moduloAsignadoId: r.modulo_asignado_id,
+      cicloId: r.ciclo_id||null, fecha: r.fecha, nota: r.nota||'',
+      createdAt: r.created_at||'',
     };
   }
   function duplaToRow(d) {
@@ -4341,7 +4357,7 @@
       // al final), así que se piden todas EN PARALELO en vez de una por
       // una — antes esto era una cadena de ~20 awaits en serie, lo que
       // con más datos se sentía como que la pantalla "se colgaba".
-      const [ag, ch, ci, pr, ce, co, prest, prot, ig, seg, mod, mev, eco, serv, post, masig, mit, cic, dup] = await Promise.all([
+      const [ag, ch, ci, pr, ce, co, prest, prot, ig, seg, mod, mev, eco, serv, post, masig, mit, cic, dup, cert] = await Promise.all([
         sbSelect(DB.agencies, 'name'),
         sbSelect(DB.challenges, 'created_at'),
         sbSelect(DB.checkins, 'created_at.desc'),
@@ -4361,6 +4377,7 @@
         sbSelect(DB.moduloItems, 'created_at').catch(()=>({data:[],errMsg:null})),
         sbSelect(DB.moduloCiclos, 'periodo.desc').catch(()=>({data:[],errMsg:null})),
         sbSelect(DB.duplas, 'created_at.desc').catch(()=>({data:[],errMsg:null})),
+        sbSelect(DB.certificaciones, 'fecha.desc').catch(()=>({data:[],errMsg:null})),
       ]);
       if (ag.errMsg) { console.warn('Load agencies error:', ag.errMsg); return null; }
       if (ch.errMsg) { console.warn('Load challenges error:', ch.errMsg); return null; }
@@ -4384,6 +4401,7 @@
         moduloItems:      mit.data.map(rowToModuloItem),
         moduloCiclos:     cic.data.map(rowToModuloCiclo),
         duplas:           dup.data.map(rowToDupla),
+        certificaciones:  cert.data.map(rowToCertificacion),
       };
     } catch(e) {
       console.warn('Supabase unavailable:', e.message || e);
@@ -6079,6 +6097,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='postular-servicio') { const sid=btn.dataset.sid; openPostularModal(sid, id); }
     else if (action==='subir-evidencia-item') { openSubirEvidenciaModal(id, btn.dataset.pid); }
     else if (action==='marcar-inicio-jornada') await marcarInicioJornada(id, btn.dataset.pid);
+    else if (action==='certificar-dia') await marcarCertificacionDia(id, btn.dataset.mid, btn.dataset.pid);
     else if (action==='delete-prestador') {
       if (!confirm('¿Eliminar este prestador?')) return;
       await deleteOne(DB.prestadores, id);
@@ -9426,10 +9445,20 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           (s?.fechaFin?' <span style="font-size:12px;color:var(--muted)">· hasta '+s.fechaFin+'</span>':'') +'</div>' +
           (ciclos.length ? ciclos.map(c => {
             const items = itemsByCiclo(c.id);
+            const certs = certificacionesByCiclo(c.id);
+            const esperadas = s?.cantidadPorPeriodo || 0;
+            const yaHoy = certs.some(cc => cc.fecha === fechaHoy());
             return '<div style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
                 '<strong style="font-size:13px;text-transform:capitalize">📅 '+periodoLabel(c.periodo)+'</strong>' +
                 '<span class="badge '+(c.estado==='aprobado'?'green':c.estado==='completado'?'blue':'gray')+'">'+(CICLO_ESTADO_LABEL[c.estado]||c.estado)+'</span>' +
+              '</div>' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--card-soft);border-radius:8px;padding:8px 10px;margin-bottom:8px">' +
+                '<div style="font-size:12px;color:var(--muted)">🗓️ Certificación diaria: <strong>'+certs.length+(esperadas?'/'+esperadas:'')+'</strong> día'+(certs.length===1?'':'s')+' certificado'+(certs.length===1?'':'s')+' este mes</div>' +
+                (c.estado==='aprobado' ? '' :
+                  yaHoy
+                    ? '<span class="badge green" style="font-size:11px;flex-shrink:0">✓ Ya certificaste hoy</span>'
+                    : '<button class="btn primary xs" style="flex-shrink:0" data-action="certificar-dia" data-id="'+c.id+'" data-mid="'+m.id+'" data-pid="'+prest.id+'">✓ Certificar hoy</button>') +
               '</div>' +
               items.map(it => {
                 const esJornada = it.tipo === 'jornada';
@@ -10318,6 +10347,29 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     return (state.moduloItems||[]).filter(it => it.cicloId === cicloId);
   }
   function periodoActual() { return new Date().toISOString().slice(0,7); }
+  function fechaHoy() { return new Date().toISOString().slice(0,10); }
+
+  /* ── Certificación diaria (control de asistencia, sin ese nombre):
+     el prestador toca "Certificar hoy" una vez por día y por módulo
+     asignado — se cuenta solo, sin aprobación, y sirve junto con los
+     ítems del protocolo para validar el módulo a fin de mes. ── */
+  function certificacionesByCiclo(cicloId) {
+    return (state.certificaciones||[]).filter(c => c.cicloId === cicloId).sort((a,b) => b.fecha.localeCompare(a.fecha));
+  }
+  async function marcarCertificacionDia(cicloId, moduloAsignadoId, prestadorId) {
+    const ciclo = cicloById(cicloId);
+    if (!ciclo) return;
+    const hoy = fechaHoy();
+    if ((state.certificaciones||[]).some(c => c.moduloAsignadoId === moduloAsignadoId && c.fecha === hoy)) return;
+    const modulo = moduloAsignadoById(moduloAsignadoId);
+    const cert = { id: uid(), organizationId: modulo?.organizationId || null, moduloAsignadoId, cicloId, fecha: hoy, nota: '', createdAt: nowISO() };
+    if (!state.certificaciones) state.certificaciones = [];
+    state.certificaciones.push(cert);
+    const ok = await saveOne(DB.certificaciones, certificacionToRow(cert));
+    if (!ok) { state.certificaciones = state.certificaciones.filter(c => c.id !== cert.id); alert('No se pudo registrar la certificación de hoy. Probá de nuevo.'); return; }
+    if (prestadorId) renderPrestadorPublicView(prestadorId);
+    else renderModulosAsignados();
+  }
 
   // Crea, en un ciclo, los ítems correspondientes al protocolo del
   // módulo. Los ítems tipo "tarea" generan un único ítem (como
@@ -10925,12 +10977,15 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         (ciclos.length ? ciclos.map(c => {
           const items = itemsByCiclo(c.id);
           const aprobados = items.filter(it => it.estado === 'aprobado').length;
+          const certs = certificacionesByCiclo(c.id);
+          const esperadas = s?.cantidadPorPeriodo || 0;
           const estadoColor = c.estado==='aprobado' ? 'green' : c.estado==='completado' ? 'blue' : 'gray';
           return '<div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:#fafaf8">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
               '<strong style="font-size:13px;text-transform:capitalize">📅 '+periodoLabel(c.periodo)+'</strong>' +
               '<span class="badge '+estadoColor+'">'+CICLO_ESTADO_LABEL[c.estado]+' · '+aprobados+'/'+items.length+'</span>' +
             '</div>' +
+            '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">🗓️ Certificación diaria: <strong>'+certs.length+(esperadas?'/'+esperadas:'')+'</strong> día'+(certs.length===1?'':'s')+' certificado'+(certs.length===1?'':'s')+'</div>' +
             items.map(it => {
               const porValidar = it.estado==='pendiente' && (it.evidenciaUrl||it.evidenciaNota);
               const badge = it.estado==='aprobado' ? '<span class="badge green">✓ Aprobado</span>' : it.estado==='rechazado' ? '<span class="badge red">✕ Rechazado</span>' : porValidar ? '<span class="badge" style="background:#fffbeb;color:#92400e">🔎 Por validar</span>' : '<span class="badge gray">Pendiente</span>';
