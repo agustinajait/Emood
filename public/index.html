@@ -2993,7 +2993,7 @@
       tipo_evidencia: m.tipoEvidencia||'foto',
       cantidad: Number(m.cantidad||1),
       monto: Number(m.monto||0),
-      ecosistema_id: m.ecosistemaId || null,
+      ecosistema_ids: JSON.stringify(m.ecosistemaIds||[]),
       orden: Number(m.orden||0),
       created_at: m.createdAt||new Date().toISOString(),
     };
@@ -3037,7 +3037,7 @@
       tipoEvidencia: r.tipo_evidencia||'foto',
       cantidad: Number(r.cantidad||1),
       monto: Number(r.monto||0),
-      ecosistemaId: r.ecosistema_id || null,
+      ecosistemaIds: (()=>{ try { const a = JSON.parse(r.ecosistema_ids||'[]'); return a.length ? a : (r.ecosistema_id ? [r.ecosistema_id] : []); } catch(_){ return r.ecosistema_id ? [r.ecosistema_id] : []; } })(),
       orden: Number(r.orden||0),
       createdAt: r.created_at||'',
     };
@@ -4094,7 +4094,7 @@
       horas_modulo: Number(s.horasModulo||0), precio_hora: Number(s.precioHora||0),
       cupos: Number(s.cupos||1), cantidad_por_periodo: Number(s.cantidadPorPeriodo||1),
       fecha_inicio: s.fechaInicio||null, fecha_fin: s.fechaFin||null,
-      ecosistema_id: s.ecosistemaId||null,
+      ecosistema_ids: JSON.stringify(s.ecosistemaIds||[]),
       deadline: s.deadline||null,
       protocolo: JSON.stringify(s.protocolo||[]),
       docs_requeridos: JSON.stringify(s.docsRequeridos||[]),
@@ -4112,7 +4112,7 @@
       horasModulo: Number(r.horas_modulo||0), precioHora: Number(r.precio_hora||0),
       cupos: Number(r.cupos||1), cantidadPorPeriodo: Number(r.cantidad_por_periodo||1),
       fechaInicio: r.fecha_inicio||'', fechaFin: r.fecha_fin||'',
-      ecosistemaId: r.ecosistema_id||null,
+      ecosistemaIds: (()=>{ try { const a = JSON.parse(r.ecosistema_ids||'[]'); return a.length ? a : (r.ecosistema_id ? [r.ecosistema_id] : []); } catch(_){ return r.ecosistema_id ? [r.ecosistema_id] : []; } })(),
       deadline: r.deadline||'',
       protocolo: (()=>{ try { return JSON.parse(r.protocolo||'[]'); } catch(_){ return []; } })(),
       docsRequeridos: (()=>{ try { return JSON.parse(r.docs_requeridos||'[]'); } catch(_){ return []; } })(),
@@ -4623,7 +4623,7 @@
     `;
 
     document.getElementById('ecosistemaStatusList').innerHTML = ecosistemas.length ? ecosistemas.map(eco => {
-      const mods = modulos.filter(s => s.ecosistemaId === eco.id);
+      const mods = modulos.filter(s => (s.ecosistemaIds||[]).includes(eco.id));
       let ti=0, ap=0;
       mods.forEach(s => {
         ciclos.filter(c => { const m=moduloAsignadoById(c.moduloAsignadoId); return m && m.servicioId===s.id; })
@@ -6140,7 +6140,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       await deleteOne(DB.ecosistemas, id);
       state.ecosistemas = (state.ecosistemas||[]).filter(e => e.id !== id);
       // unlink modules
-      (state.modulos||[]).forEach(m => { if (m.ecosistemaId === id) m.ecosistemaId = null; });
+      (state.modulos||[]).forEach(m => { if ((m.ecosistemaIds||[]).includes(id)) m.ecosistemaIds = m.ecosistemaIds.filter(e => e !== id); });
+      (state.servicios||[]).forEach(s => { if ((s.ecosistemaIds||[]).includes(id)) s.ecosistemaIds = s.ecosistemaIds.filter(e => e !== id); });
       renderEcosistemas();
     }
     else if (action==='reasignar-modulo') {
@@ -6227,7 +6228,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       await deleteOne(DB.ecosistemas, id);
       state.ecosistemas = (state.ecosistemas||[]).filter(e => e.id !== id);
       // unlink modules
-      (state.modulos||[]).forEach(m => { if (m.ecosistemaId === id) m.ecosistemaId = null; });
+      (state.modulos||[]).forEach(m => { if ((m.ecosistemaIds||[]).includes(id)) m.ecosistemaIds = m.ecosistemaIds.filter(e => e !== id); });
+      (state.servicios||[]).forEach(s => { if ((s.ecosistemaIds||[]).includes(id)) s.ecosistemaIds = s.ecosistemaIds.filter(e => e !== id); });
       renderEcosistemas();
     }
     else if (action==='reasignar-modulo') {
@@ -6680,9 +6682,12 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     // asignado — si no, el filtro por ecosistema de "Prestadores" no
     // lo encuentra (esto ya lo hacía "Importar nómina" al crearlo,
     // pero un prestador asignado directo desde acá podía no tener
-    // ecosistema cargado todavía).
-    if (servicio.ecosistemaId && prestador.ecosistemaId !== servicio.ecosistemaId) {
-      prestador.ecosistemaId = servicio.ecosistemaId;
+    // ecosistema cargado todavía). Si el módulo pertenece a más de un
+    // ecosistema no hay forma de adivinar cuál es el del prestador,
+    // así que ahí no se autocompleta.
+    const ecosistemasDelServicio = servicio.ecosistemaIds || [];
+    if (ecosistemasDelServicio.length === 1 && prestador.ecosistemaId !== ecosistemasDelServicio[0]) {
+      prestador.ecosistemaId = ecosistemasDelServicio[0];
       await saveOne(DB.prestadores, prestadorToRow(prestador));
     }
 
@@ -8414,7 +8419,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       return;
     }
     el.innerHTML = ecos.map(eco => {
-      const modulos = (state.modulos||[]).filter(m => m.ecosistemaId === eco.id);
+      const modulos = (state.modulos||[]).filter(m => (m.ecosistemaIds||[]).includes(eco.id));
       const prestadoresIds = [...new Set(modulos.map(m => m.prestadorId).filter(Boolean))];
       const presupuestoUsado = modulos.reduce((s, m) => s + (m.monto||0) * (m.cantidad||1), 0);
       const estadoColor = {activo:'#dcfce7;color:#166534', pausado:'#fef9c3;color:#92400e', cerrado:'#fee2e2;color:#991b1b'}[eco.estado] || '#f3f4f6;color:#374151';
@@ -8491,11 +8496,12 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     const modulosHTML = todosModulos.map(m => {
       const prest = (state.prestadores||[]).find(p => p.id === m.prestadorId);
-      const ecoActual = (state.ecosistemas||[]).find(e => e.id === m.ecosistemaId);
-      const yaEnEste = m.ecosistemaId === ecosistemaId;
-      const enOtro = m.ecosistemaId && m.ecosistemaId !== ecosistemaId;
-      const bgColor = yaEnEste ? '#f0fdf4' : (enOtro ? '#fef9c3' : '#f9fafb');
-      const borderColor = yaEnEste ? '#86efac' : (enOtro ? '#fde68a' : '#e5e7eb');
+      const ecosistemasDelModulo = m.ecosistemaIds || [];
+      const yaEnEste = ecosistemasDelModulo.includes(ecosistemaId);
+      const otrosNombres = ecosistemasDelModulo.filter(e => e !== ecosistemaId)
+        .map(e => (state.ecosistemas||[]).find(ec => ec.id === e)?.nombre).filter(Boolean);
+      const bgColor = yaEnEste ? '#f0fdf4' : '#f9fafb';
+      const borderColor = yaEnEste ? '#86efac' : '#e5e7eb';
       return '<label style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1.5px solid '+borderColor+';border-radius:10px;cursor:pointer;background:'+bgColor+';margin-bottom:8px">' +
         '<input type="checkbox" name="modulos" value="'+m.id+'"'+(yaEnEste?' checked':'')+' style="width:16px;height:16px;accent-color:#16a34a;margin-top:2px;flex-shrink:0">' +
         '<div style="flex:1">' +
@@ -8503,7 +8509,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:3px">' +
             (prest ? '<span style="font-size:11px;color:#6b7280">👤 '+prest.nombre+'</span>' : '<span style="font-size:11px;color:#f59e0b">👤 sin prestador</span>') +
             (yaEnEste ? '<span style="font-size:11px;color:#16a34a;font-weight:600">✓ ya en este ecosistema</span>' : '') +
-            (enOtro ? '<span style="font-size:11px;color:#92400e">⚠️ en: '+ecoActual.nombre+'</span>' : '') +
+            (otrosNombres.length ? '<span style="font-size:11px;color:#92400e">también en: '+otrosNombres.join(', ')+'</span>' : '') +
           '</div>' +
         '</div>' +
       '</label>';
@@ -8531,15 +8537,16 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const btn = document.getElementById('asignarModulosBtn');
       if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
 
-      // Update each module
+      // Update each module — se agrega o se quita SOLO este ecosistema,
+      // sin tocar los demás a los que ya pertenezca el módulo.
       for (const mod of todosModulos) {
         const debeEstar = checked.has(mod.id);
-        const estabaAntes = mod.ecosistemaId === ecosistemaId;
+        const estabaAntes = (mod.ecosistemaIds||[]).includes(ecosistemaId);
         if (debeEstar && !estabaAntes) {
-          mod.ecosistemaId = ecosistemaId;
+          mod.ecosistemaIds = [...(mod.ecosistemaIds||[]), ecosistemaId];
           await saveOne(DB.modulos, moduloToRow(mod));
         } else if (!debeEstar && estabaAntes) {
-          mod.ecosistemaId = null;
+          mod.ecosistemaIds = (mod.ecosistemaIds||[]).filter(e => e !== ecosistemaId);
           await saveOne(DB.modulos, moduloToRow(mod));
         }
       }
@@ -8916,9 +8923,16 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       esLibre ? 'Creá un módulo sin asignar. Podrás asignarlo a un prestador cuando quieras.' : 'Definí el módulo de actividad para este prestador.',
       '<form id="moduloForm" class="form-grid">' +
       '<div class="field full"><label>Nombre del módulo</label><input name="nombre" required value="'+(existing?.nombre||'')+'" placeholder="ej: Mentoreo emprendedor, Territorio"></div>' +
-      '<div class="field full"><label>Ecosistema</label><select name="ecosistemaId"><option value="">Sin ecosistema…</option>' +
-        (state.ecosistemas||[]).map(ec => '<option value="'+ec.id+'"'+(existing?.ecosistemaId===ec.id?' selected':'')+'>'+ec.nombre+'</option>').join('') +
-      '</select></div>' +
+      '<div class="field full">' +
+        '<label>Ecosistemas (podés elegir más de uno)</label>' +
+        ((state.ecosistemas||[]).length
+          ? '<div style="display:flex;flex-wrap:wrap;gap:8px">' + (state.ecosistemas||[]).map(ec =>
+              '<label style="display:flex;align-items:center;gap:6px;font-weight:400;font-size:13px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer">' +
+                '<input type="checkbox" name="ecosistemaIds" value="'+ec.id+'"'+((existing?.ecosistemaIds||[]).includes(ec.id)?' checked':'')+' style="width:auto">' + ec.nombre +
+              '</label>'
+            ).join('') + '</div>'
+          : '<div style="font-size:12px;color:var(--muted)">No hay ecosistemas creados todavía.</div>') +
+      '</div>' +
       '<div class="field full"><label>Descripción de la actividad</label><textarea name="descripcion" placeholder="Qué hace el prestador en este módulo…">'+(existing?.descripcion||'')+'</textarea></div>' +
       '<div class="field full"><label>Producto esperado</label><input name="productoEsperado" value="'+(existing?.productoEsperado||'')+'" placeholder="ej: Ficha de seguimiento, Registro fotográfico, Informe mensual"></div>' +
       '<div class="field"><label>Periodicidad</label><select name="periodicidad">' +
@@ -8938,6 +8952,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     document.getElementById('moduloForm').onsubmit = async e => {
       e.preventDefault();
       const data = Object.fromEntries(new FormData(e.target).entries());
+      const ecosistemaIds = [...e.target.querySelectorAll('input[name="ecosistemaIds"]:checked')].map(c => c.value);
       if (existing) {
         Object.assign(existing, {
           nombre: data.nombre.trim(),
@@ -8948,7 +8963,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           tipoEvidencia: data.tipoEvidencia,
           cantidad: Number(data.cantidad||1),
           monto: Number(data.monto||0),
-          ecosistemaId: data.ecosistemaId || null,
+          ecosistemaIds,
         });
         await saveOne(DB.modulos, moduloToRow(existing));
       } else {
@@ -8962,7 +8977,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           tipoEvidencia: data.tipoEvidencia,
           cantidad: Number(data.cantidad||1),
           monto: Number(data.monto||0),
-          ecosistemaId: data.ecosistemaId || null,
+          ecosistemaIds,
           orden: (state.modulos||[]).filter(m=>m.prestadorId===prestadorId).length,
           createdAt: nowISO()
         };
@@ -10406,8 +10421,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const q = (document.getElementById('servicioSearch')?.value||'').toLowerCase().trim();
 
     const servicios = todosLosServicios.filter(s => {
-      if (ecoVal === 'none' && s.ecosistemaId) return false;
-      if (ecoVal !== 'all' && ecoVal !== 'none' && s.ecosistemaId !== ecoVal) return false;
+      if (ecoVal === 'none' && (s.ecosistemaIds||[]).length) return false;
+      if (ecoVal !== 'all' && ecoVal !== 'none' && !(s.ecosistemaIds||[]).includes(ecoVal)) return false;
       if (q && !s.titulo.toLowerCase().includes(q)) return false;
       return true;
     });
@@ -10451,10 +10466,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     // (ej: Caipli / Asociación Camino a la Educación) se ve de un
     // vistazo qué módulos son de cuál.
     const grupos = {}; // ecosistemaId (o '' = sin ecosistema) -> [servicios]
+    // Un módulo con varios ecosistemas aparece repetido, una vez por
+    // cada grupo al que pertenece.
     servicios.forEach(s => {
-      const key = s.ecosistemaId || '';
-      if (!grupos[key]) grupos[key] = [];
-      grupos[key].push(s);
+      const keys = (s.ecosistemaIds||[]).length ? s.ecosistemaIds : [''];
+      keys.forEach(key => {
+        if (!grupos[key]) grupos[key] = [];
+        grupos[key].push(s);
+      });
     });
     const ecosistemasConModulos = (state.ecosistemas||[]).filter(e => grupos[e.id]);
     const sinEco = grupos[''] || [];
@@ -10519,7 +10538,16 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '<div class="field"><label>Fecha de inicio</label><input type="date" name="fechaInicio" value="'+(existing?.fechaInicio||'')+'"></div>' +
         '<div class="field"><label>Fecha de fin</label><input type="date" name="fechaFin" value="'+(existing?.fechaFin||'')+'"></div>' +
         '<div class="field"><label>Deadline para postularse</label><input type="date" name="deadline" value="'+(existing?.deadline||'')+'"></div>' +
-        '<div class="field"><label>Ecosistema</label><select name="ecosistemaId"><option value="">Sin ecosistema</option>' + (state.ecosistemas||[]).map(e=>'<option value="'+e.id+'"'+(e.id===existing?.ecosistemaId?' selected':'')+'>'+e.nombre+'</option>').join('')+'</select></div>' +
+        '<div class="field full">' +
+          '<label>Ecosistemas (podés elegir más de uno)</label>' +
+          ((state.ecosistemas||[]).length
+            ? '<div style="display:flex;flex-wrap:wrap;gap:8px">' + (state.ecosistemas||[]).map(e =>
+                '<label style="display:flex;align-items:center;gap:6px;font-weight:400;font-size:13px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer">' +
+                  '<input type="checkbox" name="ecosistemaIds" value="'+e.id+'"'+((existing?.ecosistemaIds||[]).includes(e.id)?' checked':'')+' style="width:auto">' + e.nombre +
+                '</label>'
+              ).join('') + '</div>'
+            : '<div style="font-size:12px;color:var(--muted)">No hay ecosistemas creados todavía.</div>') +
+        '</div>' +
         '<div class="field"><label>Horas por módulo</label><input type="number" min="0" step="0.5" name="horasModulo" value="'+(existing?.horasModulo??'')+'"></div>' +
         '<div class="field"><label>Precio por hora ($)</label><input type="number" min="0" step="1" name="precioHora" value="'+(existing?.precioHora??'')+'"></div>' +
         '<div class="field full" style="margin-top:4px">' +
@@ -10597,6 +10625,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       e.preventDefault();
       const submitBtn = e.target.querySelector('button[type="submit"]');
       const data = Object.fromEntries(new FormData(e.target).entries());
+      const ecosistemaIds = [...e.target.querySelectorAll('input[name="ecosistemaIds"]:checked')].map(c => c.value);
       const docsRequeridos = tempDocsRequeridos;
       const servicioId = existing ? existing.id : uid();
 
@@ -10616,7 +10645,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         frecuencia: data.frecuencia, deadline: data.deadline||'',
         cupos: Math.max(1, Number(data.cupos||1)), cantidadPorPeriodo: Math.max(1, Number(data.cantidadPorPeriodo||1)),
         fechaInicio: data.fechaInicio||'', fechaFin: data.fechaFin||'',
-        ecosistemaId: data.ecosistemaId||null,
+        ecosistemaIds,
         horasModulo: Number(data.horasModulo||0), precioHora: Number(data.precioHora||0),
         docsRequeridos, protocolo: tempProtocolo,
         tipoContrato: data.tipoContrato||'', docAdjuntoUrl,
@@ -10936,8 +10965,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const porEco = {};
     modulos.forEach(m => {
       const s = servicioById(m.servicioId);
-      const ecoId = s?.ecosistemaId || '_sin';
-      (porEco[ecoId] = porEco[ecoId]||[]).push(m);
+      const ecoIdsDelServicio = s?.ecosistemaIds?.length ? s.ecosistemaIds : ['_sin'];
+      ecoIdsDelServicio.forEach(ecoId => { (porEco[ecoId] = porEco[ecoId]||[]).push(m); });
     });
     const ecoIds = Object.keys(porEco).sort((a,b) => {
       if (a==='_sin') return 1;
