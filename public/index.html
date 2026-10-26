@@ -1182,6 +1182,11 @@
 
     .owner-shell { max-width: 1080px; margin: 0 auto; padding: 28px 24px; }
 
+    @keyframes hoyInPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,212,0,0.55); } 50% { box-shadow: 0 0 0 10px rgba(255,212,0,0); } }
+    .hoy-in-btn { animation: hoyInPulse 2s ease-in-out infinite; }
+    .hoy-in-btn:hover { filter: brightness(1.05); transform: translateY(-1px); }
+    @media (prefers-reduced-motion: reduce) { .hoy-in-btn { animation: none; } }
+
     .owner-welcome {
       background: linear-gradient(135deg, var(--owner-accent) 0%, #1d4ed8 100%);
       border-radius: 18px;
@@ -9404,7 +9409,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   // Lo primero que ve el prestador al entrar: marcar entrada (y,
   // si hace falta, salida) de hoy — un toque, bien grande, sin
   // vueltas. Un módulo queda certificado el día apenas marca la
-  // entrada; la salida es opcional.
+  // entrada; la salida es opcional. Cada módulo activo se ve con
+  // su propio cartel "● Activo" para que quede clarísimo con cuáles
+  // está trabajando ahora.
   function buildHoyWidget(prest) {
     const misModulos = (state.modulosAsignados||[]).filter(m => m.prestadorId === prest.id && m.estado !== 'aprobado');
     if (!misModulos.length) return '';
@@ -9417,22 +9424,31 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       if (!ciclo) {
         accion = '';
       } else if (!cert) {
-        accion = '<button class="btn primary" style="font-size:15px;padding:12px 26px;font-weight:700" data-action="marcar-in" data-id="'+ciclo.id+'" data-mid="'+m.id+'" data-pid="'+prest.id+'">▶️ Marcar entrada</button>';
+        accion = '<button class="btn hoy-in-btn" style="width:100%;font-size:17px;padding:16px 20px;font-weight:800;border-radius:12px;background:var(--accent);color:#1a1506;margin-top:10px" data-action="marcar-in" data-id="'+ciclo.id+'" data-mid="'+m.id+'" data-pid="'+prest.id+'">▶️ Marcar entrada</button>';
       } else if (!cert.horaOut) {
-        accion = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+        accion = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:10px">' +
           '<span class="badge green">✓ Entrada '+formatHora(cert.horaIn)+'</span>' +
-          '<button class="btn secondary small" data-action="marcar-out" data-mid="'+m.id+'" data-pid="'+prest.id+'">⏹ Marcar salida (opcional)</button>' +
+          '<button class="btn secondary small" style="background:transparent;border-color:rgba(255,255,255,0.5);color:#fff" data-action="marcar-out" data-mid="'+m.id+'" data-pid="'+prest.id+'">⏹ Marcar salida (opcional)</button>' +
         '</div>';
       } else {
-        accion = '<span class="badge green">✓ Entrada '+formatHora(cert.horaIn)+' · Salida '+formatHora(cert.horaOut)+'</span>';
+        accion = '<div style="margin-top:10px"><span class="badge green">✓ Entrada '+formatHora(cert.horaIn)+' · Salida '+formatHora(cert.horaOut)+'</span></div>';
       }
-      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 0;border-top:1px solid rgba(255,255,255,0.18)">' +
-        '<div style="font-weight:700">'+(s?.titulo||'—')+'</div>' + accion +
+      const org = orgsCacheById[s?.organizationId];
+      return '<div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.14);border-radius:14px;padding:16px;margin-top:12px">' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+          '<span style="font-weight:700;font-size:15px">'+(s?.titulo||'—')+'</span>' +
+          '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;background:rgba(34,197,94,0.2);color:#4ade80;padding:3px 9px;border-radius:999px"><span style="width:6px;height:6px;border-radius:50%;background:#4ade80;display:inline-block"></span>ACTIVO</span>' +
+        '</div>' +
+        (org?.name ? '<div style="font-size:12px;opacity:.6;margin-top:2px">'+org.name+'</div>' : '') +
+        accion +
       '</div>';
     }).join('');
     if (!filas) return '';
-    return '<div class="card" style="margin-bottom:16px;background:var(--owner-accent);color:#fff;border:none">' +
-      '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.8">🗓️ Tu día de hoy</div>' +
+    return '<div class="card" style="margin-bottom:16px;background:#141413;color:#fff;border:none;box-shadow:0 10px 30px rgba(0,0,0,0.2)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px">' +
+        '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.85">🗓️ Tu día de hoy</div>' +
+        '<div style="font-size:12px;opacity:.65">'+misModulos.length+' módulo'+(misModulos.length===1?'':'s')+' activo'+(misModulos.length===1?'':'s')+'</div>' +
+      '</div>' +
       filas +
     '</div>';
   }
