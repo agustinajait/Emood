@@ -2547,6 +2547,12 @@
     if (isNaN(d)) return '-';
     return d.toLocaleDateString('es-AR',{day:'2-digit',month:'short'}) + ' ' + d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
   }
+  function formatHora(v) {
+    if (!v) return '-';
+    const d = new Date(v);
+    if (isNaN(d)) return '-';
+    return d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  }
   function statusBadge(status) {
     const map = { 'en curso':'green','riesgo':'yellow','bloqueado':'red','logrado':'violet','pendiente':'yellow','pagado':'green','inactiva':'gray' };
     const icons = { 'en curso':'●','riesgo':'▲','bloqueado':'✕','logrado':'✓','pendiente':'○','pagado':'✓','inactiva':'–' };
@@ -4209,6 +4215,7 @@
     return {
       id: c.id, organization_id: c.organizationId||null, modulo_asignado_id: c.moduloAsignadoId,
       ciclo_id: c.cicloId||null, fecha: c.fecha, nota: c.nota||'',
+      hora_in: c.horaIn||null, hora_out: c.horaOut||null,
       created_at: c.createdAt||nowISO(),
     };
   }
@@ -4216,6 +4223,7 @@
     return {
       id: r.id, organizationId: r.organization_id||null, moduloAsignadoId: r.modulo_asignado_id,
       cicloId: r.ciclo_id||null, fecha: r.fecha, nota: r.nota||'',
+      horaIn: r.hora_in||'', horaOut: r.hora_out||'',
       createdAt: r.created_at||'',
     };
   }
@@ -6097,7 +6105,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='postular-servicio') { const sid=btn.dataset.sid; openPostularModal(sid, id); }
     else if (action==='subir-evidencia-item') { openSubirEvidenciaModal(id, btn.dataset.pid); }
     else if (action==='marcar-inicio-jornada') await marcarInicioJornada(id, btn.dataset.pid);
-    else if (action==='certificar-dia') await marcarCertificacionDia(id, btn.dataset.mid, btn.dataset.pid);
+    else if (action==='marcar-in') await marcarIn(id, btn.dataset.mid, btn.dataset.pid);
+    else if (action==='marcar-out') await marcarOut(btn.dataset.mid, btn.dataset.pid);
     else if (action==='delete-prestador') {
       if (!confirm('¿Eliminar este prestador?')) return;
       await deleteOne(DB.prestadores, id);
@@ -9200,6 +9209,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           <p>${prest.rol||'Prestador de servicio'}</p>
         </div>
 
+        ${buildHoyWidget(prest)}
+
         ${!perfilPrestadorCompleto(prest) ? `
         <div class="card" style="background:#fffbeb;border:1px solid #fde68a;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
           <div>
@@ -9384,6 +9395,42 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         : '<div class="empty" style="margin-bottom:24px">Todavía no tenés remitos aprobados — van a aparecer acá a medida que se vayan aprobando tus módulos.</div>');
   }
 
+  // Lo primero que ve el prestador al entrar: marcar entrada (y,
+  // si hace falta, salida) de hoy — un toque, bien grande, sin
+  // vueltas. Un módulo queda certificado el día apenas marca la
+  // entrada; la salida es opcional.
+  function buildHoyWidget(prest) {
+    const misModulos = (state.modulosAsignados||[]).filter(m => m.prestadorId === prest.id && m.estado !== 'aprobado');
+    if (!misModulos.length) return '';
+    const periodo = periodoActual();
+    const filas = misModulos.map(m => {
+      const s = servicioById(m.servicioId);
+      const ciclo = (state.moduloCiclos||[]).find(c => c.moduloAsignadoId === m.id && c.periodo === periodo);
+      const cert = certificacionDeHoy(m.id);
+      let accion;
+      if (!ciclo) {
+        accion = '';
+      } else if (!cert) {
+        accion = '<button class="btn primary" style="font-size:15px;padding:12px 26px;font-weight:700" data-action="marcar-in" data-id="'+ciclo.id+'" data-mid="'+m.id+'" data-pid="'+prest.id+'">▶️ Marcar entrada</button>';
+      } else if (!cert.horaOut) {
+        accion = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+          '<span class="badge green">✓ Entrada '+formatHora(cert.horaIn)+'</span>' +
+          '<button class="btn secondary small" data-action="marcar-out" data-mid="'+m.id+'" data-pid="'+prest.id+'">⏹ Marcar salida (opcional)</button>' +
+        '</div>';
+      } else {
+        accion = '<span class="badge green">✓ Entrada '+formatHora(cert.horaIn)+' · Salida '+formatHora(cert.horaOut)+'</span>';
+      }
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 0;border-top:1px solid rgba(255,255,255,0.18)">' +
+        '<div style="font-weight:700">'+(s?.titulo||'—')+'</div>' + accion +
+      '</div>';
+    }).join('');
+    if (!filas) return '';
+    return '<div class="card" style="margin-bottom:16px;background:var(--owner-accent);color:#fff;border:none">' +
+      '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.8">🗓️ Tu día de hoy</div>' +
+      filas +
+    '</div>';
+  }
+
   function buildPrestServiciosSection(prest) {
     const misPostulaciones = (state.postulaciones||[]).filter(p => p.prestadorId === prest.id);
     const postuladoA = new Set(misPostulaciones.map(p => p.servicioId));
@@ -9455,10 +9502,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
               '</div>' +
               '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--card-soft);border-radius:8px;padding:8px 10px;margin-bottom:8px">' +
                 '<div style="font-size:12px;color:var(--muted)">🗓️ Certificación diaria: <strong>'+certs.length+(esperadas?'/'+esperadas:'')+'</strong> día'+(certs.length===1?'':'s')+' certificado'+(certs.length===1?'':'s')+' este mes</div>' +
-                (c.estado==='aprobado' ? '' :
-                  yaHoy
-                    ? '<span class="badge green" style="font-size:11px;flex-shrink:0">✓ Ya certificaste hoy</span>'
-                    : '<button class="btn primary xs" style="flex-shrink:0" data-action="certificar-dia" data-id="'+c.id+'" data-mid="'+m.id+'" data-pid="'+prest.id+'">✓ Certificar hoy</button>') +
+                (yaHoy ? '<span class="badge green" style="font-size:11px;flex-shrink:0">✓ Hoy ya certificado</span>' : '') +
               '</div>' +
               items.map(it => {
                 const esJornada = it.tipo === 'jornada';
@@ -10350,23 +10394,37 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function fechaHoy() { return new Date().toISOString().slice(0,10); }
 
   /* ── Certificación diaria (control de asistencia, sin ese nombre):
-     el prestador toca "Certificar hoy" una vez por día y por módulo
-     asignado — se cuenta solo, sin aprobación, y sirve junto con los
-     ítems del protocolo para validar el módulo a fin de mes. ── */
+     el prestador marca entrada (IN) y, si hace falta, salida (OUT)
+     una vez por día y por módulo asignado — se cuenta solo, sin
+     aprobación, y sirve junto con los ítems del protocolo para
+     validar el módulo a fin de mes. Con marcar la entrada alcanza
+     para que el día cuente; la salida es opcional. ── */
   function certificacionesByCiclo(cicloId) {
     return (state.certificaciones||[]).filter(c => c.cicloId === cicloId).sort((a,b) => b.fecha.localeCompare(a.fecha));
   }
-  async function marcarCertificacionDia(cicloId, moduloAsignadoId, prestadorId) {
+  function certificacionDeHoy(moduloAsignadoId) {
+    const hoy = fechaHoy();
+    return (state.certificaciones||[]).find(c => c.moduloAsignadoId === moduloAsignadoId && c.fecha === hoy);
+  }
+  async function marcarIn(cicloId, moduloAsignadoId, prestadorId) {
+    if (certificacionDeHoy(moduloAsignadoId)) return;
     const ciclo = cicloById(cicloId);
     if (!ciclo) return;
-    const hoy = fechaHoy();
-    if ((state.certificaciones||[]).some(c => c.moduloAsignadoId === moduloAsignadoId && c.fecha === hoy)) return;
     const modulo = moduloAsignadoById(moduloAsignadoId);
-    const cert = { id: uid(), organizationId: modulo?.organizationId || null, moduloAsignadoId, cicloId, fecha: hoy, nota: '', createdAt: nowISO() };
+    const cert = { id: uid(), organizationId: modulo?.organizationId || null, moduloAsignadoId, cicloId, fecha: fechaHoy(), nota: '', horaIn: nowISO(), horaOut: '', createdAt: nowISO() };
     if (!state.certificaciones) state.certificaciones = [];
     state.certificaciones.push(cert);
     const ok = await saveOne(DB.certificaciones, certificacionToRow(cert));
-    if (!ok) { state.certificaciones = state.certificaciones.filter(c => c.id !== cert.id); alert('No se pudo registrar la certificación de hoy. Probá de nuevo.'); return; }
+    if (!ok) { state.certificaciones = state.certificaciones.filter(c => c.id !== cert.id); alert('No se pudo registrar la entrada de hoy. Probá de nuevo.'); return; }
+    if (prestadorId) renderPrestadorPublicView(prestadorId);
+    else renderModulosAsignados();
+  }
+  async function marcarOut(moduloAsignadoId, prestadorId) {
+    const cert = certificacionDeHoy(moduloAsignadoId);
+    if (!cert || cert.horaOut) return;
+    cert.horaOut = nowISO();
+    const ok = await saveOne(DB.certificaciones, certificacionToRow(cert));
+    if (!ok) { cert.horaOut = ''; alert('No se pudo registrar la salida de hoy. Probá de nuevo.'); return; }
     if (prestadorId) renderPrestadorPublicView(prestadorId);
     else renderModulosAsignados();
   }
