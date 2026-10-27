@@ -790,9 +790,24 @@
     }
     .sidebar-logout:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.7); }
 
+    /* ─── BARRA FIJA ARRIBA A LA DERECHA (cerrar sesión) ──── */
+    .admin-topbar-fixed {
+      position: fixed; top: 0; left: var(--sidebar-w); right: 0; height: 52px;
+      background: #fff; border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: flex-end;
+      padding: 0 24px; z-index: 40;
+    }
+    .admin-topbar-fixed .sidebar-logout {
+      width: auto; margin-top: 0; color: var(--text); border-color: var(--line);
+    }
+    .admin-topbar-fixed .sidebar-logout:hover { background: var(--primary-soft); color: var(--text); }
+    @media (max-width: 860px) {
+      .admin-topbar-fixed { left: 0; }
+    }
+
     /* ─── MAIN CONTENT ─────────────────────────────────── */
     .main {
-      padding: 28px 30px;
+      padding: 80px 30px 28px;
       background: var(--bg);
       min-height: 100vh;
     }
@@ -1334,8 +1349,8 @@
     }
     @media (max-width: 860px) {
       .app { grid-template-columns: 1fr; }
-      .sidebar { min-height: auto; position: static; }
-      .main { padding: 18px; }
+      .sidebar { min-height: auto; position: static; padding-top: 52px; }
+      .main { padding: 70px 18px 18px; }
       .stats, .owner-stats { grid-template-columns: 1fr 1fr; }
     }
     /* ─── THREADED COMMENTS ─────────────────────────────── */
@@ -2269,9 +2284,12 @@
 
     <div class="sidebar-bottom">
       <div id="syncStatus" class="sync-status">Sincronización pendiente</div>
-      <button class="sidebar-logout" onclick="doLogout()">⏻ Cerrar sesión</button>
     </div>
   </aside>
+
+  <div class="admin-topbar-fixed">
+    <button class="sidebar-logout" onclick="doLogout()">⏻ Cerrar sesión</button>
+  </div>
 
   <main class="main">
 
