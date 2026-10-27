@@ -3680,7 +3680,9 @@
         <span class="challenge-meta-tag">📦 ${s.horas_modulo||0} hs/módulo</span>
         <span class="challenge-meta-tag">${FRECUENCIA_LABEL[s.frecuencia]||s.frecuencia||''} × ${s.cantidad_por_periodo||1}</span>
         <span class="challenge-meta-tag">👤 ${s.cupos||1} cupo(s)</span>
-        ${pagoMensual ? '<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534" title="Monto máximo si se cumplen todas las jornadas/tareas del módulo — no está garantizado (ausencias, lluvia u otras causas de no trabajo reducen el pago real)">hasta $'+pagoMensual+'/mes c/u</span>' : ''}
+        ${pagoMensual ? (s.horas_variables
+          ? '<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534" title="Las horas varían según el día — este es solo un estimado, el monto real depende de lo certificado">~$'+pagoMensual+'/mes c/u (estimado)</span>'
+          : '<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534" title="Monto máximo si se cumplen todas las jornadas/tareas del módulo — no está garantizado (ausencias, lluvia u otras causas de no trabajo reducen el pago real)">hasta $'+pagoMensual+'/mes c/u</span>') : ''}
         ${s.fecha_inicio ? '<span class="challenge-meta-tag">📅 '+s.fecha_inicio+(s.fecha_fin?' a '+s.fecha_fin:'')+'</span>' : ''}
         ${s.deadline ? '<span class="challenge-meta-tag">⏱ vence '+s.deadline+'</span>' : ''}
         ${s.tipo_contrato ? '<span class="challenge-meta-tag" style="background:#fffbeb;color:#92400e">📄 '+s.tipo_contrato+'</span>' : ''}
@@ -4209,6 +4211,7 @@
       id: s.id, titulo: s.titulo||'', descripcion: s.descripcion||'',
       frecuencia: s.frecuencia||'mensual',
       horas_modulo: Number(s.horasModulo||0), precio_hora: Number(s.precioHora||0),
+      horas_variables: !!s.horasVariables,
       cupos: Number(s.cupos||1), cantidad_por_periodo: Number(s.cantidadPorPeriodo||1),
       fecha_inicio: s.fechaInicio||null, fecha_fin: s.fechaFin||null,
       ecosistema_ids: JSON.stringify(s.ecosistemaIds||[]),
@@ -4227,6 +4230,7 @@
       id: r.id, organizationId: r.organization_id||null, titulo: r.titulo||'', descripcion: r.descripcion||'',
       frecuencia: r.frecuencia||'mensual',
       horasModulo: Number(r.horas_modulo||0), precioHora: Number(r.precio_hora||0),
+      horasVariables: !!r.horas_variables,
       cupos: Number(r.cupos||1), cantidadPorPeriodo: Number(r.cantidad_por_periodo||1),
       fechaInicio: r.fecha_inicio||'', fechaFin: r.fecha_fin||'',
       ecosistemaIds: (()=>{ try { const a = JSON.parse(r.ecosistema_ids||'[]'); return a.length ? a : (r.ecosistema_id ? [r.ecosistema_id] : []); } catch(_){ return r.ecosistema_id ? [r.ecosistema_id] : []; } })(),
@@ -4724,9 +4728,24 @@
   }
 
   /* ─── RENDER DASHBOARD ───────────────────────────────── */
+  // Horas certificadas de un día puntual, a partir de la entrada y
+  // la salida que marcó el prestador (no se usa la palabra "trabajadas"
+  // en ningún lado de cara al prestador: no es un empleado, es un
+  // emprendedor prestando un servicio).
+  function horasCertificadasDia(cert) {
+    if (!cert?.horaIn || !cert?.horaOut) return 0;
+    const ms = new Date(cert.horaOut) - new Date(cert.horaIn);
+    return ms > 0 ? ms / 3600000 : 0;
+  }
+  function horasCertificadasCiclo(cicloId) {
+    return certificacionesByCiclo(cicloId).reduce((sum, c) => sum + horasCertificadasDia(c), 0);
+  }
   function montoCiclo(ciclo) {
     const m = moduloAsignadoById(ciclo.moduloAsignadoId);
     const s = m && servicioById(m.servicioId);
+    if (s?.horasVariables) {
+      return Math.round(horasCertificadasCiclo(ciclo.id) * (s?.precioHora||0));
+    }
     return (s?.horasModulo||0) * (s?.precioHora||0) * (s?.cantidadPorPeriodo||1);
   }
 
@@ -9529,7 +9548,11 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '<button class="btn secondary small" style="background:transparent;border-color:rgba(255,255,255,0.5);color:#fff" data-action="marcar-out" data-mid="'+m.id+'" data-pid="'+prest.id+'">⏹ Marcar salida (opcional)</button>' +
         '</div>';
       } else {
-        accion = '<div style="margin-top:10px"><span class="badge green">✓ Entrada '+formatHora(cert.horaIn)+' · Salida '+formatHora(cert.horaOut)+'</span></div>';
+        const horasHoy = horasCertificadasDia(cert);
+        const equivalente = s?.horasVariables && s?.horasModulo ? Math.round((horasHoy / s.horasModulo) * 10) / 10 : null;
+        accion = '<div style="margin-top:10px"><span class="badge green">✓ Entrada '+formatHora(cert.horaIn)+' · Salida '+formatHora(cert.horaOut)+
+          (s?.horasVariables ? ' · '+horasHoy.toFixed(1)+' hs certificadas'+(equivalente?' (≈ '+equivalente+' módulo'+(equivalente===1?'':'s')+')':'') : '') +
+          '</span></div>';
       }
       const org = orgsCacheById[s?.organizationId];
       return '<div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.14);border-radius:14px;padding:16px;margin-top:12px">' +
@@ -9577,7 +9600,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">' +
               '<span class="challenge-meta-tag" style="background:#eff6ff;color:#1d4ed8">👤 '+libres+' cupo(s) libre(s)</span>' +
               '<span class="challenge-meta-tag">📦 '+s.horasModulo+' hs/módulo</span>' +
-              (pagoMensual?'<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534" title="Monto máximo si se cumplen todas las jornadas/tareas del módulo — no está garantizado">hasta $'+pagoMensual+'/mes</span>':'') +
+              (pagoMensual?(s.horasVariables
+                ? '<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534" title="Las horas varían según el día — esto es solo un estimado, el monto real depende de lo certificado">~$'+pagoMensual+'/mes (estimado)</span>'
+                : '<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534" title="Monto máximo si se cumplen todas las jornadas/tareas del módulo — no está garantizado">hasta $'+pagoMensual+'/mes</span>'):'') +
               '<span class="challenge-meta-tag">'+(FRECUENCIA_LABEL[s.frecuencia]||s.frecuencia)+' × '+(s.cantidadPorPeriodo||1)+'</span>' +
               (s.fechaInicio?'<span class="challenge-meta-tag">📅 '+s.fechaInicio+(s.fechaFin?' a '+s.fechaFin:'')+'</span>':'') +
               (s.deadline?'<span class="challenge-meta-tag">⏱ vence '+s.deadline+'</span>':'') +
@@ -9621,7 +9646,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
                 '<span class="badge '+(c.estado==='aprobado'?'green':c.estado==='completado'?'blue':'gray')+'">'+(CICLO_ESTADO_LABEL[c.estado]||c.estado)+'</span>' +
               '</div>' +
               '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--card-soft);border-radius:8px;padding:8px 10px;margin-bottom:8px">' +
-                '<div style="font-size:12px;color:var(--muted)">🗓️ Certificación diaria: <strong>'+certs.length+(esperadas?'/'+esperadas:'')+'</strong> día'+(certs.length===1?'':'s')+' certificado'+(certs.length===1?'':'s')+' este mes</div>' +
+                '<div style="font-size:12px;color:var(--muted)">🗓️ Certificación diaria: <strong>'+certs.length+(esperadas?'/'+esperadas:'')+'</strong> día'+(certs.length===1?'':'s')+' certificado'+(certs.length===1?'':'s')+(s?.horasVariables?' · <strong>'+horasCertificadasCiclo(c.id).toFixed(1)+' hs</strong> certificadas este mes':' este mes')+'</div>' +
                 (yaHoy ? '<span class="badge green" style="font-size:11px;flex-shrink:0">✓ Hoy ya certificado</span>' : '') +
               '</div>' +
               items.map(it => {
@@ -10677,8 +10702,11 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '<span class="challenge-meta-tag" style="background:'+(ocupados>=cupos?'#fef2f2':'#eff6ff')+';color:'+(ocupados>=cupos?'#dc2626':'#1d4ed8')+'">👤 '+ocupados+'/'+cupos+' cupos</span>' +
           '<span class="challenge-meta-tag">📦 '+s.horasModulo+' hs/módulo</span>' +
           '<span class="challenge-meta-tag">💵 $'+s.precioHora+'/h</span>' +
-          (pagoMensual?'<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534" title="Monto máximo si se cumplen todas las jornadas/tareas del módulo — no está garantizado">hasta $'+pagoMensual+'/mes c/u</span>':'') +
+          (pagoMensual?(s.horasVariables
+            ? '<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534" title="Las horas varían según el día — esto es solo un estimado, el monto real depende de lo certificado">~$'+pagoMensual+'/mes c/u (estimado)</span>'
+            : '<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534" title="Monto máximo si se cumplen todas las jornadas/tareas del módulo — no está garantizado">hasta $'+pagoMensual+'/mes c/u</span>'):'') +
           '<span class="challenge-meta-tag">📋 '+(s.protocolo||[]).length+' ítems</span>' +
+          (s.horasVariables?'<span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">⏱️ Horas variables</span>':'') +
           (postCount?'<span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">👥 '+postCount+' postulantes</span>':'') +
           (s.tipoContrato?'<span class="challenge-meta-tag" style="background:#fffbeb;color:#92400e">📄 '+s.tipoContrato+'</span>':'') +
           (s.docAdjuntoUrl?'<a href="'+s.docAdjuntoUrl+'" target="_blank" class="challenge-meta-tag" style="background:#e8f0fe;color:#1a73e8;text-decoration:none">📎 Documento</a>':'') +
@@ -10780,6 +10808,12 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '</div>' +
         '<div class="field"><label>Horas por módulo</label><input type="number" min="0" step="0.5" name="horasModulo" value="'+(existing?.horasModulo??'')+'"></div>' +
         '<div class="field"><label>Precio por hora ($)</label><input type="number" min="0" step="1" name="precioHora" value="'+(existing?.precioHora??'')+'"></div>' +
+        '<div class="field full" style="background:var(--card-soft);border-radius:10px;padding:10px 12px">' +
+          '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-weight:400">' +
+            '<input type="checkbox" name="horasVariables"'+(existing?.horasVariables?' checked':'')+' style="width:auto;margin-top:3px">' +
+            '<span><strong>Horas variables</strong><br><span style="font-size:12px;color:var(--muted)">La cantidad de horas por jornada no es fija (ej: depende de cuánta gente atendió ese día). El pago del mes se calcula solo con las horas que certifique cada día (entrada/salida), en vez de "horas por módulo" × "veces por período".</span></span>' +
+          '</label>' +
+        '</div>' +
         '<div class="field full" style="margin-top:4px">' +
           '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">📄 Documentos que debe adjuntar el prestador</div>' +
           '<div id="docsRequeridosList">'+renderDocsRequeridosList()+'</div>' +
@@ -10877,6 +10911,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         fechaInicio: data.fechaInicio||'', fechaFin: data.fechaFin||'',
         ecosistemaIds,
         horasModulo: Number(data.horasModulo||0), precioHora: Number(data.precioHora||0),
+        horasVariables: !!data.horasVariables,
         docsRequeridos, protocolo: tempProtocolo,
         tipoContrato: data.tipoContrato||'', docAdjuntoUrl,
       };
@@ -11163,7 +11198,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
               '<strong style="font-size:13px;text-transform:capitalize">📅 '+periodoLabel(c.periodo)+'</strong>' +
               '<span class="badge '+estadoColor+'">'+CICLO_ESTADO_LABEL[c.estado]+' · '+aprobados+'/'+items.length+'</span>' +
             '</div>' +
-            '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">🗓️ Certificación diaria: <strong>'+certs.length+(esperadas?'/'+esperadas:'')+'</strong> día'+(certs.length===1?'':'s')+' certificado'+(certs.length===1?'':'s')+'</div>' +
+            '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">🗓️ Certificación diaria: <strong>'+certs.length+(esperadas?'/'+esperadas:'')+'</strong> día'+(certs.length===1?'':'s')+' certificado'+(certs.length===1?'':'s')+(s?.horasVariables?' · <strong>'+horasCertificadasCiclo(c.id).toFixed(1)+' hs</strong> certificadas · <strong>$'+Math.round(horasCertificadasCiclo(c.id)*(s?.precioHora||0)).toLocaleString()+'</strong>':'')+'</div>' +
             items.map(it => {
               const porValidar = it.estado==='pendiente' && (it.evidenciaUrl||it.evidenciaNota);
               const badge = it.estado==='aprobado' ? '<span class="badge green">✓ Aprobado</span>' : it.estado==='rechazado' ? '<span class="badge red">✕ Rechazado</span>' : porValidar ? '<span class="badge" style="background:#fffbeb;color:#92400e">🔎 Por validar</span>' : '<span class="badge gray">Pendiente</span>';
