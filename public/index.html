@@ -6215,6 +6215,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='invitar-prestador') { const p=prestadorById(id); if(p) await openInvitarPrestadorModal(p); }
     else if (action==='edit-servicio') { const s=servicioById(id); if(s) openServicioModal(s); }
     else if (action==='toggle-servicio') await toggleServicioEstado(id);
+    else if (action==='duplicar-servicio') await duplicarServicio(id);
     else if (action==='asignar-prestador-directo') openAsignarPrestadorDirectoModal(id);
     else if (action==='delete-servicio') await deleteServicio(id);
     else if (action==='accept-postulacion') await acceptPostulacion(id);
@@ -10713,6 +10714,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '</div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
           '<button class="btn secondary small" data-action="edit-servicio" data-id="'+s.id+'">Editar</button>' +
+          '<button class="btn secondary small" data-action="duplicar-servicio" data-id="'+s.id+'" style="background:#e0f2fe;color:#0369a1;border-color:#bae6fd" title="Duplicar para otra sede/ecosistema">⊕ Duplicar</button>' +
           '<button class="btn secondary small" data-action="asignar-prestador-directo" data-id="'+s.id+'">➕ Asignar prestador</button>' +
           '<button class="btn secondary small" data-action="toggle-servicio" data-id="'+s.id+'">'+(s.estado==='activo'?'⏸ Pausar':'▶ Reactivar')+'</button>' +
           '<button class="btn danger small" data-action="delete-servicio" data-id="'+s.id+'">Eliminar</button>' +
@@ -10940,6 +10942,29 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     await deleteOne(DB.servicios, id);
     state.servicios = state.servicios.filter(s => s.id !== id);
     renderServicios();
+  }
+
+  // Clona un módulo completo (horas, precio, protocolo, documentos
+  // requeridos, tipo de contrato, ecosistemas, etc.) en uno nuevo e
+  // independiente — con sus propios cupos y postulaciones — para no
+  // tener que volver a cargar todo cuando el mismo módulo se repite
+  // en otra sede/ecosistema. El admin solo tiene que ajustar el
+  // título y, si hace falta, el/los ecosistema(s) y los cupos.
+  async function duplicarServicio(id) {
+    const original = servicioById(id);
+    if (!original) return;
+    const copia = {
+      ...JSON.parse(JSON.stringify(original)),
+      id: uid(),
+      titulo: original.titulo + ' (copia)',
+      estado: 'activo',
+      createdAt: nowISO(),
+    };
+    state.servicios.push(copia);
+    const ok = await saveOne(DB.servicios, servicioToRow(copia));
+    if (!ok) { state.servicios = state.servicios.filter(s => s.id !== copia.id); alert('No se pudo duplicar el módulo. Probá de nuevo.'); return; }
+    renderServicios();
+    openServicioModal(copia);
   }
 
   /* ── Postulaciones (admin revisa) ── */
