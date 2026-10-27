@@ -604,6 +604,15 @@
     .login-switch a { color: var(--accent); font-weight: 700; cursor: pointer; }
     .login-panel { display: none; }
     .login-panel.active { display: block; }
+    .login-divider { display:flex; align-items:center; gap:12px; margin:18px 0; color:rgba(255,255,255,0.35); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+    .login-divider::before, .login-divider::after { content:''; flex:1; height:1px; background:rgba(255,255,255,0.15); }
+    .google-btn {
+      width:100%; display:flex; align-items:center; justify-content:center; gap:10px;
+      padding:13px; background:#fff; color:#3a3a3a; border:none;
+      border-radius: var(--radius-sm); font-weight:600; font-size:14px; cursor:pointer;
+      transition: all 0.15s;
+    }
+    .google-btn:hover { background:#f1f1f1; transform: translateY(-1px); }
 
     /* ─── ADMIN LAYOUT ─────────────────────────────────── */
     .app {
@@ -1854,6 +1863,11 @@
         </div>
         <button class="login-btn" id="adminLoginBtn" onclick="doAdminLogin()">Ingresar →</button>
         <div class="login-error" id="adminLoginError">Email o contraseña incorrectos.</div>
+        <div class="login-divider">o</div>
+        <button type="button" class="google-btn" onclick="loginWithGoogle('admin')">
+          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+          Continuar con Google
+        </button>
         <div class="login-switch">¿Todavía no tenés una organización? <a onclick="showSignupPanel()">Creá tu cuenta</a></div>
         <div class="login-switch"><a onclick="showRecoverPanel()">¿Olvidaste tu contraseña?</a></div>
       </div>
@@ -1899,6 +1913,23 @@
         <div class="login-error" id="finishOrgError">No se pudo crear la organización.</div>
       </div>
 
+      <!-- Finish prestador setup panel (primera vez que entra con Google) -->
+      <div class="login-panel" id="loginPanelFinishPrestador">
+        <div style="margin-bottom:14px;color:rgba(255,255,255,0.55);font-size:13px;line-height:1.6">
+          ¡Ya iniciaste sesión con Google (<span id="finishPrestadorEmailHint" style="color:#fff;font-weight:600"></span>)! Para terminar, contanos tu nombre.
+        </div>
+        <div class="login-field">
+          <label>Nombre completo</label>
+          <input type="text" id="finishPrestadorNombreInput" placeholder="Nombre y apellido">
+        </div>
+        <div class="login-field">
+          <label>Contacto (teléfono o email alternativo)</label>
+          <input type="text" id="finishPrestadorContactoInput" placeholder="Opcional">
+        </div>
+        <button class="login-btn" id="finishPrestadorBtn" onclick="doFinishPrestadorSetup()">Crear mi cuenta de prestador →</button>
+        <div class="login-error" id="finishPrestadorError">No se pudo crear tu cuenta.</div>
+      </div>
+
       <!-- Prestador panel -->
       <div class="login-panel" id="loginPanelPrestador">
         <div class="login-field">
@@ -1911,6 +1942,11 @@
         </div>
         <button class="login-btn" id="prestadorLoginBtn" onclick="doPrestadorLogin()">Entrar a mi panel →</button>
         <div class="login-error" id="prestadorLoginError">Email o contraseña incorrectos.</div>
+        <div class="login-divider">o</div>
+        <button type="button" class="google-btn" onclick="loginWithGoogle('prestador')">
+          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+          Continuar con Google
+        </button>
         <div class="login-switch">¿Todavía no te registraste? <a onclick="showPrestadorSignupPanel()">Creá tu cuenta de prestador</a></div>
         <div class="login-switch"><a onclick="showRecoverPanel()">¿Olvidaste tu contraseña?</a></div>
       </div>
@@ -3691,6 +3727,50 @@
     document.querySelectorAll('.login-tab').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
     document.getElementById('loginPanelSignup').classList.add('active');
+  }
+
+  // Redirige a Google vía Supabase Auth. 'intent' viaja en redirect_to
+  // (como query param, no lo toca ni Google ni GoTrue) para que, al
+  // volver, initApp() sepa si — en caso de ser la primera vez — hay
+  // que terminar el alta como organización o como prestador.
+  function loginWithGoogle(intent) {
+    const redirectTo = window.location.origin + window.location.pathname + '?authIntent=' + intent;
+    window.location.href = SB_URL + '/auth/v1/authorize?provider=google&redirect_to=' + encodeURIComponent(redirectTo);
+  }
+
+  function showFinishPrestadorPanel(email) {
+    document.querySelectorAll('.login-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('loginPanelFinishPrestador').classList.add('active');
+    const hint = document.getElementById('finishPrestadorEmailHint');
+    if (hint && email) hint.textContent = email;
+  }
+
+  async function doFinishPrestadorSetup() {
+    const nombre = document.getElementById('finishPrestadorNombreInput').value.trim();
+    const contacto = document.getElementById('finishPrestadorContactoInput').value.trim();
+    const errEl = document.getElementById('finishPrestadorError');
+    const btn = document.getElementById('finishPrestadorBtn');
+    errEl.style.display = 'none';
+    if (!nombre) { errEl.textContent = 'Completá tu nombre.'; errEl.style.display = 'block'; return; }
+    if (!authSession?.access_token) { errEl.textContent = 'Tu sesión expiró, iniciá sesión de nuevo.'; errEl.style.display = 'block'; return; }
+    btn.disabled = true; btn.textContent = 'Creando…';
+    try {
+      const rpc = await callRpc('create_prestador_account', { nombre, contacto: contacto||'', drive_link: '' });
+      if (rpc.error) throw new Error(rpc.error);
+      const profile = await fetchMyProfile();
+      if (!profile?.prestador_id) throw new Error('No se pudo crear tu cuenta. Probá de nuevo.');
+      sessionStorage.setItem('hh_role', 'prestador');
+      sessionStorage.setItem('hh_prestador_id', profile.prestador_id);
+      currentRole = 'prestador';
+      document.getElementById('loginScreen').style.display = 'none';
+      await renderPrestadorPublicView(profile.prestador_id);
+    } catch(e) {
+      errEl.textContent = e.message || 'No se pudo crear tu cuenta.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Crear mi cuenta de prestador →';
+    }
   }
 
   function showFinishOrgPanel(email) {
@@ -11675,11 +11755,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         return;
       }
       if (!profile) {
-        // Sesión válida (email confirmado) pero todavía sin organización
-        // creada — típico de confirmar el mail en otro navegador. Le
-        // pedimos acá los datos para terminar el alta, ya logueado.
+        // Sesión válida (email confirmado, o recién volvió de Google) pero
+        // todavía sin organización/prestador creado — típico de confirmar
+        // el mail en otro navegador, o de la primera vez que alguien entra
+        // con Google. authIntent (seteado por loginWithGoogle) dice si
+        // tenemos que terminar el alta como organización o como prestador.
         document.getElementById('loginScreen').style.display = 'flex';
-        showFinishOrgPanel(authSession.user?.email);
+        if (urlParams.get('authIntent') === 'prestador') showFinishPrestadorPanel(authSession.user?.email);
+        else showFinishOrgPanel(authSession.user?.email);
         return;
       }
       // Perfil existe pero no es admin: no debería pasar en este flujo.
