@@ -3667,7 +3667,8 @@
     const s = homeModulosCache.find(x => x.id === servicioId);
     if (!s) return;
     const org = orgsCacheById[s.organization_id];
-    const pagoMensual = (s.horas_modulo||0) * (s.precio_hora||0) * (s.cantidad_por_periodo||1) * (s.turnos_por_dia||1);
+    const modulosRaw = modulosDeServicioRaw(s);
+    const pagoMensual = modulosRaw.reduce((sum,h)=>sum+Number(h||0),0) * (s.precio_hora||0) * (s.cantidad_por_periodo||1);
     let protocolo = []; try { protocolo = JSON.parse(s.protocolo||'[]'); } catch(_) {}
     let docsRequeridos = []; try { docsRequeridos = JSON.parse(s.docs_requeridos||'[]'); } catch(_) {}
     openModal(s.titulo || 'Módulo', '', `
@@ -3677,8 +3678,7 @@
       </div>
       ${s.descripcion ? '<p style="white-space:pre-wrap;line-height:1.6;margin-top:0">'+s.descripcion+'</p>' : '<p style="color:var(--muted)">Sin descripción.</p>'}
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
-        <span class="challenge-meta-tag">📦 ${s.horas_modulo||0} hs/módulo</span>
-        ${(s.turnos_por_dia||1) > 1 ? '<span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">🔁 '+s.turnos_por_dia+' turnos/día</span>' : ''}
+        <span class="challenge-meta-tag">📦 ${modulosRaw.length>1 ? modulosRaw.join('+')+' hs ('+modulosRaw.length+' módulos)' : (s.horas_modulo||0)+' hs/módulo'}</span>
         <span class="challenge-meta-tag">${FRECUENCIA_LABEL[s.frecuencia]||s.frecuencia||''} × ${s.cantidad_por_periodo||1}</span>
         <span class="challenge-meta-tag">👤 ${s.cupos||1} cupo(s)</span>
         ${pagoMensual ? (s.horas_variables
@@ -4213,7 +4213,7 @@
       frecuencia: s.frecuencia||'mensual',
       horas_modulo: Number(s.horasModulo||0), precio_hora: Number(s.precioHora||0),
       horas_variables: !!s.horasVariables,
-      turnos_por_dia: Number(s.turnosPorDia||1),
+      modulos_horas: JSON.stringify(s.modulosHoras||[]),
       cupos: Number(s.cupos||1), cantidad_por_periodo: Number(s.cantidadPorPeriodo||1),
       fecha_inicio: s.fechaInicio||null, fecha_fin: s.fechaFin||null,
       ecosistema_ids: JSON.stringify(s.ecosistemaIds||[]),
@@ -4233,7 +4233,7 @@
       frecuencia: r.frecuencia||'mensual',
       horasModulo: Number(r.horas_modulo||0), precioHora: Number(r.precio_hora||0),
       horasVariables: !!r.horas_variables,
-      turnosPorDia: Number(r.turnos_por_dia||1),
+      modulosHoras: (()=>{ try { const a = JSON.parse(r.modulos_horas||'[]'); return a.length ? a : [Number(r.horas_modulo||0)]; } catch(_){ return [Number(r.horas_modulo||0)]; } })(),
       cupos: Number(r.cupos||1), cantidadPorPeriodo: Number(r.cantidad_por_periodo||1),
       fechaInicio: r.fecha_inicio||'', fechaFin: r.fecha_fin||'',
       ecosistemaIds: (()=>{ try { const a = JSON.parse(r.ecosistema_ids||'[]'); return a.length ? a : (r.ecosistema_id ? [r.ecosistema_id] : []); } catch(_){ return r.ecosistema_id ? [r.ecosistema_id] : []; } })(),
@@ -4330,7 +4330,7 @@
   function certificacionToRow(c) {
     return {
       id: c.id, organization_id: c.organizationId||null, modulo_asignado_id: c.moduloAsignadoId,
-      ciclo_id: c.cicloId||null, fecha: c.fecha, turno: Number(c.turno||1), nota: c.nota||'',
+      ciclo_id: c.cicloId||null, fecha: c.fecha, modulo_idx: Number(c.moduloIdx||1), nota: c.nota||'',
       hora_in: c.horaIn||null, hora_out: c.horaOut||null,
       created_at: c.createdAt||nowISO(),
     };
@@ -4338,7 +4338,7 @@
   function rowToCertificacion(r) {
     return {
       id: r.id, organizationId: r.organization_id||null, moduloAsignadoId: r.modulo_asignado_id,
-      cicloId: r.ciclo_id||null, fecha: r.fecha, turno: Number(r.turno||1), nota: r.nota||'',
+      cicloId: r.ciclo_id||null, fecha: r.fecha, moduloIdx: Number(r.modulo_idx||1), nota: r.nota||'',
       horaIn: r.hora_in||'', horaOut: r.hora_out||'',
       createdAt: r.created_at||'',
     };
@@ -4743,13 +4743,31 @@
   function horasCertificadasCiclo(cicloId) {
     return certificacionesByCiclo(cicloId).reduce((sum, c) => sum + horasCertificadasDia(c), 0);
   }
+  // Un servicio puede estar compuesto por más de un módulo (ej: Líder
+  // pedagógica = 2 módulos de 4hs) — cada uno con su propia cantidad
+  // de horas. Si no se configuró nada, es un solo módulo con las
+  // "horas por módulo" de siempre.
+  function modulosDeServicio(s) {
+    const arr = (s && s.modulosHoras) || [];
+    return arr.length ? arr : [Number(s?.horasModulo||0)];
+  }
+  // Igual que modulosDeServicio, pero para filas crudas de REST
+  // (snake_case) que no pasaron por rowToServicio.
+  function modulosDeServicioRaw(s) {
+    let arr = [];
+    try { arr = JSON.parse(s?.modulos_horas||'[]'); } catch(_) { arr = []; }
+    return arr.length ? arr : [Number(s?.horas_modulo||0)];
+  }
+  function horasTotalesServicio(s) {
+    return modulosDeServicio(s).reduce((sum, h) => sum + Number(h||0), 0);
+  }
   function montoCiclo(ciclo) {
     const m = moduloAsignadoById(ciclo.moduloAsignadoId);
     const s = m && servicioById(m.servicioId);
     if (s?.horasVariables) {
       return Math.round(horasCertificadasCiclo(ciclo.id) * (s?.precioHora||0));
     }
-    return (s?.horasModulo||0) * (s?.precioHora||0) * (s?.cantidadPorPeriodo||1) * (s?.turnosPorDia||1);
+    return horasTotalesServicio(s) * (s?.precioHora||0) * (s?.cantidadPorPeriodo||1);
   }
 
   function renderDashboard() {
@@ -6237,8 +6255,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='postular-servicio') { const sid=btn.dataset.sid; openPostularModal(sid, id); }
     else if (action==='subir-evidencia-item') { openSubirEvidenciaModal(id, btn.dataset.pid); }
     else if (action==='marcar-inicio-jornada') await marcarInicioJornada(id, btn.dataset.pid);
-    else if (action==='marcar-in') await marcarIn(id, btn.dataset.mid, btn.dataset.pid, btn.dataset.turno||1);
-    else if (action==='marcar-out') await marcarOut(btn.dataset.mid, btn.dataset.pid, btn.dataset.turno||1);
+    else if (action==='marcar-in') await marcarIn(id, btn.dataset.mid, btn.dataset.pid, btn.dataset.modidx||1);
+    else if (action==='marcar-out') await marcarOut(btn.dataset.mid, btn.dataset.pid, btn.dataset.modidx||1);
     else if (action==='delete-prestador') {
       if (!confirm('¿Eliminar este prestador?')) return;
       await deleteOne(DB.prestadores, id);
@@ -9540,29 +9558,31 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const filas = misModulos.map(m => {
       const s = servicioById(m.servicioId);
       const ciclo = (state.moduloCiclos||[]).find(c => c.moduloAsignadoId === m.id && c.periodo === periodo);
-      const totalTurnos = Math.max(1, Number(s?.turnosPorDia||1));
-      const turnosHtml = Array.from({length: totalTurnos}, (_,i) => i+1).map(turno => {
-        const cert = certificacionDeHoy(m.id, turno);
+      const modulosArr = modulosDeServicio(s);
+      const totalModulos = modulosArr.length;
+      const modulosHtml = modulosArr.map((horasDelModulo, i) => {
+        const moduloIdx = i + 1;
+        const cert = certificacionDeHoy(m.id, moduloIdx);
         let accion;
         if (!ciclo) {
           accion = '';
         } else if (!cert) {
-          accion = '<button class="btn hoy-in-btn" style="width:100%;font-size:17px;padding:16px 20px;font-weight:800;border-radius:12px;background:var(--accent);color:#1a1506;margin-top:10px" data-action="marcar-in" data-id="'+ciclo.id+'" data-mid="'+m.id+'" data-pid="'+prest.id+'" data-turno="'+turno+'">▶️ Marcar entrada</button>';
+          accion = '<button class="btn hoy-in-btn" style="width:100%;font-size:17px;padding:16px 20px;font-weight:800;border-radius:12px;background:var(--accent);color:#1a1506;margin-top:10px" data-action="marcar-in" data-id="'+ciclo.id+'" data-mid="'+m.id+'" data-pid="'+prest.id+'" data-modidx="'+moduloIdx+'">▶️ Marcar entrada</button>';
         } else if (!cert.horaOut) {
           accion = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:10px">' +
             '<span class="badge green">✓ Entrada '+formatHora(cert.horaIn)+'</span>' +
-            '<button class="btn secondary small" style="background:transparent;border-color:rgba(255,255,255,0.5);color:#fff" data-action="marcar-out" data-mid="'+m.id+'" data-pid="'+prest.id+'" data-turno="'+turno+'">⏹ Marcar salida (opcional)</button>' +
+            '<button class="btn secondary small" style="background:transparent;border-color:rgba(255,255,255,0.5);color:#fff" data-action="marcar-out" data-mid="'+m.id+'" data-pid="'+prest.id+'" data-modidx="'+moduloIdx+'">⏹ Marcar salida (opcional)</button>' +
           '</div>';
         } else {
           const horasHoy = horasCertificadasDia(cert);
-          const equivalente = s?.horasVariables && s?.horasModulo ? Math.round((horasHoy / s.horasModulo) * 10) / 10 : null;
+          const equivalente = s?.horasVariables && horasDelModulo ? Math.round((horasHoy / horasDelModulo) * 10) / 10 : null;
           accion = '<div style="margin-top:10px"><span class="badge green">✓ Entrada '+formatHora(cert.horaIn)+' · Salida '+formatHora(cert.horaOut)+
             (s?.horasVariables ? ' · '+horasHoy.toFixed(1)+' hs certificadas'+(equivalente?' (≈ '+equivalente+' módulo'+(equivalente===1?'':'s')+')':'') : '') +
             '</span></div>';
         }
-        return totalTurnos > 1
+        return totalModulos > 1
           ? '<div style="border-top:1px dashed rgba(255,255,255,0.15);padding-top:10px;margin-top:10px">' +
-              '<div style="font-size:11px;font-weight:700;opacity:.65;text-transform:uppercase;letter-spacing:.04em">Turno '+turno+' de '+totalTurnos+'</div>' +
+              '<div style="font-size:11px;font-weight:700;opacity:.65;text-transform:uppercase;letter-spacing:.04em">Módulo '+moduloIdx+' de '+totalModulos+' — '+horasDelModulo+' hs</div>' +
               accion +
             '</div>'
           : accion;
@@ -9574,7 +9594,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;background:rgba(34,197,94,0.2);color:#4ade80;padding:3px 9px;border-radius:999px"><span style="width:6px;height:6px;border-radius:50%;background:#4ade80;display:inline-block"></span>ACTIVO</span>' +
         '</div>' +
         (org?.name ? '<div style="font-size:12px;opacity:.6;margin-top:2px">'+org.name+'</div>' : '') +
-        turnosHtml +
+        modulosHtml +
       '</div>';
     }).join('');
     if (!filas) return '';
@@ -9600,7 +9620,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     html += disponibles.length
       ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:24px">' +
         disponibles.map(s => {
-          const pagoMensual = (s.horasModulo||0)*(s.precioHora||0)*(s.cantidadPorPeriodo||1)*(s.turnosPorDia||1);
+          const modulosArr = modulosDeServicio(s);
+          const pagoMensual = horasTotalesServicio(s)*(s.precioHora||0)*(s.cantidadPorPeriodo||1);
           const libres = (s.cupos||1) - cuposOcupados(s.id);
           const org = orgsCacheById[s.organizationId];
           return '<div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafaf8">' +
@@ -9612,8 +9633,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             (s.descripcion?'<div style="font-size:12px;color:var(--muted);margin-bottom:8px">'+s.descripcion+'</div>':'') +
             '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">' +
               '<span class="challenge-meta-tag" style="background:#eff6ff;color:#1d4ed8">👤 '+libres+' cupo(s) libre(s)</span>' +
-              '<span class="challenge-meta-tag">📦 '+s.horasModulo+' hs/módulo</span>' +
-              ((s.turnosPorDia||1)>1?'<span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">🔁 '+s.turnosPorDia+' turnos/día</span>':'') +
+              '<span class="challenge-meta-tag">📦 '+(modulosArr.length>1?modulosArr.join('+')+' hs ('+modulosArr.length+' módulos)':s.horasModulo+' hs/módulo')+'</span>' +
               (pagoMensual?(s.horasVariables
                 ? '<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534" title="Las horas varían según el día — esto es solo un estimado, el monto real depende de lo certificado">~$'+pagoMensual+'/mes (estimado)</span>'
                 : '<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534" title="Monto máximo si se cumplen todas las jornadas/tareas del módulo — no está garantizado">hasta $'+pagoMensual+'/mes</span>'):'') +
@@ -9652,8 +9672,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           (ciclos.length ? ciclos.map(c => {
             const items = itemsByCiclo(c.id);
             const certs = certificacionesByCiclo(c.id);
-            const esperadas = (s?.cantidadPorPeriodo || 0) * (s?.turnosPorDia || 1);
-            const yaHoy = certificacionesDeHoy(c.moduloAsignadoId).length >= (s?.turnosPorDia||1);
+            const esperadas = (s?.cantidadPorPeriodo || 0) * modulosDeServicio(s).length;
+            const yaHoy = certificacionesDeHoy(c.moduloAsignadoId).length >= modulosDeServicio(s).length;
             return '<div style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
                 '<strong style="font-size:13px;text-transform:capitalize">📅 '+periodoLabel(c.periodo)+'</strong>' +
@@ -10561,22 +10581,22 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function certificacionesByCiclo(cicloId) {
     return (state.certificaciones||[]).filter(c => c.cicloId === cicloId).sort((a,b) => b.fecha.localeCompare(a.fecha));
   }
-  function certificacionDeHoy(moduloAsignadoId, turno=1) {
+  function certificacionDeHoy(moduloAsignadoId, moduloIdx=1) {
     const hoy = fechaHoy();
-    return (state.certificaciones||[]).find(c => c.moduloAsignadoId === moduloAsignadoId && c.fecha === hoy && Number(c.turno||1) === Number(turno));
+    return (state.certificaciones||[]).find(c => c.moduloAsignadoId === moduloAsignadoId && c.fecha === hoy && Number(c.moduloIdx||1) === Number(moduloIdx));
   }
   // Todas las certificaciones de hoy para un módulo asignado, una por
-  // turno (para módulos con más de un turno por día) — ordenadas por turno.
+  // cada módulo que compone el servicio — ordenadas por módulo.
   function certificacionesDeHoy(moduloAsignadoId) {
     const hoy = fechaHoy();
-    return (state.certificaciones||[]).filter(c => c.moduloAsignadoId === moduloAsignadoId && c.fecha === hoy).sort((a,b) => Number(a.turno||1) - Number(b.turno||1));
+    return (state.certificaciones||[]).filter(c => c.moduloAsignadoId === moduloAsignadoId && c.fecha === hoy).sort((a,b) => Number(a.moduloIdx||1) - Number(b.moduloIdx||1));
   }
-  async function marcarIn(cicloId, moduloAsignadoId, prestadorId, turno=1) {
-    if (certificacionDeHoy(moduloAsignadoId, turno)) return;
+  async function marcarIn(cicloId, moduloAsignadoId, prestadorId, moduloIdx=1) {
+    if (certificacionDeHoy(moduloAsignadoId, moduloIdx)) return;
     const ciclo = cicloById(cicloId);
     if (!ciclo) return;
     const modulo = moduloAsignadoById(moduloAsignadoId);
-    const cert = { id: uid(), organizationId: modulo?.organizationId || null, moduloAsignadoId, cicloId, fecha: fechaHoy(), turno: Number(turno), nota: '', horaIn: nowISO(), horaOut: '', createdAt: nowISO() };
+    const cert = { id: uid(), organizationId: modulo?.organizationId || null, moduloAsignadoId, cicloId, fecha: fechaHoy(), moduloIdx: Number(moduloIdx), nota: '', horaIn: nowISO(), horaOut: '', createdAt: nowISO() };
     if (!state.certificaciones) state.certificaciones = [];
     state.certificaciones.push(cert);
     const ok = await saveOne(DB.certificaciones, certificacionToRow(cert));
@@ -10584,8 +10604,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     if (prestadorId) renderPrestadorPublicView(prestadorId);
     else renderModulosAsignados();
   }
-  async function marcarOut(moduloAsignadoId, prestadorId, turno=1) {
-    const cert = certificacionDeHoy(moduloAsignadoId, turno);
+  async function marcarOut(moduloAsignadoId, prestadorId, moduloIdx=1) {
+    const cert = certificacionDeHoy(moduloAsignadoId, moduloIdx);
     if (!cert || cert.horaOut) return;
     cert.horaOut = nowISO();
     const ok = await saveOne(DB.certificaciones, certificacionToRow(cert));
@@ -10710,7 +10730,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const postCount = (state.postulaciones||[]).filter(p => p.servicioId === s.id).length;
       const ocupados = cuposOcupados(s.id);
       const cupos = s.cupos||1;
-      const pagoMensual = (s.horasModulo||0) * (s.precioHora||0) * (s.cantidadPorPeriodo||1) * (s.turnosPorDia||1);
+      const modulosArr = modulosDeServicio(s);
+      const pagoMensual = horasTotalesServicio(s) * (s.precioHora||0) * (s.cantidadPorPeriodo||1);
       return '<div class="card">' +
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">' +
           '<div><div style="font-weight:700;font-size:15px">'+s.titulo+(s.visibilidad==='privado'?' <span title="Privada — no aparece en la búsqueda pública">🔒</span>':'')+'</div>' +
@@ -10720,8 +10741,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         (s.descripcion?'<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+s.descripcion.slice(0,120)+'</div>':'') +
         '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">' +
           '<span class="challenge-meta-tag" style="background:'+(ocupados>=cupos?'#fef2f2':'#eff6ff')+';color:'+(ocupados>=cupos?'#dc2626':'#1d4ed8')+'">👤 '+ocupados+'/'+cupos+' cupos</span>' +
-          '<span class="challenge-meta-tag">📦 '+s.horasModulo+' hs/módulo</span>' +
-          ((s.turnosPorDia||1)>1?'<span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">🔁 '+s.turnosPorDia+' turnos/día</span>':'') +
+          '<span class="challenge-meta-tag">📦 '+(modulosArr.length>1?modulosArr.join('+')+' hs ('+modulosArr.length+' módulos)':s.horasModulo+' hs/módulo')+'</span>' +
           '<span class="challenge-meta-tag">💵 $'+s.precioHora+'/h</span>' +
           (pagoMensual?(s.horasVariables
             ? '<span class="challenge-meta-tag" style="background:#f0fdf4;color:#166534" title="Las horas varían según el día — esto es solo un estimado, el monto real depende de lo certificado">~$'+pagoMensual+'/mes c/u (estimado)</span>'
@@ -10770,6 +10790,18 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function openServicioModal(existing=null) {
     let tempProtocolo = existing ? JSON.parse(JSON.stringify(existing.protocolo||[])) : [];
     let tempDocsRequeridos = existing ? JSON.parse(JSON.stringify(existing.docsRequeridos||[])) : [];
+    let tempModulosHoras = existing ? modulosDeServicio(existing).map(String) : [''];
+
+    function renderModulosHorasList() {
+      return tempModulosHoras.map((h,i) =>
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+          '<span style="font-size:12px;color:var(--muted);width:64px;flex-shrink:0">Módulo '+(i+1)+'</span>' +
+          '<input type="number" min="0" step="0.5" value="'+h+'" placeholder="Horas" style="flex:1" oninput="updateModuloHoras('+i+',this.value)">' +
+          (tempModulosHoras.length>1 ? '<button type="button" class="btn danger xs" onclick="removeModuloHoras('+i+')">✕</button>' : '') +
+        '</div>'
+      ).join('') +
+      '<button type="button" class="btn secondary xs" style="margin-top:4px" onclick="addModuloHoras()">＋ Agregar otro módulo</button>';
+    }
 
     function renderProtocoloItems() {
       if (!tempProtocolo.length) return '<div style="font-size:13px;color:var(--muted);padding:10px;border:1px dashed var(--line);border-radius:8px;text-align:center">Sin ítems todavía.</div>';
@@ -10828,16 +10860,17 @@ ${renderBeforeAfterOwner(c, state.checkins)}
               ).join('') + '</div>'
             : '<div style="font-size:12px;color:var(--muted)">No hay ecosistemas creados todavía.</div>') +
         '</div>' +
-        '<div class="field"><label>Horas por módulo</label><input type="number" min="0" step="0.5" name="horasModulo" value="'+(existing?.horasModulo??'')+'"></div>' +
+        '<div class="field full">' +
+          '<label>Módulos de este servicio (horas de cada uno)</label>' +
+          '<div id="modulosHorasList">'+renderModulosHorasList()+'</div>' +
+          '<div style="font-size:11px;color:var(--muted);margin-top:4px">La mayoría de los servicios tienen un solo módulo. Si el rol implica más de un bloque de horas (ej: Líder pedagógica = 2 módulos de 4hs, mañana y tarde), agregá uno por cada bloque — el prestador se postula una sola vez al servicio y certifica entrada/salida de cada módulo por separado; el pago y las horas suman todos los módulos.</div>' +
+        '</div>' +
         '<div class="field"><label>Precio por hora ($)</label><input type="number" min="0" step="1" name="precioHora" value="'+(existing?.precioHora??'')+'"></div>' +
         '<div class="field full" style="background:var(--card-soft);border-radius:10px;padding:10px 12px">' +
           '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-weight:400">' +
             '<input type="checkbox" name="horasVariables"'+(existing?.horasVariables?' checked':'')+' style="width:auto;margin-top:3px">' +
             '<span><strong>Horas variables</strong><br><span style="font-size:12px;color:var(--muted)">La cantidad de horas por jornada no es fija (ej: depende de cuánta gente atendió ese día). El pago del mes se calcula solo con las horas que certifique cada día (entrada/salida), en vez de "horas por módulo" × "veces por período".</span></span>' +
           '</label>' +
-        '</div>' +
-        '<div class="field"><label>Turnos por día</label><input type="number" min="1" step="1" name="turnosPorDia" value="'+(existing?.turnosPorDia??1)+'">' +
-          '<div style="font-size:11px;color:var(--muted);margin-top:3px">Si el rol implica más de un turno en el mismo día (ej: mañana y tarde), poné cuántos. El prestador se postula una sola vez y certifica entrada/salida de cada turno por separado — el pago y las horas suman todos los turnos.</div>' +
         '</div>' +
         '<div class="field full" style="margin-top:4px">' +
           '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">📄 Documentos que debe adjuntar el prestador</div>' +
@@ -10875,6 +10908,17 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       '</form>'
     );
 
+    window.addModuloHoras = function() {
+      tempModulosHoras.push('');
+      document.getElementById('modulosHorasList').innerHTML = renderModulosHorasList();
+    };
+    window.removeModuloHoras = function(idx) {
+      tempModulosHoras.splice(idx, 1);
+      document.getElementById('modulosHorasList').innerHTML = renderModulosHorasList();
+    };
+    window.updateModuloHoras = function(idx, val) {
+      tempModulosHoras[idx] = val;
+    };
     window.calcularCantidadPorPeriodo = function() {
       const veces = Number(document.getElementById('vecesPorSemanaInput').value);
       const semanas = Number(document.getElementById('semanasPorMesInput').value) || 4;
@@ -10917,6 +10961,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const ecosistemaIds = [...e.target.querySelectorAll('input[name="ecosistemaIds"]:checked')].map(c => c.value);
       const docsRequeridos = tempDocsRequeridos;
       const servicioId = existing ? existing.id : uid();
+      const modulosHoras = tempModulosHoras.map(Number).filter(h => h > 0);
+      if (!modulosHoras.length) { alert('Ingresá las horas de al menos un módulo.'); return; }
 
       let docAdjuntoUrl = existing?.docAdjuntoUrl || '';
       const docFile = e.target.querySelector('[name="docAdjunto"]')?.files?.[0];
@@ -10935,9 +10981,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         cupos: Math.max(1, Number(data.cupos||1)), cantidadPorPeriodo: Math.max(1, Number(data.cantidadPorPeriodo||1)),
         fechaInicio: data.fechaInicio||'', fechaFin: data.fechaFin||'',
         ecosistemaIds,
-        horasModulo: Number(data.horasModulo||0), precioHora: Number(data.precioHora||0),
+        modulosHoras, horasModulo: modulosHoras[0], precioHora: Number(data.precioHora||0),
         horasVariables: !!data.horasVariables,
-        turnosPorDia: Math.max(1, Number(data.turnosPorDia||1)),
         docsRequeridos, protocolo: tempProtocolo,
         tipoContrato: data.tipoContrato||'', docAdjuntoUrl,
       };
@@ -11240,7 +11285,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           const items = itemsByCiclo(c.id);
           const aprobados = items.filter(it => it.estado === 'aprobado').length;
           const certs = certificacionesByCiclo(c.id);
-          const esperadas = (s?.cantidadPorPeriodo || 0) * (s?.turnosPorDia || 1);
+          const esperadas = (s?.cantidadPorPeriodo || 0) * modulosDeServicio(s).length;
           const estadoColor = c.estado==='aprobado' ? 'green' : c.estado==='completado' ? 'blue' : 'gray';
           return '<div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:#fafaf8">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
@@ -11339,7 +11384,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const items = itemsByCiclo(cicloId);
     const hoy = new Date();
     const remitoNum = hoy.getFullYear()+String(hoy.getMonth()+1).padStart(2,'0')+String(hoy.getDate()).padStart(2,'0')+'-'+ciclo.id.slice(0,4).toUpperCase();
-    const monto = (s?.horasModulo||0) * (s?.precioHora||0) * (s?.cantidadPorPeriodo||1);
+    const monto = montoCiclo(ciclo);
 
     const rows = items.map(it =>
       '<tr class="cumplido"><td>'+it.item+(it.descripcion?'<br><span style="font-weight:400;font-size:11px;color:#6b7280">'+it.descripcion+'</span>':'')+'</td>' +
