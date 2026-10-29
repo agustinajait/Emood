@@ -1206,6 +1206,68 @@
 
     .owner-shell { max-width: 1080px; margin: 0 auto; padding: 28px 24px; }
 
+    /* ─── DASHBOARD DEL PRESTADOR: sidebar + páginas (como webapp) ──── */
+    .prest-shell {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      align-items: start;
+    }
+    .prest-nav-toggle {
+      display: none;
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      width: 36px; height: 36px;
+      font-size: 17px;
+      cursor: pointer;
+      color: var(--text);
+      flex-shrink: 0;
+    }
+    .prest-sidebar {
+      position: sticky;
+      top: 73px;
+      align-self: start;
+      background: #fff;
+      border-right: 1px solid var(--line);
+      padding: 20px 12px;
+      height: calc(100vh - 73px);
+      overflow-y: auto;
+    }
+    .prest-sidebar nav { display: flex; flex-direction: column; gap: 2px; }
+    .prest-sidebar nav button {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; text-align: left; background: transparent; border: none;
+      padding: 10px 12px; border-radius: 10px; font-size: 14px; font-weight: 600;
+      color: var(--text); cursor: pointer;
+    }
+    .prest-sidebar nav button .nav-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
+    .prest-sidebar nav button:hover { background: #f3f4f6; }
+    .prest-sidebar nav button.active { background: var(--owner-accent); color: #fff; }
+    .prest-sidebar nav button .prest-nav-dot { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; margin-left: auto; flex-shrink: 0; }
+    .prest-sidebar-backdrop { display: none; }
+    .prest-main { padding: 24px; min-width: 0; }
+    .prest-page { display: none; }
+    .prest-page.active { display: block; animation: fadeUp 0.25s ease; }
+    @media (max-width: 860px) {
+      .prest-shell { display: block; }
+      .prest-nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
+      .prest-sidebar {
+        position: fixed; top: 0; left: 0; bottom: 0; width: 248px;
+        transform: translateX(-100%); transition: transform 0.22s ease;
+        z-index: 200; box-shadow: 8px 0 30px rgba(0,0,0,0.18);
+        height: 100vh; padding-top: 70px;
+      }
+      .prest-sidebar.open { transform: translateX(0); }
+      .prest-sidebar-backdrop {
+        display: block; position: fixed; inset: 0; background: rgba(15,23,32,0.45);
+        z-index: 190; opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+      }
+      .prest-sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
+      .prest-main { padding: 16px; }
+    }
+
     @keyframes hoyInPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,212,0,0.55); } 50% { box-shadow: 0 0 0 10px rgba(255,212,0,0); } }
     .hoy-in-btn { animation: hoyInPulse 2s ease-in-out infinite; }
     .hoy-in-btn:hover { filter: brightness(1.05); transform: translateY(-1px); }
@@ -4694,6 +4756,28 @@
     if (navBtn) navBtn.classList.add('active');
   }
 
+  /* ─── NAV DEL PRESTADOR (sidebar / menú desplegable en mobile) ──── */
+  function showPrestPage(pageId) {
+    document.querySelectorAll('.prest-page').forEach(p=>p.classList.remove('active'));
+    const target = document.getElementById('prestPage-'+pageId);
+    if (target) target.classList.add('active');
+    document.querySelectorAll('.prest-sidebar nav button[data-prestpage]').forEach(b=>b.classList.remove('active'));
+    const navBtn = document.querySelector('.prest-sidebar nav button[data-prestpage="'+pageId+'"]');
+    if (navBtn) navBtn.classList.add('active');
+    togglePrestSidebar(false);
+    const mainEl = document.querySelector('.prest-main');
+    if (mainEl) mainEl.scrollTo(0,0);
+    window.scrollTo(0,0);
+  }
+  function togglePrestSidebar(open) {
+    const sb = document.getElementById('prestSidebar');
+    const bd = document.getElementById('prestSidebarBackdrop');
+    if (!sb) return;
+    const show = open !== undefined ? open : !sb.classList.contains('open');
+    sb.classList.toggle('open', show);
+    if (bd) bd.classList.toggle('open', show);
+  }
+
   /* ─── FILL FILTERS ───────────────────────────────────── */
   function fillFilters() {
     const owners = getOwnerList();
@@ -6218,6 +6302,12 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   }
 
   /* ─── EVENT DELEGATION ───────────────────────────────── */
+  document.addEventListener('click', e => {
+    const navBtn = e.target.closest('[data-prestpage]');
+    if (navBtn) { showPrestPage(navBtn.dataset.prestpage); return; }
+    if (e.target.closest('#prestNavToggle')) { togglePrestSidebar(); return; }
+    if (e.target.closest('#prestSidebarBackdrop')) { togglePrestSidebar(false); return; }
+  });
   document.getElementById('navButtons').addEventListener('click', e => {
     const btn = e.target.closest('button[data-page]');
     if (!btn) return;
@@ -9299,6 +9389,22 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     body.style.display = isVisible ? 'none' : 'block';
   }
 
+  // Banner de "Inicio" que resume si ya certificó el día — con un
+  // acceso directo a la página "Certificar mi día".
+  function buildHoyBanner(pendientesHoyCount, totalActivos) {
+    if (!totalActivos) return '';
+    if (!pendientesHoyCount) {
+      return '<div class="card" style="background:#f0fdf4;border:1px solid #bbf7d0;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">' +
+        '<div style="font-weight:700;color:#166534">✓ Ya certificaste tu día de hoy</div>' +
+        '<button class="btn secondary small" data-prestpage="certificar">Ver detalle →</button>' +
+      '</div>';
+    }
+    return '<div class="card" style="background:#141413;color:#fff;border:none;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">' +
+      '<div><div style="font-weight:700">🗓️ Todavía no certificaste tu día</div><div style="font-size:12px;opacity:.7">Tenés '+pendientesHoyCount+' módulo'+(pendientesHoyCount===1?'':'s')+' esperando.</div></div>' +
+      '<button class="btn primary small" data-prestpage="certificar">Certificar ahora →</button>' +
+    '</div>';
+  }
+
   async function renderPrestadorPublicView(prestadorId) {
     const ov = document.getElementById('ownerView');
     ov.style.display = 'block';
@@ -9354,9 +9460,19 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       periodos.push({val, label: d.toLocaleDateString('es-AR',{month:'long',year:'numeric'})});
     }
 
+    const misModulosActivos = (state.modulosAsignados||[]).filter(m => m.prestadorId === prest.id && m.estado !== 'aprobado');
+    const pendientesHoyCount = misModulosActivos.filter(m => {
+      const s = servicioById(m.servicioId);
+      const elegidos = modulosElegidosDeModulo(m, s);
+      return !elegidos.every(idx => certificacionDeHoy(m.id, idx));
+    }).length;
+    const miAgencia = (state.agencies||[]).find(a => (a.owner||'').trim().toLowerCase() === prest.nombre.trim().toLowerCase());
+    const agPrestadores = miAgencia ? (state.prestadores||[]).filter(p => p.agencyId === miAgencia.id && p.id !== prest.id && p.activo !== false) : [];
+
     ov.innerHTML = `
       <div class="owner-topbar">
         <div class="owner-topbar-brand">
+          <button id="prestNavToggle" class="prest-nav-toggle" aria-label="Abrir menú">☰</button>
           <div class="logo-dot"><img src="3.png" style="width:100%;height:100%;object-fit:cover;border-radius:11px"></div>
           <span class="brand-text">E-Mood Huehaci</span>
           <span class="brand-role-tag">Prestador</span>
@@ -9364,165 +9480,182 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         <div class="owner-topbar-user">
           <div class="owner-avatar">${prest.fotoUrl ? '<img src="'+prest.fotoUrl+'" style="width:100%;height:100%;object-fit:cover">' : initials(prest.nombre)}</div>
           <span class="owner-name">${prest.nombre}</span>
-          <button class="btn secondary small" onclick="openMisDatosModal('${prest.id}')">👤 Mi perfil</button>
           <button class="btn secondary small" onclick="doLogout()">Salir</button>
         </div>
       </div>
 
-      <div class="owner-shell">
+      <div class="prest-shell">
+        <div id="prestSidebarBackdrop" class="prest-sidebar-backdrop"></div>
+        <aside id="prestSidebar" class="prest-sidebar">
+          <nav>
+            <button class="active" data-prestpage="inicio"><span class="nav-icon">🏠</span>Inicio</button>
+            <button data-prestpage="certificar"><span class="nav-icon">✅</span>Certificar mi día${pendientesHoyCount?'<span class="prest-nav-dot"></span>':''}</button>
+            <button data-prestpage="modulos"><span class="nav-icon">🧩</span>Mis módulos activos</button>
+            <button data-prestpage="buscar"><span class="nav-icon">🔍</span>Buscar servicios</button>
+            <button data-prestpage="pagos"><span class="nav-icon">💰</span>Mis pagos</button>
+            <button data-prestpage="perfil"><span class="nav-icon">👤</span>Mi perfil${!perfilPrestadorCompleto(prest)?'<span class="prest-nav-dot"></span>':''}</button>
+            ${agPrestadores.length ? '<button data-prestpage="equipo"><span class="nav-icon">🏢</span>Mi equipo</button>' : ''}
+          </nav>
+        </aside>
 
-        <div class="owner-welcome">
-          <h1>Hola, ${prest.nombre.split(' ')[0]} 👋</h1>
-          <p>${prest.rol||'Prestador de servicio'}</p>
-        </div>
+        <main class="prest-main">
 
-        ${buildHoyWidget(prest)}
+          <div id="prestPage-inicio" class="prest-page active">
+            <div class="owner-welcome">
+              <h1>Hola, ${prest.nombre.split(' ')[0]} 👋</h1>
+              <p>${prest.rol||'Prestador de servicio'}</p>
+            </div>
 
-        ${!perfilPrestadorCompleto(prest) ? `
-        <div class="card" style="background:#fffbeb;border:1px solid #fde68a;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-          <div>
-            <div style="font-weight:700;color:#92400e">⚠️ Completá tu perfil para poder postularte</div>
-            <div style="font-size:12px;color:#92400e">Te falta: ${camposPerfilFaltantes(prest).join(', ')}.</div>
-          </div>
-          <button class="btn primary small" onclick="openMisDatosModal('${prest.id}')">Completar ahora</button>
-        </div>` : ''}
-
-        <div class="card" id="miPerfilSection" style="margin-bottom:20px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px">
-            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">👤 Mi perfil</div>
-            <button class="btn secondary xs" onclick="openMisDatosModal('${prest.id}')">✏️ Editar</button>
-          </div>
-          <div style="display:flex;gap:16px;align-items:flex-start">
-          ${prest.fotoUrl ? '<img src="'+prest.fotoUrl+'" style="width:64px;height:64px;border-radius:50%;object-fit:cover;flex-shrink:0">' : '<div style="width:64px;height:64px;border-radius:50%;background:var(--owner-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;flex-shrink:0">'+initials(prest.nombre||'?')+'</div>'}
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;flex:1">
-            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Nombre completo</div><div style="font-size:14px;font-weight:600">${prest.nombre||'—'} ${prest.apellido||''}</div></div>
-            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Email</div><div style="font-size:14px;font-weight:600">${prest.email||'—'}</div></div>
-            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Teléfono</div><div style="font-size:14px;font-weight:600">${prest.telefono||'—'}</div></div>
-            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Dirección</div><div style="font-size:14px;font-weight:600">${prest.direccion||'—'}</div></div>
-            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Fecha de nacimiento</div><div style="font-size:14px;font-weight:600">${prest.fechaNacimiento?new Date(prest.fechaNacimiento+'T00:00:00').toLocaleDateString('es-AR'):'—'}</div></div>
-            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">CUIL</div><div style="font-size:14px;font-weight:600">${prest.numeroCuil || '<span style="color:#dc2626;font-weight:600">Sin cargar</span>'}${prest.cuilComprobanteUrl ? ' <a href="'+prest.cuilComprobanteUrl+'" target="_blank" style="font-size:12px">📎</a>' : ''}</div></div>
-            <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">CBU / Alias</div><div style="font-size:14px;font-weight:600">${(prest.cbu||prest.aliasCbu) ? [prest.cbu,prest.aliasCbu].filter(Boolean).join(' · ') : '<span style="color:#dc2626;font-weight:600">Sin cargar</span>'}${prest.cbuComprobanteUrl ? ' <a href="'+prest.cbuComprobanteUrl+'" target="_blank" style="font-size:12px">📎</a>' : ''}</div></div>
-          </div>
-          </div>
-        </div>
-
-        <div class="owner-stats">
-          <div class="owner-stat">
-            <div class="owner-stat-val">${mods.length}</div>
-            <div class="owner-stat-label">Tareas asignadas</div>
-          </div>
-          <div class="owner-stat">
-            <div class="owner-stat-val" style="color:#5b21b6">${totalModulos}</div>
-            <div class="owner-stat-label">Módulos / mes</div>
-          </div>
-          <div class="owner-stat">
-            <div class="owner-stat-val" style="color:#92400e">${totalHoras}hs</div>
-            <div class="owner-stat-label">Horas comprometidas</div>
-          </div>
-          <div class="owner-stat">
-            <div class="owner-stat-val" style="color:${pct>=70?'#166534':'#dc2626'}">${pct}%</div>
-            <div class="owner-stat-label">Cumplimiento</div>
-          </div>
-        </div>
-
-        ${buildPrestPagosSection(prest)}
-
-        <!-- MÓDULOS FIJOS -->
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px;margin-top:8px">📦 Mis tareas asignadas</div>
-        ${mods.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:24px">
-          ${mods.map(mod=>`
-            <div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafaf8">
-              <div style="font-size:14px;font-weight:700;margin-bottom:6px">${mod.nombre}</div>
-              <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">
-                <span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">📦 ${mod.cantidad||1} módulos</span>
-                <span class="challenge-meta-tag" style="background:#fef9c3;color:#92400e">⏱ ${(mod.cantidad||1)*4}hs</span>
-                <span class="challenge-meta-tag">${mod.periodicidad}</span>
-                <span class="challenge-meta-tag">${mod.modalidad}</span>
+            ${!perfilPrestadorCompleto(prest) ? `
+            <div class="card" style="background:#fffbeb;border:1px solid #fde68a;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+              <div>
+                <div style="font-weight:700;color:#92400e">⚠️ Completá tu perfil para poder postularte</div>
+                <div style="font-size:12px;color:#92400e">Te falta: ${camposPerfilFaltantes(prest).join(', ')}.</div>
               </div>
-              ${mod.descripcion ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${mod.descripcion}</div>` : ''}
-              ${mod.productoEsperado ? `<div style="font-size:12px;background:#f0fdf4;padding:6px 8px;border-radius:6px;color:#166534">📋 ${mod.productoEsperado}</div>` : ''}
-            </div>`).join('')}
-        </div>` : '<div class="empty" style="margin-bottom:20px">Sin tareas asignadas todavía.</div>'}
+              <button class="btn primary small" onclick="openMisDatosModal('${prest.id}')">Completar ahora</button>
+            </div>` : ''}
 
-        ${buildPrestServiciosSection(prest)}
+            ${buildHoyBanner(pendientesHoyCount, misModulosActivos.length)}
 
-        <!-- EVOLUCIÓN MENSUAL -->
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">📅 Evidencias del mes</div>
-          <select id="prestPeriodoSel" style="font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--line)" onchange="renderPrestModulos('${prestadorId}',this.value)">
-            ${periodos.map(p=>`<option value="${p.val}"${p.val===periodo?' selected':''}>${p.label}</option>`).join('')}
-          </select>
-        </div>
-
-        <div id="prestModulosContainer">
-          ${buildPrestModulos(prest, mods, periodo)}
-        </div>
-
-        ${(() => {
-          // If this prestador is also a socio responsable (agency owner)
-          const myAgency = state.agencies.find(a =>
-            (a.owner||'').trim().toLowerCase() === prest.nombre.trim().toLowerCase()
-          );
-          if (!myAgency) return '';
-          const agPrestadores = (state.prestadores||[]).filter(p =>
-            p.agencyId === myAgency.id && p.id !== prest.id && p.activo !== false
-          );
-          if (!agPrestadores.length) return '';
-
-          const mes = periodo;
-          return `
-            <div style="border-top:2px solid var(--line);padding-top:20px;margin-top:8px">
-              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:14px">
-                🏢 Prestadores de tu agencia — ${myAgency.name}
+            <div class="owner-stats">
+              <div class="owner-stat">
+                <div class="owner-stat-val">${mods.length}</div>
+                <div class="owner-stat-label">Tareas asignadas</div>
               </div>
-              ${agPrestadores.map(p => {
-                const pMods = modulosByPrestador(p.id);
-                const pValidados = pMods.filter(m => (state.modEvidencias||[]).some(e =>
-                  e.moduloId===m.id && e.periodo===mes && (e.estado==='cumplido'||e.estado==='certificado')
-                )).length;
-                const pPct = pMods.length ? Math.round(pValidados/pMods.length*100) : 0;
-                const pColor = pPct===100?'#166534':pPct>=60?'#1e3a5f':'#dc2626';
-                return `
-                  <div class="owner-card" style="margin-bottom:12px">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start">
-                      <div>
-                        <div style="font-size:15px;font-weight:700;margin-bottom:4px">${p.nombre}</div>
-                        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${p.rol||'Sin rol'}</div>
-                        <div style="display:flex;flex-wrap:wrap;gap:5px">
-                          ${pMods.map(m => {
-                            const ev = (state.modEvidencias||[]).find(e=>e.moduloId===m.id&&e.periodo===mes);
-                            const est = ev?.estado||'pendiente';
-                            const bg = est==='certificado'?'#f5f3ff':est==='cumplido'?'#f0fdf4':est==='observado'?'#fef9c3':'#f9fafb';
-                            const col = est==='certificado'?'#5b21b6':est==='cumplido'?'#166534':est==='observado'?'#92400e':'#6b7280';
-                            const icon = est==='certificado'?'✓':est==='cumplido'?'✓':est==='observado'?'▲':'○';
-                            return `<span style="font-size:11px;padding:3px 8px;border-radius:6px;background:${bg};color:${col};border:1px solid ${col}20">${icon} ${m.nombre}</span>`;
-                          }).join('')}
-                        </div>
-                      </div>
-                      <div style="text-align:right;flex-shrink:0">
-                        <div style="font-size:22px;font-weight:800;font-family:var(--font-display);color:${pColor}">${pPct}%</div>
-                        <div style="font-size:11px;color:var(--muted)">${pValidados}/${pMods.length} módulos</div>
+              <div class="owner-stat">
+                <div class="owner-stat-val" style="color:#5b21b6">${totalModulos}</div>
+                <div class="owner-stat-label">Módulos / mes</div>
+              </div>
+              <div class="owner-stat">
+                <div class="owner-stat-val" style="color:#92400e">${totalHoras}hs</div>
+                <div class="owner-stat-label">Horas comprometidas</div>
+              </div>
+              <div class="owner-stat">
+                <div class="owner-stat-val" style="color:${pct>=70?'#166534':'#dc2626'}">${pct}%</div>
+                <div class="owner-stat-label">Cumplimiento</div>
+              </div>
+            </div>
+          </div>
+
+          <div id="prestPage-certificar" class="prest-page">
+            ${buildHoyWidget(prest) || '<div class="empty">No tenés módulos activos todavía — postulate a uno en "Buscar servicios".</div>'}
+          </div>
+
+          <div id="prestPage-modulos" class="prest-page">
+            <!-- MÓDULOS FIJOS -->
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px">📦 Mis tareas asignadas</div>
+            ${mods.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:24px">
+              ${mods.map(mod=>`
+                <div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafaf8">
+                  <div style="font-size:14px;font-weight:700;margin-bottom:6px">${mod.nombre}</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">
+                    <span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">📦 ${mod.cantidad||1} módulos</span>
+                    <span class="challenge-meta-tag" style="background:#fef9c3;color:#92400e">⏱ ${(mod.cantidad||1)*4}hs</span>
+                    <span class="challenge-meta-tag">${mod.periodicidad}</span>
+                    <span class="challenge-meta-tag">${mod.modalidad}</span>
+                  </div>
+                  ${mod.descripcion ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${mod.descripcion}</div>` : ''}
+                  ${mod.productoEsperado ? `<div style="font-size:12px;background:#f0fdf4;padding:6px 8px;border-radius:6px;color:#166534">📋 ${mod.productoEsperado}</div>` : ''}
+                </div>`).join('')}
+            </div>` : '<div class="empty" style="margin-bottom:20px">Sin tareas asignadas todavía.</div>'}
+
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px">📋 Mis módulos asignados</div>
+            ${buildPrestModulosActivos(prest)}
+
+            <!-- EVOLUCIÓN MENSUAL -->
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;margin-top:24px">
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">📅 Evidencias del mes</div>
+              <select id="prestPeriodoSel" style="font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--line)" onchange="renderPrestModulos('${prestadorId}',this.value)">
+                ${periodos.map(p=>`<option value="${p.val}"${p.val===periodo?' selected':''}>${p.label}</option>`).join('')}
+              </select>
+            </div>
+
+            <div id="prestModulosContainer">
+              ${buildPrestModulos(prest, mods, periodo)}
+            </div>
+          </div>
+
+          <div id="prestPage-buscar" class="prest-page">
+            ${buildPrestBuscarServicios(prest)}
+          </div>
+
+          <div id="prestPage-pagos" class="prest-page">
+            ${buildPrestPagosSection(prest)}
+          </div>
+
+          <div id="prestPage-perfil" class="prest-page">
+            <div class="card" id="miPerfilSection">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px">
+                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">👤 Mi perfil</div>
+                <button class="btn secondary xs" onclick="openMisDatosModal('${prest.id}')">✏️ Editar</button>
+              </div>
+              <div style="display:flex;gap:16px;align-items:flex-start">
+              ${prest.fotoUrl ? '<img src="'+prest.fotoUrl+'" style="width:64px;height:64px;border-radius:50%;object-fit:cover;flex-shrink:0">' : '<div style="width:64px;height:64px;border-radius:50%;background:var(--owner-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;flex-shrink:0">'+initials(prest.nombre||'?')+'</div>'}
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;flex:1">
+                <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Nombre completo</div><div style="font-size:14px;font-weight:600">${prest.nombre||'—'} ${prest.apellido||''}</div></div>
+                <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Email</div><div style="font-size:14px;font-weight:600">${prest.email||'—'}</div></div>
+                <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Teléfono</div><div style="font-size:14px;font-weight:600">${prest.telefono||'—'}</div></div>
+                <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Dirección</div><div style="font-size:14px;font-weight:600">${prest.direccion||'—'}</div></div>
+                <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Fecha de nacimiento</div><div style="font-size:14px;font-weight:600">${prest.fechaNacimiento?new Date(prest.fechaNacimiento+'T00:00:00').toLocaleDateString('es-AR'):'—'}</div></div>
+                <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">CUIL</div><div style="font-size:14px;font-weight:600">${prest.numeroCuil || '<span style="color:#dc2626;font-weight:600">Sin cargar</span>'}${prest.cuilComprobanteUrl ? ' <a href="'+prest.cuilComprobanteUrl+'" target="_blank" style="font-size:12px">📎</a>' : ''}</div></div>
+                <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">CBU / Alias</div><div style="font-size:14px;font-weight:600">${(prest.cbu||prest.aliasCbu) ? [prest.cbu,prest.aliasCbu].filter(Boolean).join(' · ') : '<span style="color:#dc2626;font-weight:600">Sin cargar</span>'}${prest.cbuComprobanteUrl ? ' <a href="'+prest.cbuComprobanteUrl+'" target="_blank" style="font-size:12px">📎</a>' : ''}</div></div>
+              </div>
+              </div>
+            </div>
+          </div>
+
+          ${agPrestadores.length ? `
+          <div id="prestPage-equipo" class="prest-page">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:14px">
+              🏢 Prestadores de tu agencia — ${miAgencia.name}
+            </div>
+            ${agPrestadores.map(p => {
+              const pMods = modulosByPrestador(p.id);
+              const pValidados = pMods.filter(m => (state.modEvidencias||[]).some(e =>
+                e.moduloId===m.id && e.periodo===periodo && (e.estado==='cumplido'||e.estado==='certificado')
+              )).length;
+              const pPct = pMods.length ? Math.round(pValidados/pMods.length*100) : 0;
+              const pColor = pPct===100?'#166534':pPct>=60?'#1e3a5f':'#dc2626';
+              return `
+                <div class="owner-card" style="margin-bottom:12px">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                    <div>
+                      <div style="font-size:15px;font-weight:700;margin-bottom:4px">${p.nombre}</div>
+                      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${p.rol||'Sin rol'}</div>
+                      <div style="display:flex;flex-wrap:wrap;gap:5px">
+                        ${pMods.map(m => {
+                          const ev = (state.modEvidencias||[]).find(e=>e.moduloId===m.id&&e.periodo===periodo);
+                          const est = ev?.estado||'pendiente';
+                          const bg = est==='certificado'?'#f5f3ff':est==='cumplido'?'#f0fdf4':est==='observado'?'#fef9c3':'#f9fafb';
+                          const col = est==='certificado'?'#5b21b6':est==='cumplido'?'#166534':est==='observado'?'#92400e':'#6b7280';
+                          const icon = est==='certificado'?'✓':est==='cumplido'?'✓':est==='observado'?'▲':'○';
+                          return `<span style="font-size:11px;padding:3px 8px;border-radius:6px;background:${bg};color:${col};border:1px solid ${col}20">${icon} ${m.nombre}</span>`;
+                        }).join('')}
                       </div>
                     </div>
-                    ${pMods.length ? `<div class="progress-wrap" style="margin-top:10px"><div class="progress"><div class="${pPct>=70?'':'warning'}" style="width:${pPct}%"></div></div></div>` : ''}
-                    ${pMods.some(m=>{const ev=(state.modEvidencias||[]).find(e=>e.moduloId===m.id&&e.periodo===mes);return ev?.logrado||ev?.descripcion;}) ? `
-                      <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)">
-                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Evidencias del mes</div>
-                        ${pMods.map(m=>{
-                          const ev=(state.modEvidencias||[]).find(e=>e.moduloId===m.id&&e.periodo===mes);
-                          if(!ev||(!ev.logrado&&!ev.descripcion)) return '';
-                          return `<div style="background:#f8fafc;border-radius:8px;padding:10px;margin-bottom:6px;font-size:13px">
-                            <strong>${m.nombre}:</strong> ${ev.logrado||ev.descripcion}
-                            ${ev.link?`<a href="${ev.link}" target="_blank" style="margin-left:8px;color:#2563eb;font-size:11px">🔗 Ver</a>`:''}
-                          </div>`;
-                        }).join('')}
-                      </div>` : ''}
-                  </div>`;
-              }).join('')}
-            </div>
-          `;
-        })()}
+                    <div style="text-align:right;flex-shrink:0">
+                      <div style="font-size:22px;font-weight:800;font-family:var(--font-display);color:${pColor}">${pPct}%</div>
+                      <div style="font-size:11px;color:var(--muted)">${pValidados}/${pMods.length} módulos</div>
+                    </div>
+                  </div>
+                  ${pMods.length ? `<div class="progress-wrap" style="margin-top:10px"><div class="progress"><div class="${pPct>=70?'':'warning'}" style="width:${pPct}%"></div></div></div>` : ''}
+                  ${pMods.some(m=>{const ev=(state.modEvidencias||[]).find(e=>e.moduloId===m.id&&e.periodo===periodo);return ev?.logrado||ev?.descripcion;}) ? `
+                    <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)">
+                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Evidencias del mes</div>
+                      ${pMods.map(m=>{
+                        const ev=(state.modEvidencias||[]).find(e=>e.moduloId===m.id&&e.periodo===periodo);
+                        if(!ev||(!ev.logrado&&!ev.descripcion)) return '';
+                        return `<div style="background:#f8fafc;border-radius:8px;padding:10px;margin-bottom:6px;font-size:13px">
+                          <strong>${m.nombre}:</strong> ${ev.logrado||ev.descripcion}
+                          ${ev.link?`<a href="${ev.link}" target="_blank" style="margin-left:8px;color:#2563eb;font-size:11px">🔗 Ver</a>`:''}
+                        </div>`;
+                      }).join('')}
+                    </div>` : ''}
+                </div>`;
+            }).join('')}
+          </div>` : ''}
 
+        </main>
       </div>
     `;
   }
@@ -9629,16 +9762,15 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     '</div>';
   }
 
-  function buildPrestServiciosSection(prest) {
+  function buildPrestBuscarServicios(prest) {
     const misPostulaciones = (state.postulaciones||[]).filter(p => p.prestadorId === prest.id);
     const postuladoA = new Set(misPostulaciones.map(p => p.servicioId));
     const disponibles = (state.servicios||[]).filter(s => s.estado === 'activo' && s.visibilidad !== 'privado' && !postuladoA.has(s.id) && cuposOcupados(s.id) < (s.cupos||1));
-    const misModulos = (state.modulosAsignados||[]).filter(m => m.prestadorId === prest.id);
 
     let html = '';
 
     // Módulos disponibles
-    html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px;margin-top:24px">🧩 Módulos disponibles</div>';
+    html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px">🧩 Módulos disponibles</div>';
     html += disponibles.length
       ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:24px">' +
         disponibles.map(s => {
@@ -9682,10 +9814,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         }).join('') + '</div>';
     }
 
-    // Mis módulos asignados (un bloque por mes/ciclo, con evidencia por ítem)
-    if (misModulos.length) {
-      html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px">📋 Mis módulos asignados</div>';
-      html += misModulos.map(m => {
+    return html;
+  }
+
+  // "Mis módulos activos" — un bloque por mes/ciclo, con evidencia por ítem.
+  function buildPrestModulosActivos(prest) {
+    const misModulos = (state.modulosAsignados||[]).filter(m => m.prestadorId === prest.id);
+    if (!misModulos.length) return '<div class="empty">Todavía no tenés módulos asignados. Postulate a uno en "Buscar servicios".</div>';
+    let html = misModulos.map(m => {
         const s = (state.servicios||[]).find(x=>x.id===m.servicioId);
         const ciclos = ciclosByModuloAsignado(m.id);
         return '<div class="owner-card" style="margin-bottom:12px">' +
@@ -9731,7 +9867,6 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           }).join('') : '<div class="empty">Todavía no se abrió el primer ciclo.</div>') +
         '</div>';
       }).join('');
-    }
 
     return html;
   }
