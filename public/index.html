@@ -9770,19 +9770,19 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     // Módulos disponibles
     html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px">🧩 Módulos disponibles</div>';
     html += disponibles.length
-      ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:24px">' +
+      ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px;margin-bottom:24px">' +
         disponibles.map(s => {
           const modulosArr = modulosDeServicio(s);
           const pagoMensual = horasTotalesServicio(s)*(s.precioHora||0)*(s.cantidadPorPeriodo||1);
           const libres = (s.cupos||1) - cuposOcupados(s.id);
           const org = orgsCacheById[s.organizationId];
-          return '<div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafaf8">' +
-            '<div style="font-size:14px;font-weight:700;margin-bottom:6px">'+s.titulo+'</div>' +
+          return '<div class="card">' +
+            '<div style="font-size:15px;font-weight:700;margin-bottom:6px">'+s.titulo+'</div>' +
             '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:8px;cursor:pointer" onclick="verOrganizacion(\''+(s.organizationId||'')+'\')">' +
               (org?.logo_url?'<img src="'+org.logo_url+'" style="width:18px;height:18px;object-fit:cover;border-radius:5px">':'🏢') +
               ' <span style="text-decoration:underline">'+(org?.name||'Organización')+'</span>' +
             '</div>' +
-            (s.descripcion?'<div style="font-size:12px;color:var(--muted);margin-bottom:8px">'+s.descripcion+'</div>':'') +
+            (s.descripcion?'<div style="font-size:13px;margin-bottom:10px">'+s.descripcion+'</div>':'') +
             '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">' +
               '<span class="challenge-meta-tag" style="background:#eff6ff;color:#1d4ed8">👤 '+libres+' cupo(s) libre(s)</span>' +
               '<span class="challenge-meta-tag">📦 '+(modulosArr.length>1?modulosArr.join('+')+' hs ('+modulosArr.length+' módulos)':s.horasModulo+' hs/módulo')+'</span>' +
