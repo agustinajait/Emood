@@ -6272,8 +6272,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='postular-servicio') { const sid=btn.dataset.sid; openPostularModal(sid, id); }
     else if (action==='subir-evidencia-item') { openSubirEvidenciaModal(id, btn.dataset.pid); }
     else if (action==='marcar-inicio-jornada') await marcarInicioJornada(id, btn.dataset.pid);
-    else if (action==='marcar-in') await marcarIn(id, btn.dataset.mid, btn.dataset.pid, btn.dataset.modidx||1);
-    else if (action==='marcar-out') await marcarOut(btn.dataset.mid, btn.dataset.pid, btn.dataset.modidx||1);
+    else if (action==='marcar-in-todos') await marcarInTodosModulos(id, btn.dataset.mid, btn.dataset.pid, btn.dataset.idxs.split(',').map(Number));
+    else if (action==='marcar-out-todos') await marcarOutTodosModulos(btn.dataset.mid, btn.dataset.pid, btn.dataset.idxs.split(',').map(Number));
     else if (action==='delete-prestador') {
       if (!confirm('¿Eliminar este prestador?')) return;
       await deleteOne(DB.prestadores, id);
@@ -9578,33 +9578,36 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const modulosArr = modulosDeServicio(s);
       const elegidos = modulosElegidosDeModulo(m, s);
       const totalModulos = elegidos.length;
-      const modulosHtml = elegidos.map((moduloIdx, pos) => {
-        const horasDelModulo = modulosArr[moduloIdx-1];
-        const cert = certificacionDeHoy(m.id, moduloIdx);
-        let accion;
-        if (!ciclo) {
-          accion = '';
-        } else if (!cert) {
-          accion = '<button class="btn hoy-in-btn" style="width:100%;font-size:17px;padding:16px 20px;font-weight:800;border-radius:12px;background:var(--accent);color:#1a1506;margin-top:10px" data-action="marcar-in" data-id="'+ciclo.id+'" data-mid="'+m.id+'" data-pid="'+prest.id+'" data-modidx="'+moduloIdx+'">▶️ Marcar entrada</button>';
-        } else if (!cert.horaOut) {
+      const horasTotalElegidas = elegidos.reduce((sum,idx) => sum + Number(modulosArr[idx-1]||0), 0);
+      const idxsAttr = elegidos.join(',');
+      // Un solo check-in/check-out certifica, de una, todos los
+      // módulos que esta persona tomó de este servicio (aunque sean
+      // 2 o más) — no hace falta repetir el toque por cada uno.
+      let accion;
+      if (!ciclo) {
+        accion = '';
+      } else {
+        const certs = elegidos.map(idx => certificacionDeHoy(m.id, idx));
+        const todasConEntrada = certs.every(c => !!c);
+        const todasConSalida = certs.every(c => c && c.horaOut);
+        if (!todasConEntrada) {
+          accion = '<button class="btn hoy-in-btn" style="width:100%;font-size:17px;padding:16px 20px;font-weight:800;border-radius:12px;background:var(--accent);color:#1a1506;margin-top:10px" data-action="marcar-in-todos" data-id="'+ciclo.id+'" data-mid="'+m.id+'" data-pid="'+prest.id+'" data-idxs="'+idxsAttr+'">▶️ Marcar entrada</button>';
+        } else if (!todasConSalida) {
+          const primeraEntrada = certs.find(c=>c)?.horaIn;
           accion = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:10px">' +
-            '<span class="badge green">✓ Entrada '+formatHora(cert.horaIn)+'</span>' +
-            '<button class="btn secondary small" style="background:transparent;border-color:rgba(255,255,255,0.5);color:#fff" data-action="marcar-out" data-mid="'+m.id+'" data-pid="'+prest.id+'" data-modidx="'+moduloIdx+'">⏹ Marcar salida (opcional)</button>' +
+            '<span class="badge green">✓ Entrada '+formatHora(primeraEntrada)+'</span>' +
+            '<button class="btn secondary small" style="background:transparent;border-color:rgba(255,255,255,0.5);color:#fff" data-action="marcar-out-todos" data-mid="'+m.id+'" data-pid="'+prest.id+'" data-idxs="'+idxsAttr+'">⏹ Marcar salida (opcional)</button>' +
           '</div>';
         } else {
-          const horasHoy = horasCertificadasDia(cert);
-          const equivalente = s?.horasVariables && horasDelModulo ? Math.round((horasHoy / horasDelModulo) * 10) / 10 : null;
-          accion = '<div style="margin-top:10px"><span class="badge green">✓ Entrada '+formatHora(cert.horaIn)+' · Salida '+formatHora(cert.horaOut)+
+          const primeraEntrada = certs[0].horaIn;
+          const primeraSalida = certs[0].horaOut;
+          const horasHoy = certs.reduce((sum,c) => sum + horasCertificadasDia(c), 0);
+          const equivalente = s?.horasVariables && horasTotalElegidas ? Math.round((horasHoy / horasTotalElegidas) * 10) / 10 : null;
+          accion = '<div style="margin-top:10px"><span class="badge green">✓ Entrada '+formatHora(primeraEntrada)+' · Salida '+formatHora(primeraSalida)+
             (s?.horasVariables ? ' · '+horasHoy.toFixed(1)+' hs certificadas'+(equivalente?' (≈ '+equivalente+' módulo'+(equivalente===1?'':'s')+')':'') : '') +
             '</span></div>';
         }
-        return totalModulos > 1
-          ? '<div style="border-top:1px dashed rgba(255,255,255,0.15);padding-top:10px;margin-top:10px">' +
-              '<div style="font-size:11px;font-weight:700;opacity:.65;text-transform:uppercase;letter-spacing:.04em">Módulo '+(pos+1)+' de '+totalModulos+' — '+horasDelModulo+' hs</div>' +
-              accion +
-            '</div>'
-          : accion;
-      }).join('');
+      }
       const org = orgsCacheById[s?.organizationId];
       return '<div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.14);border-radius:14px;padding:16px;margin-top:12px">' +
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
@@ -9612,7 +9615,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;background:rgba(34,197,94,0.2);color:#4ade80;padding:3px 9px;border-radius:999px"><span style="width:6px;height:6px;border-radius:50%;background:#4ade80;display:inline-block"></span>ACTIVO</span>' +
         '</div>' +
         (org?.name ? '<div style="font-size:12px;opacity:.6;margin-top:2px">'+org.name+'</div>' : '') +
-        modulosHtml +
+        (totalModulos > 1 ? '<div style="font-size:11px;opacity:.6;margin-top:2px">🧩 '+totalModulos+' módulos — '+horasTotalElegidas+' hs en total</div>' : '') +
+        accion +
       '</div>';
     }).join('');
     if (!filas) return '';
@@ -10609,25 +10613,38 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const hoy = fechaHoy();
     return (state.certificaciones||[]).filter(c => c.moduloAsignadoId === moduloAsignadoId && c.fecha === hoy).sort((a,b) => Number(a.moduloIdx||1) - Number(b.moduloIdx||1));
   }
-  async function marcarIn(cicloId, moduloAsignadoId, prestadorId, moduloIdx=1) {
-    if (certificacionDeHoy(moduloAsignadoId, moduloIdx)) return;
+  // Cuando el prestador tomó más de un módulo del mismo servicio
+  // (ej: 2 turnos), un solo toque certifica todos de una — en vez de
+  // obligarlo a repetir el check-in por cada módulo.
+  async function marcarInTodosModulos(cicloId, moduloAsignadoId, prestadorId, moduloIdxs) {
+    const pendientes = moduloIdxs.filter(idx => !certificacionDeHoy(moduloAsignadoId, idx));
+    if (!pendientes.length) return;
     const ciclo = cicloById(cicloId);
     if (!ciclo) return;
     const modulo = moduloAsignadoById(moduloAsignadoId);
-    const cert = { id: uid(), organizationId: modulo?.organizationId || null, moduloAsignadoId, cicloId, fecha: fechaHoy(), moduloIdx: Number(moduloIdx), nota: '', horaIn: nowISO(), horaOut: '', createdAt: nowISO() };
+    const horaIn = nowISO();
+    const nuevos = pendientes.map(idx => ({ id: uid(), organizationId: modulo?.organizationId || null, moduloAsignadoId, cicloId, fecha: fechaHoy(), moduloIdx: Number(idx), nota: '', horaIn, horaOut: '', createdAt: nowISO() }));
     if (!state.certificaciones) state.certificaciones = [];
-    state.certificaciones.push(cert);
-    const ok = await saveOne(DB.certificaciones, certificacionToRow(cert));
-    if (!ok) { state.certificaciones = state.certificaciones.filter(c => c.id !== cert.id); alert('No se pudo registrar la entrada de hoy. Probá de nuevo.'); return; }
+    state.certificaciones.push(...nuevos);
+    const oks = await Promise.all(nuevos.map(c => saveOne(DB.certificaciones, certificacionToRow(c))));
+    if (oks.some(ok => !ok)) {
+      const idsFallidos = new Set(nuevos.filter((_,i) => !oks[i]).map(c => c.id));
+      state.certificaciones = state.certificaciones.filter(c => !idsFallidos.has(c.id));
+      alert('No se pudo registrar la entrada de hoy en alguno de los módulos. Probá de nuevo.');
+    }
     if (prestadorId) renderPrestadorPublicView(prestadorId);
     else renderModulosAsignados();
   }
-  async function marcarOut(moduloAsignadoId, prestadorId, moduloIdx=1) {
-    const cert = certificacionDeHoy(moduloAsignadoId, moduloIdx);
-    if (!cert || cert.horaOut) return;
-    cert.horaOut = nowISO();
-    const ok = await saveOne(DB.certificaciones, certificacionToRow(cert));
-    if (!ok) { cert.horaOut = ''; alert('No se pudo registrar la salida de hoy. Probá de nuevo.'); return; }
+  async function marcarOutTodosModulos(moduloAsignadoId, prestadorId, moduloIdxs) {
+    const certs = moduloIdxs.map(idx => certificacionDeHoy(moduloAsignadoId, idx)).filter(c => c && !c.horaOut);
+    if (!certs.length) return;
+    const horaOut = nowISO();
+    certs.forEach(c => { c.horaOut = horaOut; });
+    const oks = await Promise.all(certs.map(c => saveOne(DB.certificaciones, certificacionToRow(c))));
+    if (oks.some(ok => !ok)) {
+      certs.forEach((c,i) => { if (!oks[i]) c.horaOut = ''; });
+      alert('No se pudo registrar la salida de hoy en alguno de los módulos. Probá de nuevo.');
+    }
     if (prestadorId) renderPrestadorPublicView(prestadorId);
     else renderModulosAsignados();
   }
