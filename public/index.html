@@ -1232,8 +1232,7 @@
       position: sticky;
       top: 73px;
       align-self: start;
-      background: #fff;
-      border-right: 1px solid var(--line);
+      background: var(--admin-sidebar);
       padding: 20px 12px;
       height: calc(100vh - 73px);
       overflow-y: auto;
@@ -1243,11 +1242,11 @@
       display: flex; align-items: center; gap: 10px;
       width: 100%; text-align: left; background: transparent; border: none;
       padding: 10px 12px; border-radius: 10px; font-size: 14px; font-weight: 600;
-      color: var(--text); cursor: pointer;
+      color: rgba(255,255,255,0.65); cursor: pointer; transition: all 0.15s;
     }
-    .pdash-sidebar nav button .nav-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
-    .pdash-sidebar nav button:hover { background: #f3f4f6; }
-    .pdash-sidebar nav button.active { background: var(--owner-accent); color: #fff; }
+    .pdash-sidebar nav button .nav-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; opacity: 0.8; }
+    .pdash-sidebar nav button:hover { background: var(--admin-sidebar-hover); color: rgba(255,255,255,0.9); }
+    .pdash-sidebar nav button.active { background: var(--admin-sidebar-active); color: #fff; }
     .pdash-sidebar nav button .pdash-nav-dot { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; margin-left: auto; flex-shrink: 0; }
     .pdash-sidebar-backdrop { display: none; }
     .pdash-main { padding: 24px; min-width: 0; }
@@ -9804,53 +9803,62 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   }
 
   // "Mis módulos activos" — un bloque por mes/ciclo, con evidencia por ítem.
+  // Solo el ciclo del MES EN CURSO de cada módulo — los meses
+  // anteriores ya están cerrados/liquidados y verlos acá solo
+  // generaba ruido. Cada módulo es una caja bien delimitada, y cada
+  // ítem adentro también, con su botón de evidencia pegado al lado.
   function buildPrestModulosActivos(prest) {
     const misModulos = (state.modulosAsignados||[]).filter(m => m.prestadorId === prest.id);
     if (!misModulos.length) return '<div class="empty">Todavía no tenés módulos asignados. Postulate a uno en "Buscar servicios".</div>';
+    const periodoHoy = periodoActual();
     let html = misModulos.map(m => {
         const s = (state.servicios||[]).find(x=>x.id===m.servicioId);
-        const ciclos = ciclosByModuloAsignado(m.id);
-        return '<div class="owner-card" style="margin-bottom:12px">' +
-          '<div style="margin-bottom:10px"><strong>'+(s?.titulo||'—')+'</strong>' +
-          (s?.fechaFin?' <span style="font-size:12px;color:var(--muted)">· hasta '+s.fechaFin+'</span>':'') +'</div>' +
-          (ciclos.length ? ciclos.map(c => {
-            const items = itemsByCiclo(c.id);
-            const certs = certificacionesByCiclo(c.id);
-            const esperadas = (s?.cantidadPorPeriodo || 0) * modulosElegidosDeModulo(m, s).length;
-            const yaHoy = certificacionesDeHoy(c.moduloAsignadoId).length >= modulosElegidosDeModulo(m, s).length;
-            return '<div style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">' +
-              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-                '<strong style="font-size:13px;text-transform:capitalize">📅 '+periodoLabel(c.periodo)+'</strong>' +
-                '<span class="badge '+(c.estado==='aprobado'?'green':c.estado==='completado'?'blue':'gray')+'">'+(CICLO_ESTADO_LABEL[c.estado]||c.estado)+'</span>' +
-              '</div>' +
-              '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--card-soft);border-radius:8px;padding:8px 10px;margin-bottom:8px">' +
-                '<div style="font-size:12px;color:var(--muted)">🗓️ Certificación diaria: <strong>'+certs.length+(esperadas?'/'+esperadas:'')+'</strong> día'+(certs.length===1?'':'s')+' certificado'+(certs.length===1?'':'s')+(s?.horasVariables?' · <strong>'+horasCertificadasCiclo(c.id).toFixed(1)+' hs</strong> certificadas este mes':' este mes')+'</div>' +
-                (yaHoy ? '<span class="badge green" style="font-size:11px;flex-shrink:0">✓ Hoy ya certificado</span>' : '') +
-              '</div>' +
-              items.map(it => {
-                const esJornada = it.tipo === 'jornada';
-                const badge = it.estado==='aprobado' ? '<span class="badge green">✓ Aprobado</span>' : it.estado==='rechazado' ? '<span class="badge red">✕ Rechazado — subí de nuevo</span>' : '<span class="badge gray">'+(it.evidenciaUrl||it.evidenciaNota?'En revisión':(esJornada && it.horaInicio ? 'Jornada abierta' : 'Sin evidencia'))+'</span>';
-                let accion = '';
-                if (it.estado !== 'aprobado') {
-                  if (esJornada && !it.horaInicio) {
-                    accion = '<button class="btn primary xs" style="margin-top:6px" data-action="marcar-inicio-jornada" data-id="'+it.id+'" data-pid="'+prest.id+'">▶️ Marcar inicio de jornada</button>';
-                  } else if (esJornada && !it.horaCierre) {
-                    accion = '<button class="btn primary xs" style="margin-top:6px" data-action="subir-evidencia-item" data-id="'+it.id+'" data-pid="'+prest.id+'">⏹ Marcar cierre y subir evidencia</button>';
-                  } else {
-                    accion = '<button class="btn secondary xs" style="margin-top:6px" data-action="subir-evidencia-item" data-id="'+it.id+'" data-pid="'+prest.id+'">'+(it.evidenciaUrl||it.evidenciaNota?'Actualizar evidencia':'Subir evidencia')+'</button>';
-                  }
+        const ciclo = ciclosByModuloAsignado(m.id).find(c => c.periodo === periodoHoy);
+        let cuerpo;
+        if (!ciclo) {
+          cuerpo = '<div class="empty" style="margin-top:12px">Todavía no se abrió el ciclo de '+periodoLabel(periodoHoy)+'.</div>';
+        } else {
+          const items = itemsByCiclo(ciclo.id);
+          const certs = certificacionesByCiclo(ciclo.id);
+          const esperadas = (s?.cantidadPorPeriodo || 0) * modulosElegidosDeModulo(m, s).length;
+          const yaHoy = certificacionesDeHoy(ciclo.moduloAsignadoId).length >= modulosElegidosDeModulo(m, s).length;
+          cuerpo =
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 10px">' +
+              '<strong style="font-size:13px;text-transform:capitalize">📅 '+periodoLabel(ciclo.periodo)+'</strong>' +
+              '<span class="badge '+(ciclo.estado==='aprobado'?'green':ciclo.estado==='completado'?'blue':'gray')+'">'+(CICLO_ESTADO_LABEL[ciclo.estado]||ciclo.estado)+'</span>' +
+            '</div>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--card-soft);border-radius:8px;padding:8px 10px;margin-bottom:10px">' +
+              '<div style="font-size:12px;color:var(--muted)">🗓️ Certificación diaria: <strong>'+certs.length+(esperadas?'/'+esperadas:'')+'</strong> día'+(certs.length===1?'':'s')+' certificado'+(certs.length===1?'':'s')+(s?.horasVariables?' · <strong>'+horasCertificadasCiclo(ciclo.id).toFixed(1)+' hs</strong> certificadas este mes':' este mes')+'</div>' +
+              (yaHoy ? '<span class="badge green" style="font-size:11px;flex-shrink:0">✓ Hoy ya certificado</span>' : '') +
+            '</div>' +
+            (items.length ? '<div style="display:flex;flex-direction:column;gap:8px">' + items.map(it => {
+              const esJornada = it.tipo === 'jornada';
+              const badge = it.estado==='aprobado' ? '<span class="badge green">✓ Aprobado</span>' : it.estado==='rechazado' ? '<span class="badge red">✕ Rechazado — subí de nuevo</span>' : '<span class="badge gray">'+(it.evidenciaUrl||it.evidenciaNota?'En revisión':(esJornada && it.horaInicio ? 'Jornada abierta' : 'Sin evidencia'))+'</span>';
+              let accion = '';
+              if (it.estado !== 'aprobado') {
+                if (esJornada && !it.horaInicio) {
+                  accion = '<button class="btn primary xs" style="margin-top:8px" data-action="marcar-inicio-jornada" data-id="'+it.id+'" data-pid="'+prest.id+'">▶️ Marcar inicio de jornada</button>';
+                } else if (esJornada && !it.horaCierre) {
+                  accion = '<button class="btn primary xs" style="margin-top:8px" data-action="subir-evidencia-item" data-id="'+it.id+'" data-pid="'+prest.id+'">⏹ Marcar cierre y subir evidencia</button>';
+                } else {
+                  accion = '<button class="btn secondary xs" style="margin-top:8px" data-action="subir-evidencia-item" data-id="'+it.id+'" data-pid="'+prest.id+'">'+(it.evidenciaUrl||it.evidenciaNota?'Actualizar evidencia':'Subir evidencia')+'</button>';
                 }
-                return '<div style="border-top:1px solid var(--line);padding:8px 0">' +
-                  '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
-                    '<span style="font-size:13px">'+it.item+'</span>' + badge +
-                  '</div>' +
-                  (esJornada && (it.horaInicio||it.horaCierre) ? '<div style="font-size:11px;color:var(--muted);margin-top:4px">'+(it.horaInicio?'Inicio: '+formatFechaHora(it.horaInicio):'')+(it.horaCierre?' · Cierre: '+formatFechaHora(it.horaCierre):'')+'</div>' : '') +
-                  (it.comentarioOrg?'<div style="font-size:12px;color:#dc2626;margin-top:4px">Motivo: '+it.comentarioOrg+'</div>':'') +
-                  accion +
-                '</div>';
-              }).join('') +
-            '</div>';
-          }).join('') : '<div class="empty">Todavía no se abrió el primer ciclo.</div>') +
+              }
+              return '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fafaf8">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
+                  '<span style="font-size:13px;font-weight:600">'+it.item+'</span>' + badge +
+                '</div>' +
+                (esJornada && (it.horaInicio||it.horaCierre) ? '<div style="font-size:11px;color:var(--muted);margin-top:4px">'+(it.horaInicio?'Inicio: '+formatFechaHora(it.horaInicio):'')+(it.horaCierre?' · Cierre: '+formatFechaHora(it.horaCierre):'')+'</div>' : '') +
+                (it.comentarioOrg?'<div style="font-size:12px;color:#dc2626;margin-top:4px">Motivo: '+it.comentarioOrg+'</div>':'') +
+                accion +
+              '</div>';
+            }).join('') + '</div>' : '');
+        }
+        const colorBorde = !ciclo ? '#d1d5db' : ciclo.estado==='aprobado' ? '#16a34a' : ciclo.estado==='completado' ? '#2563eb' : '#f59e0b';
+        return '<div class="card" style="margin-bottom:14px;border-left:4px solid '+colorBorde+'">' +
+          '<div><strong style="font-size:15px">'+(s?.titulo||'—')+'</strong>' +
+          (s?.fechaFin?' <span style="font-size:12px;color:var(--muted)">· hasta '+s.fechaFin+'</span>':'') +'</div>' +
+          cuerpo +
         '</div>';
       }).join('');
 
