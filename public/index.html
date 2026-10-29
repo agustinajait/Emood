@@ -1207,14 +1207,17 @@
     .owner-shell { max-width: 1080px; margin: 0 auto; padding: 28px 24px; }
 
     /* ─── DASHBOARD DEL PRESTADOR: sidebar + páginas (como webapp) ──── */
-    .prest-shell {
-      max-width: 1280px;
-      margin: 0 auto;
+    /* OJO: nombre .pdash-shell (no .prest-shell) a propósito — esa
+       clase ya la usa, con otro layout, la vista vieja de prestador
+       basada en protocolo/seguimiento (más abajo en este archivo). */
+    .pdash-shell {
+      width: 100%;
       display: grid;
       grid-template-columns: 220px 1fr;
       align-items: start;
     }
-    .prest-nav-toggle {
+    .pdash-main > .pdash-page { max-width: 1400px; }
+    .pdash-nav-toggle {
       display: none;
       background: transparent;
       border: 1px solid var(--line);
@@ -1225,7 +1228,7 @@
       color: var(--text);
       flex-shrink: 0;
     }
-    .prest-sidebar {
+    .pdash-sidebar {
       position: sticky;
       top: 73px;
       align-self: start;
@@ -1235,37 +1238,37 @@
       height: calc(100vh - 73px);
       overflow-y: auto;
     }
-    .prest-sidebar nav { display: flex; flex-direction: column; gap: 2px; }
-    .prest-sidebar nav button {
+    .pdash-sidebar nav { display: flex; flex-direction: column; gap: 2px; }
+    .pdash-sidebar nav button {
       display: flex; align-items: center; gap: 10px;
       width: 100%; text-align: left; background: transparent; border: none;
       padding: 10px 12px; border-radius: 10px; font-size: 14px; font-weight: 600;
       color: var(--text); cursor: pointer;
     }
-    .prest-sidebar nav button .nav-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
-    .prest-sidebar nav button:hover { background: #f3f4f6; }
-    .prest-sidebar nav button.active { background: var(--owner-accent); color: #fff; }
-    .prest-sidebar nav button .prest-nav-dot { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; margin-left: auto; flex-shrink: 0; }
-    .prest-sidebar-backdrop { display: none; }
-    .prest-main { padding: 24px; min-width: 0; }
-    .prest-page { display: none; }
-    .prest-page.active { display: block; animation: fadeUp 0.25s ease; }
+    .pdash-sidebar nav button .nav-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
+    .pdash-sidebar nav button:hover { background: #f3f4f6; }
+    .pdash-sidebar nav button.active { background: var(--owner-accent); color: #fff; }
+    .pdash-sidebar nav button .pdash-nav-dot { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; margin-left: auto; flex-shrink: 0; }
+    .pdash-sidebar-backdrop { display: none; }
+    .pdash-main { padding: 24px; min-width: 0; }
+    .pdash-page { display: none; }
+    .pdash-page.active { display: block; animation: fadeUp 0.25s ease; }
     @media (max-width: 860px) {
-      .prest-shell { display: block; }
-      .prest-nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
-      .prest-sidebar {
+      .pdash-shell { display: block; }
+      .pdash-nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
+      .pdash-sidebar {
         position: fixed; top: 0; left: 0; bottom: 0; width: 248px;
         transform: translateX(-100%); transition: transform 0.22s ease;
         z-index: 200; box-shadow: 8px 0 30px rgba(0,0,0,0.18);
         height: 100vh; padding-top: 70px;
       }
-      .prest-sidebar.open { transform: translateX(0); }
-      .prest-sidebar-backdrop {
+      .pdash-sidebar.open { transform: translateX(0); }
+      .pdash-sidebar-backdrop {
         display: block; position: fixed; inset: 0; background: rgba(15,23,32,0.45);
         z-index: 190; opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
       }
-      .prest-sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
-      .prest-main { padding: 16px; }
+      .pdash-sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
+      .pdash-main { padding: 16px; }
     }
 
     @keyframes hoyInPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,212,0,0.55); } 50% { box-shadow: 0 0 0 10px rgba(255,212,0,0); } }
@@ -4758,14 +4761,14 @@
 
   /* ─── NAV DEL PRESTADOR (sidebar / menú desplegable en mobile) ──── */
   function showPrestPage(pageId) {
-    document.querySelectorAll('.prest-page').forEach(p=>p.classList.remove('active'));
+    document.querySelectorAll('.pdash-page').forEach(p=>p.classList.remove('active'));
     const target = document.getElementById('prestPage-'+pageId);
     if (target) target.classList.add('active');
-    document.querySelectorAll('.prest-sidebar nav button[data-prestpage]').forEach(b=>b.classList.remove('active'));
-    const navBtn = document.querySelector('.prest-sidebar nav button[data-prestpage="'+pageId+'"]');
+    document.querySelectorAll('.pdash-sidebar nav button[data-prestpage]').forEach(b=>b.classList.remove('active'));
+    const navBtn = document.querySelector('.pdash-sidebar nav button[data-prestpage="'+pageId+'"]');
     if (navBtn) navBtn.classList.add('active');
     togglePrestSidebar(false);
-    const mainEl = document.querySelector('.prest-main');
+    const mainEl = document.querySelector('.pdash-main');
     if (mainEl) mainEl.scrollTo(0,0);
     window.scrollTo(0,0);
   }
@@ -9472,7 +9475,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     ov.innerHTML = `
       <div class="owner-topbar">
         <div class="owner-topbar-brand">
-          <button id="prestNavToggle" class="prest-nav-toggle" aria-label="Abrir menú">☰</button>
+          <button id="prestNavToggle" class="pdash-nav-toggle" aria-label="Abrir menú">☰</button>
           <div class="logo-dot"><img src="3.png" style="width:100%;height:100%;object-fit:cover;border-radius:11px"></div>
           <span class="brand-text">E-Mood Huehaci</span>
           <span class="brand-role-tag">Prestador</span>
@@ -9484,23 +9487,23 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         </div>
       </div>
 
-      <div class="prest-shell">
-        <div id="prestSidebarBackdrop" class="prest-sidebar-backdrop"></div>
-        <aside id="prestSidebar" class="prest-sidebar">
+      <div class="pdash-shell">
+        <div id="prestSidebarBackdrop" class="pdash-sidebar-backdrop"></div>
+        <aside id="prestSidebar" class="pdash-sidebar">
           <nav>
             <button class="active" data-prestpage="inicio"><span class="nav-icon">🏠</span>Inicio</button>
-            <button data-prestpage="certificar"><span class="nav-icon">✅</span>Certificar mi día${pendientesHoyCount?'<span class="prest-nav-dot"></span>':''}</button>
+            <button data-prestpage="certificar"><span class="nav-icon">✅</span>Certificar mi día${pendientesHoyCount?'<span class="pdash-nav-dot"></span>':''}</button>
             <button data-prestpage="modulos"><span class="nav-icon">🧩</span>Mis módulos activos</button>
             <button data-prestpage="buscar"><span class="nav-icon">🔍</span>Buscar servicios</button>
             <button data-prestpage="pagos"><span class="nav-icon">💰</span>Mis pagos</button>
-            <button data-prestpage="perfil"><span class="nav-icon">👤</span>Mi perfil${!perfilPrestadorCompleto(prest)?'<span class="prest-nav-dot"></span>':''}</button>
+            <button data-prestpage="perfil"><span class="nav-icon">👤</span>Mi perfil${!perfilPrestadorCompleto(prest)?'<span class="pdash-nav-dot"></span>':''}</button>
             ${agPrestadores.length ? '<button data-prestpage="equipo"><span class="nav-icon">🏢</span>Mi equipo</button>' : ''}
           </nav>
         </aside>
 
-        <main class="prest-main">
+        <main class="pdash-main">
 
-          <div id="prestPage-inicio" class="prest-page active">
+          <div id="prestPage-inicio" class="pdash-page active">
             <div class="owner-welcome">
               <h1>Hola, ${prest.nombre.split(' ')[0]} 👋</h1>
               <p>${prest.rol||'Prestador de servicio'}</p>
@@ -9537,28 +9540,11 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             </div>
           </div>
 
-          <div id="prestPage-certificar" class="prest-page">
+          <div id="prestPage-certificar" class="pdash-page">
             ${buildHoyWidget(prest) || '<div class="empty">No tenés módulos activos todavía — postulate a uno en "Buscar servicios".</div>'}
           </div>
 
-          <div id="prestPage-modulos" class="prest-page">
-            <!-- MÓDULOS FIJOS -->
-            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px">📦 Mis tareas asignadas</div>
-            ${mods.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:24px">
-              ${mods.map(mod=>`
-                <div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafaf8">
-                  <div style="font-size:14px;font-weight:700;margin-bottom:6px">${mod.nombre}</div>
-                  <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">
-                    <span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">📦 ${mod.cantidad||1} módulos</span>
-                    <span class="challenge-meta-tag" style="background:#fef9c3;color:#92400e">⏱ ${(mod.cantidad||1)*4}hs</span>
-                    <span class="challenge-meta-tag">${mod.periodicidad}</span>
-                    <span class="challenge-meta-tag">${mod.modalidad}</span>
-                  </div>
-                  ${mod.descripcion ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${mod.descripcion}</div>` : ''}
-                  ${mod.productoEsperado ? `<div style="font-size:12px;background:#f0fdf4;padding:6px 8px;border-radius:6px;color:#166534">📋 ${mod.productoEsperado}</div>` : ''}
-                </div>`).join('')}
-            </div>` : '<div class="empty" style="margin-bottom:20px">Sin tareas asignadas todavía.</div>'}
-
+          <div id="prestPage-modulos" class="pdash-page">
             <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px">📋 Mis módulos asignados</div>
             ${buildPrestModulosActivos(prest)}
 
@@ -9575,15 +9561,15 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             </div>
           </div>
 
-          <div id="prestPage-buscar" class="prest-page">
+          <div id="prestPage-buscar" class="pdash-page">
             ${buildPrestBuscarServicios(prest)}
           </div>
 
-          <div id="prestPage-pagos" class="prest-page">
+          <div id="prestPage-pagos" class="pdash-page">
             ${buildPrestPagosSection(prest)}
           </div>
 
-          <div id="prestPage-perfil" class="prest-page">
+          <div id="prestPage-perfil" class="pdash-page">
             <div class="card" id="miPerfilSection">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px">
                 <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">👤 Mi perfil</div>
@@ -9605,7 +9591,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           </div>
 
           ${agPrestadores.length ? `
-          <div id="prestPage-equipo" class="prest-page">
+          <div id="prestPage-equipo" class="pdash-page">
             <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:14px">
               🏢 Prestadores de tu agencia — ${miAgencia.name}
             </div>
