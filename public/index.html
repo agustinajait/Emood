@@ -11218,13 +11218,18 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function itemsPendientesValidacion() {
     return (state.moduloItems||[]).filter(it => it.estado === 'pendiente' && (it.evidenciaUrl || it.evidenciaNota));
   }
+  // El badge del nav "Postulaciones" es solo por postulaciones
+  // pendientes de aceptar/rechazar — la evidencia por validar de
+  // módulos ya asignados tiene su propio contador en la pestaña
+  // "Módulos asignados" (asignadosTabCount). Antes se sumaban los
+  // dos en el badge del nav, así que quedaba en rojo (con items por
+  // validar) aunque no hubiera ninguna postulación pendiente.
   function updatePostulacionesBadge() {
     const pendientes = (state.postulaciones||[]).filter(p => p.estado === 'pendiente').length;
     const porValidar = itemsPendientesValidacion().length;
     const navBadge = document.getElementById('postulacionesBadge');
     const asignadosTabCount = document.getElementById('asignadosTabCount');
-    const total = pendientes + porValidar;
-    if (navBadge) { navBadge.style.display = total ? 'inline-flex' : 'none'; navBadge.textContent = total; }
+    if (navBadge) { navBadge.style.display = pendientes ? 'inline-flex' : 'none'; navBadge.textContent = pendientes; }
     if (asignadosTabCount) { asignadosTabCount.style.display = porValidar ? 'inline-flex' : 'none'; asignadosTabCount.textContent = porValidar; }
   }
 
