@@ -453,6 +453,8 @@ create policy hh_prestadores_update on public.hh_prestadores for update using (
 );
 create policy hh_prestadores_delete on public.hh_prestadores for delete using (
   id = public.my_prestador_id()
+  or exists (select 1 from public.hh_postulaciones po where po.prestador_id = hh_prestadores.id and po.organization_id = public.current_org_id())
+  or exists (select 1 from public.hh_modulos_asignados ma where ma.prestador_id = hh_prestadores.id and ma.organization_id = public.current_org_id())
 );
 
 -- ── 3) Alta de prestador (autoregistro, sin admin de por medio) ─
