@@ -1232,8 +1232,7 @@
       position: sticky;
       top: 73px;
       align-self: start;
-      background: #fff;
-      border-right: 1px solid var(--line);
+      background: var(--admin-sidebar);
       padding: 20px 12px;
       height: calc(100vh - 73px);
       overflow-y: auto;
@@ -1243,11 +1242,11 @@
       display: flex; align-items: center; gap: 10px;
       width: 100%; text-align: left; background: transparent; border: none;
       padding: 10px 12px; border-radius: 10px; font-size: 14px; font-weight: 600;
-      color: var(--text); cursor: pointer;
+      color: rgba(255,255,255,0.65); cursor: pointer; transition: all 0.15s;
     }
-    .pdash-sidebar nav button .nav-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
-    .pdash-sidebar nav button:hover { background: #f3f4f6; }
-    .pdash-sidebar nav button.active { background: var(--owner-accent); color: #fff; }
+    .pdash-sidebar nav button .nav-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; opacity: 0.8; }
+    .pdash-sidebar nav button:hover { background: var(--admin-sidebar-hover); color: rgba(255,255,255,0.9); }
+    .pdash-sidebar nav button.active { background: var(--admin-sidebar-active); color: #fff; }
     .pdash-sidebar nav button .pdash-nav-dot { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; margin-left: auto; flex-shrink: 0; }
     .pdash-sidebar-backdrop { display: none; }
     .pdash-main { padding: 24px; min-width: 0; }
@@ -1271,8 +1270,8 @@
       .pdash-main { padding: 16px; }
     }
 
-    @keyframes hoyInPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,212,0,0.55); } 50% { box-shadow: 0 0 0 10px rgba(255,212,0,0); } }
-    .hoy-in-btn { animation: hoyInPulse 2s ease-in-out infinite; }
+    @keyframes hoyInPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,212,0,0.45); } 50% { box-shadow: 0 0 0 6px rgba(255,212,0,0); } }
+    .hoy-in-btn { animation: hoyInPulse 2.4s ease-in-out infinite; }
     .hoy-in-btn:hover { filter: brightness(1.05); transform: translateY(-1px); }
     @media (prefers-reduced-motion: reduce) { .hoy-in-btn { animation: none; } }
 
@@ -9447,6 +9446,19 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       if (refreshed) state = normalizeState(refreshed);
     }
 
+    renderPrestadorViewFromState(prestadorId);
+  }
+
+  // Redibuja el dashboard del prestador con lo que ya está en
+  // memoria, SIN volver a pedirle nada al servidor — así, acciones
+  // rápidas (marcar entrada/salida, inicio de jornada) se sienten
+  // instantáneas en vez de esperar una recarga completa de todo el
+  // estado de la app cada vez que se tocan.
+  function renderPrestadorViewFromState(prestadorId) {
+    const ov = document.getElementById('ownerView');
+    const prest = (state.prestadores||[]).find(p => p.id === prestadorId);
+    if (!prest) return;
+
     const mods = modulosByPrestador(prestadorId);
     const periodo = new Date().toISOString().slice(0,7);
     const [yr, mo] = periodo.split('-');
@@ -9512,8 +9524,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             ${!perfilPrestadorCompleto(prest) ? `
             <div class="card" style="background:#fffbeb;border:1px solid #fde68a;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
               <div>
-                <div style="font-weight:700;color:#92400e">⚠️ Completá tu perfil para poder postularte</div>
-                <div style="font-size:12px;color:#92400e">Te falta: ${camposPerfilFaltantes(prest).join(', ')}.</div>
+                <div style="font-weight:700;color:#92400e">⚠️ Completá tu perfil</div>
+                <div style="font-size:12px;color:#92400e">Te falta: ${camposPerfilFaltantes(prest).join(', ')} — lo necesitás para poder cobrar y para postularte a nuevos módulos.</div>
               </div>
               <button class="btn primary small" onclick="openMisDatosModal('${prest.id}')">Completar ahora</button>
             </div>` : ''}
@@ -9710,7 +9722,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         const todasConEntrada = certs.every(c => !!c);
         const todasConSalida = certs.every(c => c && c.horaOut);
         if (!todasConEntrada) {
-          accion = '<button class="btn hoy-in-btn" style="width:100%;font-size:17px;padding:16px 20px;font-weight:800;border-radius:12px;background:var(--accent);color:#1a1506;margin-top:10px" data-action="marcar-in-todos" data-id="'+ciclo.id+'" data-mid="'+m.id+'" data-pid="'+prest.id+'" data-idxs="'+idxsAttr+'">▶️ Marcar entrada</button>';
+          accion = '<button class="btn hoy-in-btn" style="font-size:14px;padding:10px 22px;font-weight:700;border-radius:999px;background:var(--accent);color:#1a1506;margin-top:12px" data-action="marcar-in-todos" data-id="'+ciclo.id+'" data-mid="'+m.id+'" data-pid="'+prest.id+'" data-idxs="'+idxsAttr+'">▶ Marcar entrada</button>';
         } else if (!todasConSalida) {
           const primeraEntrada = certs.find(c=>c)?.horaIn;
           accion = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:10px">' +
@@ -9758,19 +9770,19 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     // Módulos disponibles
     html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px">🧩 Módulos disponibles</div>';
     html += disponibles.length
-      ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:24px">' +
+      ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px;margin-bottom:24px">' +
         disponibles.map(s => {
           const modulosArr = modulosDeServicio(s);
           const pagoMensual = horasTotalesServicio(s)*(s.precioHora||0)*(s.cantidadPorPeriodo||1);
           const libres = (s.cupos||1) - cuposOcupados(s.id);
           const org = orgsCacheById[s.organizationId];
-          return '<div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafaf8">' +
-            '<div style="font-size:14px;font-weight:700;margin-bottom:6px">'+s.titulo+'</div>' +
+          return '<div class="card">' +
+            '<div style="font-size:15px;font-weight:700;margin-bottom:6px">'+s.titulo+'</div>' +
             '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:8px;cursor:pointer" onclick="verOrganizacion(\''+(s.organizationId||'')+'\')">' +
               (org?.logo_url?'<img src="'+org.logo_url+'" style="width:18px;height:18px;object-fit:cover;border-radius:5px">':'🏢') +
               ' <span style="text-decoration:underline">'+(org?.name||'Organización')+'</span>' +
             '</div>' +
-            (s.descripcion?'<div style="font-size:12px;color:var(--muted);margin-bottom:8px">'+s.descripcion+'</div>':'') +
+            (s.descripcion?'<div style="font-size:13px;margin-bottom:10px">'+s.descripcion+'</div>':'') +
             '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">' +
               '<span class="challenge-meta-tag" style="background:#eff6ff;color:#1d4ed8">👤 '+libres+' cupo(s) libre(s)</span>' +
               '<span class="challenge-meta-tag">📦 '+(modulosArr.length>1?modulosArr.join('+')+' hs ('+modulosArr.length+' módulos)':s.horasModulo+' hs/módulo')+'</span>' +
@@ -9804,57 +9816,67 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   }
 
   // "Mis módulos activos" — un bloque por mes/ciclo, con evidencia por ítem.
+  // Solo el ciclo del MES EN CURSO de cada módulo — los meses
+  // anteriores ya están cerrados/liquidados y verlos acá solo
+  // generaba ruido. Cada módulo es una caja bien delimitada, y cada
+  // ítem adentro también, con su botón de evidencia pegado al lado.
   function buildPrestModulosActivos(prest) {
     const misModulos = (state.modulosAsignados||[]).filter(m => m.prestadorId === prest.id);
     if (!misModulos.length) return '<div class="empty">Todavía no tenés módulos asignados. Postulate a uno en "Buscar servicios".</div>';
+    const periodoHoy = periodoActual();
     let html = misModulos.map(m => {
         const s = (state.servicios||[]).find(x=>x.id===m.servicioId);
-        const ciclos = ciclosByModuloAsignado(m.id);
-        return '<div class="owner-card" style="margin-bottom:12px">' +
-          '<div style="margin-bottom:10px"><strong>'+(s?.titulo||'—')+'</strong>' +
-          (s?.fechaFin?' <span style="font-size:12px;color:var(--muted)">· hasta '+s.fechaFin+'</span>':'') +'</div>' +
-          (ciclos.length ? ciclos.map(c => {
-            const items = itemsByCiclo(c.id);
-            const certs = certificacionesByCiclo(c.id);
-            const esperadas = (s?.cantidadPorPeriodo || 0) * modulosElegidosDeModulo(m, s).length;
-            const yaHoy = certificacionesDeHoy(c.moduloAsignadoId).length >= modulosElegidosDeModulo(m, s).length;
-            return '<div style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">' +
-              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-                '<strong style="font-size:13px;text-transform:capitalize">📅 '+periodoLabel(c.periodo)+'</strong>' +
-                '<span class="badge '+(c.estado==='aprobado'?'green':c.estado==='completado'?'blue':'gray')+'">'+(CICLO_ESTADO_LABEL[c.estado]||c.estado)+'</span>' +
-              '</div>' +
-              '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--card-soft);border-radius:8px;padding:8px 10px;margin-bottom:8px">' +
-                '<div style="font-size:12px;color:var(--muted)">🗓️ Certificación diaria: <strong>'+certs.length+(esperadas?'/'+esperadas:'')+'</strong> día'+(certs.length===1?'':'s')+' certificado'+(certs.length===1?'':'s')+(s?.horasVariables?' · <strong>'+horasCertificadasCiclo(c.id).toFixed(1)+' hs</strong> certificadas este mes':' este mes')+'</div>' +
-                (yaHoy ? '<span class="badge green" style="font-size:11px;flex-shrink:0">✓ Hoy ya certificado</span>' : '') +
-              '</div>' +
-              items.map(it => {
-                const esJornada = it.tipo === 'jornada';
-                const badge = it.estado==='aprobado' ? '<span class="badge green">✓ Aprobado</span>' : it.estado==='rechazado' ? '<span class="badge red">✕ Rechazado — subí de nuevo</span>' : '<span class="badge gray">'+(it.evidenciaUrl||it.evidenciaNota?'En revisión':(esJornada && it.horaInicio ? 'Jornada abierta' : 'Sin evidencia'))+'</span>';
-                let accion = '';
-                if (it.estado !== 'aprobado') {
-                  if (esJornada && !it.horaInicio) {
-                    accion = '<button class="btn primary xs" style="margin-top:6px" data-action="marcar-inicio-jornada" data-id="'+it.id+'" data-pid="'+prest.id+'">▶️ Marcar inicio de jornada</button>';
-                  } else if (esJornada && !it.horaCierre) {
-                    accion = '<button class="btn primary xs" style="margin-top:6px" data-action="subir-evidencia-item" data-id="'+it.id+'" data-pid="'+prest.id+'">⏹ Marcar cierre y subir evidencia</button>';
-                  } else {
-                    accion = '<button class="btn secondary xs" style="margin-top:6px" data-action="subir-evidencia-item" data-id="'+it.id+'" data-pid="'+prest.id+'">'+(it.evidenciaUrl||it.evidenciaNota?'Actualizar evidencia':'Subir evidencia')+'</button>';
-                  }
+        const ciclo = ciclosByModuloAsignado(m.id).find(c => c.periodo === periodoHoy);
+        let cuerpo;
+        if (!ciclo) {
+          cuerpo = '<div class="empty" style="margin-top:12px">Todavía no se abrió el ciclo de '+periodoLabel(periodoHoy)+'.</div>';
+        } else {
+          const items = itemsByCiclo(ciclo.id);
+          const certs = certificacionesByCiclo(ciclo.id);
+          const esperadas = (s?.cantidadPorPeriodo || 0) * modulosElegidosDeModulo(m, s).length;
+          const yaHoy = certificacionesDeHoy(ciclo.moduloAsignadoId).length >= modulosElegidosDeModulo(m, s).length;
+          cuerpo =
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 10px">' +
+              '<strong style="font-size:13px;text-transform:capitalize">📅 '+periodoLabel(ciclo.periodo)+'</strong>' +
+              '<span class="badge '+(ciclo.estado==='aprobado'?'green':ciclo.estado==='completado'?'blue':'gray')+'">'+(CICLO_ESTADO_LABEL[ciclo.estado]||ciclo.estado)+'</span>' +
+            '</div>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:rgba(255,255,255,0.65);border-radius:8px;padding:8px 10px;margin-bottom:10px">' +
+              '<div style="font-size:12px;color:var(--muted)">🗓️ Certificación diaria: <strong>'+certs.length+(esperadas?'/'+esperadas:'')+'</strong> día'+(certs.length===1?'':'s')+' certificado'+(certs.length===1?'':'s')+(s?.horasVariables?' · <strong>'+horasCertificadasCiclo(ciclo.id).toFixed(1)+' hs</strong> certificadas este mes':' este mes')+'</div>' +
+              (yaHoy ? '<span class="badge green" style="font-size:11px;flex-shrink:0">✓ Hoy ya certificado</span>' : '') +
+            '</div>' +
+            (items.length ? '<div style="display:flex;flex-direction:column;gap:8px">' + items.map(it => {
+              const esJornada = it.tipo === 'jornada';
+              const badge = it.estado==='aprobado' ? '<span class="badge green">✓ Aprobado</span>' : it.estado==='rechazado' ? '<span class="badge red">✕ Rechazado — subí de nuevo</span>' : '<span class="badge gray">'+(it.evidenciaUrl||it.evidenciaNota?'En revisión':(esJornada && it.horaInicio ? 'Jornada abierta' : 'Sin evidencia'))+'</span>';
+              let accion = '';
+              if (it.estado !== 'aprobado') {
+                if (esJornada && !it.horaInicio) {
+                  accion = '<button class="btn primary xs" style="margin-top:8px" data-action="marcar-inicio-jornada" data-id="'+it.id+'" data-pid="'+prest.id+'">▶️ Marcar inicio de jornada</button>';
+                } else if (esJornada && !it.horaCierre) {
+                  accion = '<button class="btn primary xs" style="margin-top:8px" data-action="subir-evidencia-item" data-id="'+it.id+'" data-pid="'+prest.id+'">⏹ Marcar cierre y subir evidencia</button>';
+                } else {
+                  accion = '<button class="btn secondary xs" style="margin-top:8px" data-action="subir-evidencia-item" data-id="'+it.id+'" data-pid="'+prest.id+'">'+(it.evidenciaUrl||it.evidenciaNota?'Actualizar evidencia':'Subir evidencia')+'</button>';
                 }
-                return '<div style="border-top:1px solid var(--line);padding:8px 0">' +
-                  '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
-                    '<span style="font-size:13px">'+it.item+'</span>' + badge +
-                  '</div>' +
-                  (esJornada && (it.horaInicio||it.horaCierre) ? '<div style="font-size:11px;color:var(--muted);margin-top:4px">'+(it.horaInicio?'Inicio: '+formatFechaHora(it.horaInicio):'')+(it.horaCierre?' · Cierre: '+formatFechaHora(it.horaCierre):'')+'</div>' : '') +
-                  (it.comentarioOrg?'<div style="font-size:12px;color:#dc2626;margin-top:4px">Motivo: '+it.comentarioOrg+'</div>':'') +
-                  accion +
-                '</div>';
-              }).join('') +
-            '</div>';
-          }).join('') : '<div class="empty">Todavía no se abrió el primer ciclo.</div>') +
+              }
+              return '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
+                  '<span style="font-size:13px;font-weight:600">'+it.item+'</span>' + badge +
+                '</div>' +
+                (esJornada && (it.horaInicio||it.horaCierre) ? '<div style="font-size:11px;color:var(--muted);margin-top:4px">'+(it.horaInicio?'Inicio: '+formatFechaHora(it.horaInicio):'')+(it.horaCierre?' · Cierre: '+formatFechaHora(it.horaCierre):'')+'</div>' : '') +
+                (it.comentarioOrg?'<div style="font-size:12px;color:#dc2626;margin-top:4px">Motivo: '+it.comentarioOrg+'</div>':'') +
+                accion +
+              '</div>';
+            }).join('') + '</div>' : '');
+        }
+        const key = !ciclo ? 'sin_ciclo' : ciclo.estado==='aprobado' ? 'aprobado' : ciclo.estado==='completado' ? 'completado' : 'en_progreso';
+        const est = MODULO_ESTADO_ESTILO[key];
+        return '<div style="border-radius:16px;background:'+est.bg+';border:1px solid '+est.border+';padding:18px 20px">' +
+          '<div><strong style="font-size:15px">'+(s?.titulo||'—')+'</strong>' +
+          (s?.fechaFin?' <span style="font-size:12px;color:var(--muted)">· hasta '+s.fechaFin+'</span>':'') +'</div>' +
+          cuerpo +
         '</div>';
       }).join('');
 
-    return html;
+    return '<div style="display:flex;flex-direction:column;gap:16px;max-width:760px">' + html + '</div>';
   }
 
   function renderPrestModulos(prestadorId, periodo) {
@@ -10753,7 +10775,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       state.certificaciones = state.certificaciones.filter(c => !idsFallidos.has(c.id));
       alert('No se pudo registrar la entrada de hoy en alguno de los módulos. Probá de nuevo.');
     }
-    if (prestadorId) renderPrestadorPublicView(prestadorId);
+    if (prestadorId) renderPrestadorViewFromState(prestadorId);
     else renderModulosAsignados();
   }
   async function marcarOutTodosModulos(moduloAsignadoId, prestadorId, moduloIdxs) {
@@ -10766,7 +10788,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       certs.forEach((c,i) => { if (!oks[i]) c.horaOut = ''; });
       alert('No se pudo registrar la salida de hoy en alguno de los módulos. Probá de nuevo.');
     }
-    if (prestadorId) renderPrestadorPublicView(prestadorId);
+    if (prestadorId) renderPrestadorViewFromState(prestadorId);
     else renderModulosAsignados();
   }
 
@@ -11196,13 +11218,18 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function itemsPendientesValidacion() {
     return (state.moduloItems||[]).filter(it => it.estado === 'pendiente' && (it.evidenciaUrl || it.evidenciaNota));
   }
+  // El badge del nav "Postulaciones" es solo por postulaciones
+  // pendientes de aceptar/rechazar — la evidencia por validar de
+  // módulos ya asignados tiene su propio contador en la pestaña
+  // "Módulos asignados" (asignadosTabCount). Antes se sumaban los
+  // dos en el badge del nav, así que quedaba en rojo (con items por
+  // validar) aunque no hubiera ninguna postulación pendiente.
   function updatePostulacionesBadge() {
     const pendientes = (state.postulaciones||[]).filter(p => p.estado === 'pendiente').length;
     const porValidar = itemsPendientesValidacion().length;
     const navBadge = document.getElementById('postulacionesBadge');
     const asignadosTabCount = document.getElementById('asignadosTabCount');
-    const total = pendientes + porValidar;
-    if (navBadge) { navBadge.style.display = total ? 'inline-flex' : 'none'; navBadge.textContent = total; }
+    if (navBadge) { navBadge.style.display = pendientes ? 'inline-flex' : 'none'; navBadge.textContent = pendientes; }
     if (asignadosTabCount) { asignadosTabCount.style.display = porValidar ? 'inline-flex' : 'none'; asignadosTabCount.textContent = porValidar; }
   }
 
@@ -11396,6 +11423,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   /* ── Módulos asignados (admin: un ciclo por mes, aprobación por
         ítem dentro de cada ciclo, remito por ciclo) ── */
   const CICLO_ESTADO_LABEL = { en_progreso:'En progreso', completado:'Completado — listo para remito', aprobado:'Aprobado (remito generado)' };
+  // Tarjeta de "Mis módulos activos" — fondo tintado según el estado
+  // del ciclo del mes, para que se distinga de un vistazo.
+  const MODULO_ESTADO_ESTILO = {
+    sin_ciclo: { bg:'#f9fafb', border:'#e5e7eb' },
+    en_progreso: { bg:'#fffbeb', border:'#fde68a' },
+    completado: { bg:'#eff6ff', border:'#bfdbfe' },
+    aprobado: { bg:'#f0fdf4', border:'#bbf7d0' },
+  };
 
   function periodoLabel(periodo) {
     const [y,m] = (periodo||'').split('-');
@@ -11755,7 +11790,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     it.horaInicio = nowISO();
     const ok = await saveOne(DB.moduloItems, moduloItemToRow(it));
     if (!ok) { it.horaInicio = ''; alert('No se pudo registrar el inicio de la jornada. Probá de nuevo.'); return; }
-    renderPrestadorPublicView(prestadorId);
+    renderPrestadorViewFromState(prestadorId);
   }
 
   function openSubirEvidenciaModal(itemId, prestadorId) {
@@ -11802,7 +11837,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         if (!ok) throw new Error('No se pudo guardar la evidencia. Probá de nuevo.');
         closeModal();
         alert(esJornada ? 'Jornada cerrada y evidencia enviada. La organización la va a revisar.' : 'Evidencia enviada. La organización la va a revisar.');
-        renderPrestadorPublicView(prestadorId);
+        renderPrestadorViewFromState(prestadorId);
       } catch(err) {
         errEl.textContent = err.message || 'No se pudo enviar la evidencia.';
         errEl.style.display = 'block';
@@ -11894,7 +11929,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const p = (state.prestadores||[]).find(x => x.id === prestadorId);
     if (!p) return;
     const faltan = camposPerfilFaltantes(p);
-    openModal('Mi perfil', 'Completá tu perfil para poder postularte a cualquier módulo disponible.', `
+    openModal('Mi perfil', 'Completá tu perfil — lo necesitás para poder cobrar y para postularte a nuevos módulos.', `
       <form id="misDatosForm" class="form-grid">
         ${faltan.length ? '<div class="field full" style="background:#fffbeb;border-radius:10px;padding:10px 12px;font-size:12px;color:#92400e">⚠️ Te falta completar: '+faltan.join(', ')+'.</div>' : '<div class="field full" style="background:#f0fdf4;border-radius:10px;padding:10px 12px;font-size:12px;color:#166534">✓ Tu perfil está completo — ya podés postularte a cualquier módulo.</div>'}
         <div class="field full" style="display:flex;flex-direction:row;align-items:center;gap:14px">
