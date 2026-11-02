@@ -7202,7 +7202,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const mes = new Date().toISOString().slice(0,7);
 
     const list = (state.prestadores||[]).filter(p => {
-      if (ecoVal !== 'all' && p.ecosistemaId !== ecoVal) return false;
+      if (ecoVal !== 'all' && !ecosistemaIdsEfectivos(p).includes(ecoVal)) return false;
       if (!q) return true;
       const ag = state.agencies.find(a => a.id === p.agencyId)?.name||'';
       return [p.nombre, p.rol||'', ag, p.contacto||''].some(v => v.toLowerCase().includes(q));
@@ -7215,8 +7215,11 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     el.innerHTML = list.map(p => {
       const ag = state.agencies.find(a => a.id === p.agencyId);
-      const eco = (state.ecosistemas||[]).find(e => e.id === p.ecosistemaId);
+      const ecoIds = ecosistemaIdsEfectivos(p);
+      const ecoNombres = (state.ecosistemas||[]).filter(e => ecoIds.includes(e.id)).map(e => e.nombre);
       const mods = modulosByPrestador(p.id);
+      const serviciosNuevos = mods.length ? [] : serviciosAsignadosDe(p);
+      const rolLabel = p.rol || (serviciosNuevos.length ? serviciosNuevos.map(s=>s.titulo).join(', ') : 'Sin rol');
       const modsValidados = mods.filter(m => (state.modEvidencias||[]).some(e => e.moduloId===m.id && e.periodo===mes && (e.estado==='cumplido'||e.estado==='certificado'))).length;
       const totalModulos = mods.reduce((s,m) => s+(m.cantidad||1), 0);
       const totalHoras = totalModulos * 4;
@@ -7242,14 +7245,21 @@ ${renderBeforeAfterOwner(c, state.checkins)}
               '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">',
                 '<strong style="font-size:16px">'+p.nombre+'</strong>',
                 p.activo !== false ? '<span class="badge green">● Activo</span>' : '<span class="badge gray">– Inactivo</span>',
+                !perfilPrestadorCompleto(p) ? '<span class="badge" style="background:#fef2f2;color:#dc2626" title="'+camposPerfilFaltantes(p).join(', ')+'">⚠️ Perfil incompleto</span>' : '',
               '</div>',
-              '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+( p.rol||'Sin rol')+(eco?' · 🌿 '+eco.nombre:'')+(ag?' · 🏢 '+ag.name:'')+'</div>',
-              // Módulos fijos summary
+              '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+rolLabel+(ecoNombres.length?' · 🌿 '+ecoNombres.join(', '):'')+(ag?' · 🏢 '+ag.name:'')+'</div>',
+              // Módulos fijos summary (sistema viejo) o, si no tiene
+              // ninguno ahí, los módulos a los que se postuló y le
+              // aceptaron (sistema nuevo, postulación).
               mods.length ? [
                 '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">',
                   mods.map(m => '<span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">📦 '+m.nombre+' ×'+(m.cantidad||1)+'</span>').join(''),
                 '</div>',
-              ].join('') : '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Sin módulos asignados.</div>',
+              ].join('') : (serviciosNuevos.length ? [
+                '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">',
+                  serviciosNuevos.map(s => '<span class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6">📦 '+s.titulo+'</span>').join(''),
+                '</div>',
+              ].join('') : '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Sin módulos asignados.</div>'),
               '<div style="display:flex;flex-wrap:wrap;gap:6px">',
                 docBadges,
                 p.contacto ? '<span class="challenge-meta-tag">📱 '+p.contacto+'</span>' : '',
@@ -7298,8 +7308,11 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const p = (state.prestadores||[]).find(pr => pr.id === prestadorId);
     if (!p) return;
     const ag = state.agencies.find(a => a.id === p.agencyId);
-    const eco = (state.ecosistemas||[]).find(e => e.id === p.ecosistemaId);
+    const ecoIds = ecosistemaIdsEfectivos(p);
+    const ecoNombres = (state.ecosistemas||[]).filter(e => ecoIds.includes(e.id)).map(e => e.nombre);
     const mods = modulosByPrestador(prestadorId);
+    const serviciosNuevos = mods.length ? [] : serviciosAsignadosDe(p);
+    const rolLabel = p.rol || (serviciosNuevos.length ? serviciosNuevos.map(s=>s.titulo).join(', ') : 'Sin rol');
     const mes = new Date().toISOString().slice(0,7);
     const mesLabel = new Date().toLocaleDateString('es-AR',{month:'long',year:'numeric'});
 
@@ -7318,7 +7331,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">',
           '<div>',
             '<h2 style="margin:0 0 4px;font-family:var(--font-display)">'+p.nombre+'</h2>',
-            '<div style="font-size:14px;color:var(--muted);margin-bottom:10px">'+(p.rol||'Sin rol')+(eco?' · 🌿 '+eco.nombre:'')+(ag?' · 🏢 '+ag.name:'')+'</div>',
+            '<div style="font-size:14px;color:var(--muted);margin-bottom:10px">'+rolLabel+(ecoNombres.length?' · 🌿 '+ecoNombres.join(', '):'')+(ag?' · 🏢 '+ag.name:'')+'</div>',
             '<div style="display:flex;flex-wrap:wrap;gap:6px">',
               p.tieneSeguro ? '<span class="badge green">✓ Seguro</span>' : '<span class="badge gray">✗ Seguro</span>',
               p.numeroCuil ? '<span class="badge green">🪪 CUIL '+p.numeroCuil+(p.cuilComprobanteUrl?' <a href="'+p.cuilComprobanteUrl+'" target="_blank" style="color:inherit">📎</a>':'')+'</span>' : (p.tieneCuil ? '<span class="badge green">✓ CUIL</span>' : '<span class="badge gray">✗ CUIL</span>'),
@@ -7342,6 +7355,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '</div>',
       '</div>',
 
+      buildPerfilChecklist(p),
+
       // Módulos fijos
       '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px">📦 Módulos asignados</div>',
       mods.length ? [
@@ -7360,7 +7375,16 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '</div>',
           ].join('')).join(''),
         '</div>',
-      ].join('') : '<div class="empty" style="margin-bottom:20px">Sin módulos asignados todavía.</div>',
+      ].join('') : (serviciosNuevos.length ? [
+        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px">',
+          serviciosNuevos.map(s => [
+            '<div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafaf8">',
+              '<div style="font-size:14px;font-weight:700;margin-bottom:6px">'+s.titulo+'</div>',
+              '<div style="font-size:11px;color:var(--muted)">Asignado por postulación — ver detalle en "Postulaciones" o "Módulos".</div>',
+            '</div>',
+          ].join('')).join(''),
+        '</div>',
+      ].join('') : '<div class="empty" style="margin-bottom:20px">Sin módulos asignados todavía.</div>'),
 
       // Evolución mensual
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">',
@@ -8688,6 +8712,53 @@ ${renderBeforeAfterOwner(c, state.checkins)}
      MÓDULOS POR PRESTADOR
   ═══════════════════════════════════════════════════ */
 
+  // Los ecosistemas "de verdad" de un prestador: el legacy
+  // ecosistemaId (asignación directa) MÁS los ecosistemas de los
+  // servicios a los que se postuló y le aceptaron (sistema nuevo) —
+  // sin esto, alguien que se dio de alta y se postuló quedaba sin
+  // ecosistema y el filtro de "Prestadores" nunca lo encontraba.
+  function ecosistemaIdsEfectivos(p) {
+    const ids = new Set();
+    if (p.ecosistemaId) ids.add(p.ecosistemaId);
+    (state.modulosAsignados||[]).filter(m => m.prestadorId === p.id).forEach(m => {
+      const s = servicioById(m.servicioId);
+      (s?.ecosistemaIds||[]).forEach(id => ids.add(id));
+    });
+    return [...ids];
+  }
+  // Los servicios (sistema nuevo, postulación) a los que este
+  // prestador tiene un módulo asignado — para mostrar "rol"/módulos
+  // en la lista de "Prestadores" aunque nunca se le haya cargado un
+  // módulo por el sistema viejo (hh_modulos).
+  function serviciosAsignadosDe(p) {
+    return (state.modulosAsignados||[]).filter(m => m.prestadorId === p.id).map(m => servicioById(m.servicioId)).filter(Boolean);
+  }
+  // Checklist de perfil para que el admin vea, de un vistazo, qué le
+  // falta cargar a cada prestador (y pueda abrir cada constancia para
+  // verificar que esté bien) — antes solo se podían ver los boolean
+  // "tieneCuil/tieneSeguro/tieneDni" sin el dato real ni el archivo.
+  function buildPerfilChecklist(p) {
+    const rows = [
+      { label: 'Nombre y apellido', ok: !!(p.nombre && p.apellido), value: [p.nombre,p.apellido].filter(Boolean).join(' ') },
+      { label: 'Dirección', ok: !!p.direccion, value: p.direccion },
+      { label: 'Teléfono', ok: !!p.telefono, value: p.telefono },
+      { label: 'Fecha de nacimiento', ok: !!p.fechaNacimiento, value: p.fechaNacimiento ? new Date(p.fechaNacimiento+'T00:00:00').toLocaleDateString('es-AR') : '' },
+      { label: 'CUIL', ok: !!p.numeroCuil, value: p.numeroCuil, doc: p.cuilComprobanteUrl, docLabel: '📎 constancia' },
+      { label: 'CBU / Alias (para cobrar)', ok: !!(p.cbu||p.aliasCbu), value: [p.cbu,p.aliasCbu].filter(Boolean).join(' · '), doc: p.cbuComprobanteUrl, docLabel: '📎 constancia' },
+      { label: 'Foto de perfil', ok: !!p.fotoUrl, value: '', doc: p.fotoUrl, docLabel: '🖼️ ver foto' },
+    ];
+    return '<div class="card" style="margin-bottom:18px">' +
+      '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px">📋 Checklist de perfil</div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px">' +
+      rows.map(r =>
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:'+(r.ok?'#f0fdf4':'#fef2f2')+'">' +
+          '<div style="font-size:13px"><strong style="color:'+(r.ok?'#166534':'#dc2626')+'">'+(r.ok?'✓':'✗')+'</strong> '+r.label+(r.value?': <span style="color:var(--muted)">'+r.value+'</span>':'')+'</div>' +
+          (r.doc ? '<a href="'+r.doc+'" target="_blank" onclick="event.stopPropagation()" style="font-size:12px;color:#1a73e8;flex-shrink:0;white-space:nowrap">'+r.docLabel+'</a>' : '') +
+        '</div>'
+      ).join('') +
+      '</div>' +
+    '</div>';
+  }
   function modulosByPrestador(prestadorId) {
     return (state.modulos||[]).filter(m => m.prestadorId === prestadorId && m.prestadorId !== '__libre__' && m.prestadorId.trim() !== '')
       .sort((a,b) => (a.orden||0) - (b.orden||0));
