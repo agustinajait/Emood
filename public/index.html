@@ -11348,6 +11348,24 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     };
     const okModulo = await saveOne(DB.modulosAsignados, moduloAsignadoToRow(modulo));
     if (!okModulo) {
+      // El insert puede fallar porque el módulo YA EXISTE en el
+      // servidor (unique constraint "hh_modulos_asignados_postulacion_unica")
+      // y el estado local simplemente no se había enterado todavía —
+      // por ejemplo, un intento anterior sí se guardó bien pero esta
+      // pestaña quedó con el estado viejo. En vez de mostrar un error
+      // confuso, lo adoptamos y seguimos normal.
+      const { data } = await sbFetch('/rest/v1/' + DB.modulosAsignados + '?postulacion_id=eq.' + encodeURIComponent(p.id), { method: 'GET', headers: { 'Accept': 'application/json' } });
+      const existenteRow = (data||[])[0];
+      if (existenteRow) {
+        const existente = rowToModuloAsignado(existenteRow);
+        state.modulosAsignados = (state.modulosAsignados||[]).filter(m => m.id !== existente.id);
+        state.modulosAsignados.push(existente);
+        await vincularDuplaAutomatica(p, existente, s);
+        await ensureCicloForPeriodo(existente.id, periodoActual());
+        renderPostulaciones();
+        renderModulosAsignados();
+        return;
+      }
       alert('La postulación se marcó como aceptada, pero no se pudo crear el módulo asignado (falló al guardar). Volvé a tocar "Aceptar" en un rato para reintentar solo la creación del módulo.');
       renderPostulaciones();
       return;
