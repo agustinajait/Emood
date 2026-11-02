@@ -2972,11 +2972,22 @@
   }
 
   async function sbDelete(table, id) {
-    const { error } = await sbFetch('/rest/v1/' + table + '?id=eq.' + encodeURIComponent(id), {
-      method: 'DELETE'
+    // Prefer: return=representation para poder distinguir "se borró
+    // de verdad" de "la política RLS dejó pasar el pedido pero no
+    // matcheó ninguna fila" — PostgREST considera esto último un
+    // 200/204 normal, sin error, así que sin esto el DELETE parecía
+    // exitoso aunque en la base no cambiara nada.
+    const { data, error } = await sbFetch('/rest/v1/' + table + '?id=eq.' + encodeURIComponent(id), {
+      method: 'DELETE',
+      headers: { 'Prefer': 'return=representation' }
     });
-    if (error) console.error('sbDelete [' + table + '] error:', error);
-    return { errMsg: error || null };
+    if (error) { console.error('sbDelete [' + table + '] error:', error); return { errMsg: error }; }
+    if (!data || !data.length) {
+      const msg = 'no se borró ninguna fila (bloqueado por un permiso o la fila ya no existía)';
+      console.error('sbDelete [' + table + '] ' + id + ']:', msg);
+      return { errMsg: msg };
+    }
+    return { errMsg: null };
   }
 
 
@@ -4723,10 +4734,17 @@
     setSyncStatus(ok ? 'Guardado' : 'Error al guardar — revisá la consola', ok ? 'ok' : 'error');
     return ok;
   }
+  // Devuelve true/false según si el borrado en el servidor realmente
+  // funcionó — antes no se chequeaba en ningún lado, así que un
+  // borrado bloqueado en el servidor (RLS, una referencia que lo
+  // impide, etc.) igual sacaba la fila de la pantalla: parecía
+  // borrado pero en la base seguía estando, y volvía a aparecer en el
+  // próximo refresh.
   async function deleteOne(table, id) {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeState(state))); } catch(e) {}
-    await dbDelete(table, id);
-    setSyncStatus('Eliminado', 'ok');
+    const ok = await dbDelete(table, id);
+    setSyncStatus(ok ? 'Eliminado' : 'Error al eliminar', ok ? 'ok' : 'error');
+    return ok;
   }
 
   /* ─── HELPERS ────────────────────────────────────────── */
@@ -5825,7 +5843,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   }
   async function deleteChallenge(id) {
     if (!confirm('¿Eliminar este challenge?')) return;
-    await deleteOne(DB.challenges, id);
+    const ok = await deleteOne(DB.challenges, id);
+    if (!ok) { alert('No se pudo eliminar el challenge en el servidor. Probá de nuevo.'); return; }
     state.challenges = state.challenges.filter(c=>c.id!==id);
     // cascaded deletes handled by DB; clean local state too
     state.checkins = state.checkins.filter(ci=>ci.challengeId!==id);
@@ -5834,7 +5853,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     await renderAll();
   }
   async function deleteCheckin(id) {
-    await deleteOne(DB.checkins, id);
+    const ok = await deleteOne(DB.checkins, id);
+    if (!ok) { alert('No se pudo eliminar el check-in en el servidor. Probá de nuevo.'); return; }
     state.checkins = state.checkins.filter(c=>c.id!==id);
     await renderAll();
     if (currentChallengeId) renderChallengeDetail(currentChallengeId);
@@ -5842,12 +5862,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     renderModulos();
   }
   async function deleteProduct(id) {
-    await deleteOne(DB.products, id);
+    const ok = await deleteOne(DB.products, id);
+    if (!ok) { alert('No se pudo eliminar el producto en el servidor. Probá de nuevo.'); return; }
     state.products = state.products.filter(p=>p.id!==id);
     await renderAll();
   }
   async function deleteCertification(id) {
-    await deleteOne(DB.certifications, id);
+    const ok = await deleteOne(DB.certifications, id);
+    if (!ok) { alert('No se pudo eliminar la certificación en el servidor. Probá de nuevo.'); return; }
     state.certifications = state.certifications.filter(c=>c.id!==id);
     await renderAll();
   }
@@ -6368,20 +6390,23 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='marcar-out-todos') await marcarOutTodosModulos(btn.dataset.mid, btn.dataset.pid, btn.dataset.idxs.split(',').map(Number));
     else if (action==='delete-prestador') {
       if (!confirm('¿Eliminar este prestador?')) return;
-      await deleteOne(DB.prestadores, id);
+      const ok = await deleteOne(DB.prestadores, id);
+      if (!ok) { alert('No se pudo eliminar el prestador en el servidor — revisá la consola del navegador (F12) para el detalle. Puede estar bloqueado por postulaciones, módulos asignados u otra referencia.'); return; }
       state.prestadores = state.prestadores.filter(p=>p.id!==id);
       renderPrestadores();
     }
     else if (action==='edit-protocolo') { const p=protocoloById(id); if(p) openProtocoloModal(p); }
     else if (action==='delete-protocolo') {
       if (!confirm('¿Eliminar este protocolo?')) return;
-      await deleteOne(DB.protocolos, id);
+      const ok = await deleteOne(DB.protocolos, id);
+      if (!ok) { alert('No se pudo eliminar el protocolo en el servidor. Probá de nuevo.'); return; }
       state.protocolos = state.protocolos.filter(p=>p.id!==id);
       renderProtocolos();
     }
     else if (action==='add-item-protocolo') openItemProtocoloModal(id);
     else if (action==='delete-item-global') {
-      await deleteOne(DB.itemsGlobales, id);
+      const ok = await deleteOne(DB.itemsGlobales, id);
+      if (!ok) { alert('No se pudo eliminar el ítem en el servidor. Probá de nuevo.'); return; }
       state.itemsGlobales = state.itemsGlobales.filter(ig=>ig.id!==id);
       renderProtocolos();
     }
@@ -6424,7 +6449,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     }
     else if (action==='delete-ecosistema') {
       if (!confirm('¿Eliminar este ecosistema? Los módulos asociados quedarán sin ecosistema.')) return;
-      await deleteOne(DB.ecosistemas, id);
+      const ok = await deleteOne(DB.ecosistemas, id);
+      if (!ok) { alert('No se pudo eliminar el ecosistema en el servidor. Probá de nuevo.'); return; }
       state.ecosistemas = (state.ecosistemas||[]).filter(e => e.id !== id);
       // unlink modules
       (state.modulos||[]).forEach(m => { if ((m.ecosistemaIds||[]).includes(id)) m.ecosistemaIds = m.ecosistemaIds.filter(e => e !== id); });
@@ -6446,7 +6472,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     }
     else if (action==='delete-modulo') {
       if (!confirm('¿Eliminar este módulo?')) return;
-      await deleteOne(DB.modulos, id);
+      const ok = await deleteOne(DB.modulos, id);
+      if (!ok) { alert('No se pudo eliminar el módulo en el servidor. Probá de nuevo.'); return; }
       // Also delete related evidencias
       const relEvs = (state.modEvidencias||[]).filter(e=>e.moduloId===id);
       for (const ev of relEvs) await deleteOne(DB.modEvidencias, ev.id);
@@ -6512,7 +6539,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     }
     else if (action==='delete-ecosistema') {
       if (!confirm('¿Eliminar este ecosistema? Los módulos asociados quedarán sin ecosistema.')) return;
-      await deleteOne(DB.ecosistemas, id);
+      const ok = await deleteOne(DB.ecosistemas, id);
+      if (!ok) { alert('No se pudo eliminar el ecosistema en el servidor. Probá de nuevo.'); return; }
       state.ecosistemas = (state.ecosistemas||[]).filter(e => e.id !== id);
       // unlink modules
       (state.modulos||[]).forEach(m => { if ((m.ecosistemaIds||[]).includes(id)) m.ecosistemaIds = m.ecosistemaIds.filter(e => e !== id); });
@@ -6534,7 +6562,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     }
     else if (action==='delete-modulo') {
       if (!confirm('¿Eliminar este módulo?')) return;
-      await deleteOne(DB.modulos, id);
+      const ok = await deleteOne(DB.modulos, id);
+      if (!ok) { alert('No se pudo eliminar el módulo en el servidor. Probá de nuevo.'); return; }
       // Also delete related evidencias
       const relEvs = (state.modEvidencias||[]).filter(e=>e.moduloId===id);
       for (const ev of relEvs) await deleteOne(DB.modEvidencias, ev.id);
@@ -6706,8 +6735,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
   async function deleteDupla(id) {
     if (!confirm('¿Eliminar esta dupla? No borra a los prestadores ni sus módulos asignados, solo la agrupación.')) return;
+    const ok = await deleteOne(DB.duplas, id);
+    if (!ok) { alert('No se pudo eliminar la dupla en el servidor. Probá de nuevo.'); return; }
     state.duplas = (state.duplas||[]).filter(d => d.id !== id);
-    await deleteOne(DB.duplas, id);
     renderDuplas();
   }
 
@@ -11186,7 +11216,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   }
   async function deleteServicio(id) {
     if (!confirm('¿Eliminar este módulo? Las postulaciones asociadas quedan huérfanas.')) return;
-    await deleteOne(DB.servicios, id);
+    const ok = await deleteOne(DB.servicios, id);
+    if (!ok) { alert('No se pudo eliminar el módulo en el servidor. Probá de nuevo.'); return; }
     state.servicios = state.servicios.filter(s => s.id !== id);
     renderServicios();
   }
