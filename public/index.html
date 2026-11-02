@@ -7245,6 +7245,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
               '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">',
                 '<strong style="font-size:16px">'+p.nombre+'</strong>',
                 p.activo !== false ? '<span class="badge green">● Activo</span>' : '<span class="badge gray">– Inactivo</span>',
+                !perfilPrestadorCompleto(p) ? '<span class="badge" style="background:#fef2f2;color:#dc2626" title="'+camposPerfilFaltantes(p).join(', ')+'">⚠️ Perfil incompleto</span>' : '',
               '</div>',
               '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+rolLabel+(ecoNombres.length?' · 🌿 '+ecoNombres.join(', '):'')+(ag?' · 🏢 '+ag.name:'')+'</div>',
               // Módulos fijos summary (sistema viejo) o, si no tiene
@@ -7353,6 +7354,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '</div>',
         '</div>',
       '</div>',
+
+      buildPerfilChecklist(p),
 
       // Módulos fijos
       '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px">📦 Módulos asignados</div>',
@@ -8729,6 +8732,32 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   // módulo por el sistema viejo (hh_modulos).
   function serviciosAsignadosDe(p) {
     return (state.modulosAsignados||[]).filter(m => m.prestadorId === p.id).map(m => servicioById(m.servicioId)).filter(Boolean);
+  }
+  // Checklist de perfil para que el admin vea, de un vistazo, qué le
+  // falta cargar a cada prestador (y pueda abrir cada constancia para
+  // verificar que esté bien) — antes solo se podían ver los boolean
+  // "tieneCuil/tieneSeguro/tieneDni" sin el dato real ni el archivo.
+  function buildPerfilChecklist(p) {
+    const rows = [
+      { label: 'Nombre y apellido', ok: !!(p.nombre && p.apellido), value: [p.nombre,p.apellido].filter(Boolean).join(' ') },
+      { label: 'Dirección', ok: !!p.direccion, value: p.direccion },
+      { label: 'Teléfono', ok: !!p.telefono, value: p.telefono },
+      { label: 'Fecha de nacimiento', ok: !!p.fechaNacimiento, value: p.fechaNacimiento ? new Date(p.fechaNacimiento+'T00:00:00').toLocaleDateString('es-AR') : '' },
+      { label: 'CUIL', ok: !!p.numeroCuil, value: p.numeroCuil, doc: p.cuilComprobanteUrl, docLabel: '📎 constancia' },
+      { label: 'CBU / Alias (para cobrar)', ok: !!(p.cbu||p.aliasCbu), value: [p.cbu,p.aliasCbu].filter(Boolean).join(' · '), doc: p.cbuComprobanteUrl, docLabel: '📎 constancia' },
+      { label: 'Foto de perfil', ok: !!p.fotoUrl, value: '', doc: p.fotoUrl, docLabel: '🖼️ ver foto' },
+    ];
+    return '<div class="card" style="margin-bottom:18px">' +
+      '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px">📋 Checklist de perfil</div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px">' +
+      rows.map(r =>
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:'+(r.ok?'#f0fdf4':'#fef2f2')+'">' +
+          '<div style="font-size:13px"><strong style="color:'+(r.ok?'#166534':'#dc2626')+'">'+(r.ok?'✓':'✗')+'</strong> '+r.label+(r.value?': <span style="color:var(--muted)">'+r.value+'</span>':'')+'</div>' +
+          (r.doc ? '<a href="'+r.doc+'" target="_blank" onclick="event.stopPropagation()" style="font-size:12px;color:#1a73e8;flex-shrink:0;white-space:nowrap">'+r.docLabel+'</a>' : '') +
+        '</div>'
+      ).join('') +
+      '</div>' +
+    '</div>';
   }
   function modulosByPrestador(prestadorId) {
     return (state.modulos||[]).filter(m => m.prestadorId === prestadorId && m.prestadorId !== '__libre__' && m.prestadorId.trim() !== '')
