@@ -11460,6 +11460,80 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     return (state.postulaciones||[]).filter(p => p.servicioId === servicioId && p.estado === 'aceptada').length;
   }
 
+  // Mover a un prestador de un módulo (servicio) a otro sin que tenga
+  // que volver a postularse — pensado para corregir errores como
+  // postularse a la sede equivocada (ej: Caipli Sur en vez de Norte).
+  function openCambiarServicioModal(moduloAsignadoId) {
+    const m = moduloAsignadoById(moduloAsignadoId);
+    if (!m) return;
+    const actual = servicioById(m.servicioId);
+    const prest = prestadorById(m.prestadorId);
+    const opciones = (state.servicios||[]).filter(s => s.id !== m.servicioId && s.estado === 'activo');
+    openModal('Cambiar de módulo — ' + (prest ? nombreCompleto(prest) : ''), 'Módulo actual: ' + (actual?.titulo||'—'),
+      '<form id="cambiarServicioForm" class="form-grid">' +
+        '<div class="field full"><label>Nuevo módulo</label><select name="servicioId" required>' +
+          '<option value="">— Elegí un módulo —</option>' +
+          opciones.map(s => '<option value="'+s.id+'">'+s.titulo+' ('+cuposOcupados(s.id)+'/'+(s.cupos||1)+' cupos)</option>').join('') +
+        '</select></div>' +
+        '<div style="font-size:11px;color:var(--muted);margin:2px 2px 8px">Los ciclos y certificaciones ya cargados quedan como están — esto solo cambia a qué módulo queda asignado de ahora en más.</div>' +
+        '<div class="field full"><button class="btn primary" type="submit">Cambiar</button></div>' +
+      '</form>' +
+      '<div id="cambiarServicioError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>'
+    );
+    document.getElementById('cambiarServicioForm').onsubmit = async e => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button[type="submit"]');
+      const errEl = document.getElementById('cambiarServicioError');
+      errEl.style.display = 'none';
+      const nuevoServicioId = e.target.servicioId.value;
+      if (!nuevoServicioId) return;
+      btn.disabled = true; btn.textContent = 'Cambiando…';
+      const res = await cambiarServicioModuloAsignado(moduloAsignadoId, nuevoServicioId);
+      if (!res.ok) {
+        errEl.textContent = res.motivo;
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Cambiar';
+        return;
+      }
+      closeModal();
+      renderModulosAsignados();
+      renderPrestadores();
+    };
+  }
+  async function cambiarServicioModuloAsignado(moduloAsignadoId, nuevoServicioId) {
+    const m = moduloAsignadoById(moduloAsignadoId);
+    const nuevoServicio = servicioById(nuevoServicioId);
+    if (!m || !nuevoServicio) return { ok: false, motivo: 'Módulo no encontrado.' };
+    if (cuposOcupados(nuevoServicioId) >= (nuevoServicio.cupos||1)) {
+      return { ok: false, motivo: 'No hay cupos disponibles en "'+nuevoServicio.titulo+'".' };
+    }
+    const servicioAnteriorId = m.servicioId;
+    m.servicioId = nuevoServicioId;
+    m.organizationId = nuevoServicio.organizationId || m.organizationId;
+    m.modulosElegidos = []; // los índices del servicio anterior no corresponden al nuevo
+    const okModulo = await saveOne(DB.modulosAsignados, moduloAsignadoToRow(m));
+    if (!okModulo) { m.servicioId = servicioAnteriorId; return { ok: false, motivo: 'Falló al guardar el cambio. Probá de nuevo.' }; }
+
+    if (m.postulacionId) {
+      const p = postulacionById(m.postulacionId);
+      if (p) {
+        p.servicioId = nuevoServicioId;
+        p.modulosElegidos = [];
+        await saveOneUpdate(DB.postulaciones, p.id, postulacionToRow(p));
+      }
+    }
+
+    const prest = prestadorById(m.prestadorId);
+    const ecosistemasDelServicio = nuevoServicio.ecosistemaIds || [];
+    if (prest && ecosistemasDelServicio.length === 1 && prest.ecosistemaId !== ecosistemasDelServicio[0]) {
+      prest.ecosistemaId = ecosistemasDelServicio[0];
+      await saveOne(DB.prestadores, prestadorToRow(prest));
+    }
+
+    await ensureCicloForPeriodo(m.id, periodoActual());
+    return { ok: true };
+  }
+
   async function acceptPostulacion(id) {
     const p = postulacionById(id);
     const s = p && servicioById(p.servicioId);
@@ -11681,10 +11755,94 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '<div style="font-size:12px;color:var(--muted)">'+f.s.titulo+'</div>' +
             '<div style="font-size:12px;margin-top:4px">'+horasTxt+'</div>' +
           '</div>' +
-          '<span class="badge" style="background:#fff;color:'+info.color+';border-color:'+info.color+'">'+info.label+'</span>' +
+          '<div style="display:flex;align-items:center;gap:8px">' +
+            '<span class="badge" style="background:#fff;color:'+info.color+';border-color:'+info.color+'">'+info.label+'</span>' +
+            '<button class="btn secondary xs" onclick="openEditarAsistenciaModal(\''+f.m.id+'\',\''+fecha+'\')">✏️ Editar</button>' +
+          '</div>' +
         '</div>';
       }).join('') +
     '</div>';
+  }
+
+  // Permite al admin cargar o corregir a mano el check-in/check-out de
+  // un día puntual — por ejemplo cuando el prestador no pudo marcar a
+  // horario desde la app y avisa por otro medio, o se equivocó de hora.
+  function horaInputValue(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+  function openEditarAsistenciaModal(moduloAsignadoId, fecha) {
+    const m = moduloAsignadoById(moduloAsignadoId);
+    const s = m && servicioById(m.servicioId);
+    const prest = m && prestadorById(m.prestadorId);
+    if (!m || !s || !prest) return;
+    const idxs = modulosElegidosDeModulo(m, s);
+    const fechaLabel = new Date(fecha+'T00:00:00').toLocaleDateString('es-AR',{weekday:'long', day:'numeric', month:'long', year:'numeric'});
+    openModal('Editar asistencia — ' + nombreCompleto(prest), fechaLabel + ' · ' + s.titulo,
+      '<form id="editarAsistenciaForm" class="form-grid">' +
+        idxs.map(idx => {
+          const cert = (state.certificaciones||[]).find(c => c.moduloAsignadoId===moduloAsignadoId && c.fecha===fecha && Number(c.moduloIdx||1)===Number(idx));
+          return '<div class="field full" style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:4px">' +
+            (idxs.length>1 ? '<div style="font-weight:700;font-size:13px;margin-bottom:8px">Módulo '+idx+'</div>' : '') +
+            '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
+              '<div class="field"><label>Entrada</label><input type="time" name="in_'+idx+'" value="'+horaInputValue(cert?.horaIn)+'"></div>' +
+              '<div class="field"><label>Salida</label><input type="time" name="out_'+idx+'" value="'+horaInputValue(cert?.horaOut)+'"></div>' +
+            '</div>' +
+          '</div>';
+        }).join('') +
+        '<div style="font-size:11px;color:var(--muted);margin:2px 2px 8px">Dejá ambos campos vacíos para borrar la marca de ese módulo ese día.</div>' +
+        '<div class="field full"><button class="btn primary" type="submit">Guardar</button></div>' +
+      '</form>' +
+      '<div id="editarAsistenciaError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>'
+    );
+    document.getElementById('editarAsistenciaForm').onsubmit = async e => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button[type="submit"]');
+      const errEl = document.getElementById('editarAsistenciaError');
+      errEl.style.display = 'none';
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      const data = Object.fromEntries(new FormData(e.target).entries());
+      let ok = true;
+      for (const idx of idxs) {
+        const r = await guardarAsistenciaManual(moduloAsignadoId, fecha, idx, data['in_'+idx]||'', data['out_'+idx]||'');
+        if (!r) ok = false;
+      }
+      if (!ok) {
+        errEl.textContent = 'No se pudo guardar alguno de los horarios. Probá de nuevo.';
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Guardar';
+        return;
+      }
+      closeModal();
+      renderAsistenciaDiaria();
+    };
+  }
+  async function guardarAsistenciaManual(moduloAsignadoId, fecha, idx, horaInStr, horaOutStr) {
+    const existente = (state.certificaciones||[]).find(c => c.moduloAsignadoId===moduloAsignadoId && c.fecha===fecha && Number(c.moduloIdx||1)===Number(idx));
+    const horaIn = horaInStr ? new Date(fecha+'T'+horaInStr+':00').toISOString() : '';
+    const horaOut = horaOutStr ? new Date(fecha+'T'+horaOutStr+':00').toISOString() : '';
+
+    if (!horaIn && !horaOut) {
+      if (!existente) return true;
+      const ok = await deleteOne(DB.certificaciones, existente.id);
+      if (ok) state.certificaciones = (state.certificaciones||[]).filter(c => c.id !== existente.id);
+      return ok;
+    }
+
+    if (existente) {
+      existente.horaIn = horaIn;
+      existente.horaOut = horaOut;
+      return await saveOne(DB.certificaciones, certificacionToRow(existente));
+    }
+
+    const periodo = fecha.slice(0,7);
+    const ciclo = await ensureCicloForPeriodo(moduloAsignadoId, periodo);
+    const m = moduloAsignadoById(moduloAsignadoId);
+    const nuevo = { id: uid(), organizationId: m?.organizationId||null, moduloAsignadoId, cicloId: ciclo?.id||null, fecha, moduloIdx: Number(idx), nota: '', horaIn, horaOut, createdAt: nowISO() };
+    const ok = await saveOne(DB.certificaciones, certificacionToRow(nuevo));
+    if (ok) { if (!state.certificaciones) state.certificaciones = []; state.certificaciones.push(nuevo); }
+    return ok;
   }
 
   function renderModulosAsignados() {
@@ -11718,12 +11876,15 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const tieneJornadas = (m.protocolo||[]).some(it => it.tipo === 'jornada');
       return '<div class="card" style="margin-bottom:12px">' +
         '<div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">' +
-          '<div><div style="font-weight:700">'+(prest?.nombre||'—')+'</div>' +
+          '<div><div style="font-weight:700">'+(prest?nombreCompleto(prest):'—')+'</div>' +
           '<div style="font-size:13px;color:var(--muted)">'+(s?.titulo||'—')+(s?.fechaFin?' · hasta '+s.fechaFin:'')+'</div>' +
           (modulosDeServicio(s).length>1?'<div style="font-size:12px;color:#5b21b6;margin-top:2px">🧩 Módulo'+(modulosElegidosDeModulo(m,s).length===1?'':'s')+' '+modulosElegidosDeModulo(m,s).join(', ')+' de '+modulosDeServicio(s).length+'</div>':'') +
           (post?.numeroDupla?'<div style="font-size:12px;color:#5b21b6;margin-top:2px">🤝 Dupla #'+post.numeroDupla+'</div>':'') +
           '</div>' +
-          (tieneJornadas ? '<button class="btn secondary xs" data-action="set-codigo-externo" data-id="'+m.id+'">🔗 '+(m.codigoExterno?'Código: '+m.codigoExterno:'Vincular código externo')+'</button>' : '') +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+            '<button class="btn secondary xs" onclick="openCambiarServicioModal(\''+m.id+'\')">🔀 Cambiar de módulo</button>' +
+            (tieneJornadas ? '<button class="btn secondary xs" data-action="set-codigo-externo" data-id="'+m.id+'">🔗 '+(m.codigoExterno?'Código: '+m.codigoExterno:'Vincular código externo')+'</button>' : '') +
+          '</div>' +
         '</div>' +
         (ciclos.length ? ciclos.map(c => {
           const items = itemsByCiclo(c.id);
