@@ -7336,7 +7336,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '<div style="font-size:14px;color:var(--muted);margin-bottom:10px">'+rolLabel+(ecoNombres.length?' · 🌿 '+ecoNombres.join(', '):'')+(ag?' · 🏢 '+ag.name:'')+'</div>',
             '<div style="display:flex;flex-wrap:wrap;gap:6px">',
               p.tieneSeguro ? '<span class="badge green">✓ Seguro</span>' : '<span class="badge gray">✗ Seguro</span>',
-              p.numeroCuil ? '<span class="badge green">🪪 CUIL '+p.numeroCuil+(p.cuilComprobanteUrl?' <a href="'+p.cuilComprobanteUrl+'" target="_blank" style="color:inherit">📎</a>':'')+'</span>' : (p.tieneCuil ? '<span class="badge green">✓ CUIL</span>' : '<span class="badge gray">✗ CUIL</span>'),
+              p.numeroCuil ? (p.cuilComprobanteUrl ? '<span class="badge green">🪪 CUIL '+p.numeroCuil+' <a href="'+p.cuilComprobanteUrl+'" target="_blank" style="color:inherit">📎</a></span>' : '<span class="badge" style="background:#fffbeb;color:#92400e;border-color:#92400e">🪪 CUIL '+p.numeroCuil+' — ⚠️ falta constancia</span>') : (p.tieneCuil ? '<span class="badge green">✓ CUIL</span>' : '<span class="badge gray">✗ CUIL</span>'),
               p.tieneDni    ? '<span class="badge green">✓ DNI</span>'    : '<span class="badge gray">✗ DNI</span>',
               (p.cbu||p.aliasCbu) ? '<span class="badge blue">💳 '+[p.cbu,p.aliasCbu].filter(Boolean).join(' · ')+(p.cbuComprobanteUrl?' <a href="'+p.cbuComprobanteUrl+'" target="_blank" style="color:inherit">📎</a>':'')+'</span>' : '',
               p.cvUrl ? '<span class="badge blue">📄 <a href="'+p.cvUrl+'" target="_blank" style="color:inherit">Ver CV</a></span>' : '',
@@ -8746,7 +8746,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       { label: 'Dirección', ok: !!p.direccion, value: p.direccion },
       { label: 'Teléfono', ok: !!p.telefono, value: p.telefono },
       { label: 'Fecha de nacimiento', ok: !!p.fechaNacimiento, value: p.fechaNacimiento ? new Date(p.fechaNacimiento+'T00:00:00').toLocaleDateString('es-AR') : '' },
-      { label: 'CUIL', ok: !!p.numeroCuil, value: p.numeroCuil, doc: p.cuilComprobanteUrl, docLabel: '📎 constancia' },
+      { label: 'CUIL', ok: !!(p.numeroCuil && p.cuilComprobanteUrl), warn: !!(p.numeroCuil && !p.cuilComprobanteUrl), warnLabel: 'cargó el número pero falta subir la constancia', value: p.numeroCuil, doc: p.cuilComprobanteUrl, docLabel: '📎 constancia' },
       { label: 'CBU / Alias (para cobrar)', ok: !!(p.cbu||p.aliasCbu), value: [p.cbu,p.aliasCbu].filter(Boolean).join(' · '), doc: p.cbuComprobanteUrl, docLabel: '📎 constancia' },
       { label: 'Foto de perfil', ok: !!p.fotoUrl, value: '', doc: p.fotoUrl, docLabel: '🖼️ ver foto' },
       { label: 'CV (opcional)', ok: !!p.cvUrl, opcional: true, value: '', doc: p.cvUrl, docLabel: '📄 ver CV' },
@@ -8756,11 +8756,11 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       '<div style="display:flex;flex-direction:column;gap:8px">' +
       rows.map(r => {
         const neutral = r.opcional && !r.ok;
-        const bg = neutral ? '#f9fafb' : (r.ok ? '#f0fdf4' : '#fef2f2');
-        const markColor = neutral ? 'var(--muted)' : (r.ok ? '#166534' : '#dc2626');
-        const mark = neutral ? '—' : (r.ok ? '✓' : '✗');
+        const bg = r.warn ? '#fffbeb' : neutral ? '#f9fafb' : (r.ok ? '#f0fdf4' : '#fef2f2');
+        const markColor = r.warn ? '#92400e' : neutral ? 'var(--muted)' : (r.ok ? '#166534' : '#dc2626');
+        const mark = r.warn ? '⚠️' : neutral ? '—' : (r.ok ? '✓' : '✗');
         return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:'+bg+'">' +
-          '<div style="font-size:13px"><strong style="color:'+markColor+'">'+mark+'</strong> '+r.label+(r.value?': <span style="color:var(--muted)">'+r.value+'</span>':'')+'</div>' +
+          '<div style="font-size:13px"><strong style="color:'+markColor+'">'+mark+'</strong> '+r.label+(r.value?': <span style="color:var(--muted)">'+r.value+'</span>':'')+(r.warn?' — <span style="color:#92400e">'+r.warnLabel+'</span>':'')+'</div>' +
           (r.doc ? '<a href="'+r.doc+'" target="_blank" onclick="event.stopPropagation()" style="font-size:12px;color:#1a73e8;flex-shrink:0;white-space:nowrap">'+r.docLabel+'</a>' : '') +
         '</div>';
       }).join('') +
