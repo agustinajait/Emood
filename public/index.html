@@ -3073,6 +3073,7 @@
       foto_url: p.fotoUrl||'',
       numero_cuil: p.numeroCuil||'',
       cuil_comprobante_url: p.cuilComprobanteUrl||'',
+      cv_url: p.cvUrl||'',
       created_by_org_id: p.createdByOrgId||null,
       created_at: p.createdAt||new Date().toISOString(),
     };
@@ -3107,6 +3108,7 @@
       fotoUrl: r.foto_url||'',
       numeroCuil: r.numero_cuil||'',
       cuilComprobanteUrl: r.cuil_comprobante_url||'',
+      cvUrl: r.cv_url||'',
       createdByOrgId: r.created_by_org_id||null,
       createdAt: r.created_at||'',
     };
@@ -7337,6 +7339,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
               p.numeroCuil ? '<span class="badge green">🪪 CUIL '+p.numeroCuil+(p.cuilComprobanteUrl?' <a href="'+p.cuilComprobanteUrl+'" target="_blank" style="color:inherit">📎</a>':'')+'</span>' : (p.tieneCuil ? '<span class="badge green">✓ CUIL</span>' : '<span class="badge gray">✗ CUIL</span>'),
               p.tieneDni    ? '<span class="badge green">✓ DNI</span>'    : '<span class="badge gray">✗ DNI</span>',
               (p.cbu||p.aliasCbu) ? '<span class="badge blue">💳 '+[p.cbu,p.aliasCbu].filter(Boolean).join(' · ')+(p.cbuComprobanteUrl?' <a href="'+p.cbuComprobanteUrl+'" target="_blank" style="color:inherit">📎</a>':'')+'</span>' : '',
+              p.cvUrl ? '<span class="badge blue">📄 <a href="'+p.cvUrl+'" target="_blank" style="color:inherit">Ver CV</a></span>' : '',
               p.concursoEmprendedores ? '<span class="badge blue">🏆 Concurso</span>' : '',
               p.tipoContrato ? '<span class="badge blue">📄 '+p.tipoContrato+'</span>' : '',
               p.contacto ? '<span class="challenge-meta-tag">📱 '+p.contacto+'</span>' : '',
@@ -8746,16 +8749,21 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       { label: 'CUIL', ok: !!p.numeroCuil, value: p.numeroCuil, doc: p.cuilComprobanteUrl, docLabel: '📎 constancia' },
       { label: 'CBU / Alias (para cobrar)', ok: !!(p.cbu||p.aliasCbu), value: [p.cbu,p.aliasCbu].filter(Boolean).join(' · '), doc: p.cbuComprobanteUrl, docLabel: '📎 constancia' },
       { label: 'Foto de perfil', ok: !!p.fotoUrl, value: '', doc: p.fotoUrl, docLabel: '🖼️ ver foto' },
+      { label: 'CV (opcional)', ok: !!p.cvUrl, opcional: true, value: '', doc: p.cvUrl, docLabel: '📄 ver CV' },
     ];
     return '<div class="card" style="margin-bottom:18px">' +
       '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px">📋 Checklist de perfil</div>' +
       '<div style="display:flex;flex-direction:column;gap:8px">' +
-      rows.map(r =>
-        '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:'+(r.ok?'#f0fdf4':'#fef2f2')+'">' +
-          '<div style="font-size:13px"><strong style="color:'+(r.ok?'#166534':'#dc2626')+'">'+(r.ok?'✓':'✗')+'</strong> '+r.label+(r.value?': <span style="color:var(--muted)">'+r.value+'</span>':'')+'</div>' +
+      rows.map(r => {
+        const neutral = r.opcional && !r.ok;
+        const bg = neutral ? '#f9fafb' : (r.ok ? '#f0fdf4' : '#fef2f2');
+        const markColor = neutral ? 'var(--muted)' : (r.ok ? '#166534' : '#dc2626');
+        const mark = neutral ? '—' : (r.ok ? '✓' : '✗');
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:'+bg+'">' +
+          '<div style="font-size:13px"><strong style="color:'+markColor+'">'+mark+'</strong> '+r.label+(r.value?': <span style="color:var(--muted)">'+r.value+'</span>':'')+'</div>' +
           (r.doc ? '<a href="'+r.doc+'" target="_blank" onclick="event.stopPropagation()" style="font-size:12px;color:#1a73e8;flex-shrink:0;white-space:nowrap">'+r.docLabel+'</a>' : '') +
-        '</div>'
-      ).join('') +
+        '</div>';
+      }).join('') +
       '</div>' +
     '</div>';
   }
@@ -9699,6 +9707,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
                 <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Fecha de nacimiento</div><div style="font-size:14px;font-weight:600">${prest.fechaNacimiento?new Date(prest.fechaNacimiento+'T00:00:00').toLocaleDateString('es-AR'):'—'}</div></div>
                 <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">CUIL</div><div style="font-size:14px;font-weight:600">${prest.numeroCuil || '<span style="color:#dc2626;font-weight:600">Sin cargar</span>'}${prest.cuilComprobanteUrl ? ' <a href="'+prest.cuilComprobanteUrl+'" target="_blank" style="font-size:12px">📎</a>' : ''}</div></div>
                 <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">CBU / Alias</div><div style="font-size:14px;font-weight:600">${(prest.cbu||prest.aliasCbu) ? [prest.cbu,prest.aliasCbu].filter(Boolean).join(' · ') : '<span style="color:#dc2626;font-weight:600">Sin cargar</span>'}${prest.cbuComprobanteUrl ? ' <a href="'+prest.cbuComprobanteUrl+'" target="_blank" style="font-size:12px">📎</a>' : ''}</div></div>
+                <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">CV</div><div style="font-size:14px;font-weight:600">${prest.cvUrl ? '<a href="'+prest.cvUrl+'" target="_blank" style="font-size:13px;color:#1a73e8">🔗 Ver CV</a>' : '<span style="color:var(--muted)">Sin cargar</span>'}</div></div>
               </div>
               </div>
             </div>
@@ -12080,6 +12089,11 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           <input type="file" name="cbuComprobante" accept="image/*,application/pdf">
           ${p.cbuComprobanteUrl ? '<div style="margin-top:6px"><a href="'+p.cbuComprobanteUrl+'" target="_blank" style="font-size:12px;color:#1a73e8">🔗 Ver constancia actual</a></div>' : ''}
         </div>
+        <div class="field full">
+          <label>📄 CV (opcional)</label>
+          <input type="file" name="cv" accept="application/pdf,image/*,.doc,.docx">
+          ${p.cvUrl ? '<div style="margin-top:6px"><a href="'+p.cvUrl+'" target="_blank" style="font-size:12px;color:#1a73e8">🔗 Ver CV actual</a></div>' : ''}
+        </div>
         <div class="field full"><label>🔗 Perfil en OportunAI</label><input type="url" name="oportunaiLink" value="${p.oportunaiLink||''}" placeholder="https://oportunai.com/…"></div>
         <div class="field full"><button class="btn primary" type="submit">Guardar</button></div>
       </form>
@@ -12094,6 +12108,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const cbuFile = e.target.querySelector('[name="cbuComprobante"]')?.files?.[0];
       const cuilFile = e.target.querySelector('[name="cuilComprobante"]')?.files?.[0];
       const fotoFile = e.target.querySelector('[name="foto"]')?.files?.[0];
+      const cvFile = e.target.querySelector('[name="cv"]')?.files?.[0];
       btn.disabled = true; btn.textContent = 'Guardando…';
       try {
         let cbuComprobanteUrl = p.cbuComprobanteUrl || '';
@@ -12117,6 +12132,13 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           if (!uploaded) throw new Error('No se pudo subir la foto. Probá de nuevo.');
           fotoUrl = uploaded;
         }
+        let cvUrl = p.cvUrl || '';
+        if (cvFile) {
+          const ext = (cvFile.name.split('.').pop() || 'pdf').toLowerCase();
+          const uploaded = await sbUpload('prestador-docs', p.id + '/cv_' + Date.now() + '.' + ext, cvFile);
+          if (!uploaded) throw new Error('No se pudo subir el CV. Probá de nuevo.');
+          cvUrl = uploaded;
+        }
         p.nombre = (data.nombre||'').trim();
         p.apellido = (data.apellido||'').trim();
         p.direccion = (data.direccion||'').trim();
@@ -12130,6 +12152,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         p.aliasCbu = (data.aliasCbu||'').trim();
         p.cbuComprobanteUrl = cbuComprobanteUrl;
         p.fotoUrl = fotoUrl;
+        p.cvUrl = cvUrl;
         p.oportunaiLink = (data.oportunaiLink||'').trim();
         await saveOne(DB.prestadores, prestadorToRow(p));
         closeModal();
