@@ -11845,6 +11845,68 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     return ok;
   }
 
+  // Certificar de una sola vez varios días de un módulo (ej: se cargó
+  // tarde el webhook de Censo Flash / Umbral 0, o el prestador ya
+  // trabajó todo el mes y hay que ponerse al día) — cada día marcado
+  // queda como una jornada fija de 9 a 13 (4hs), igual que el webhook.
+  function openCertificarRangoModal(moduloAsignadoId, periodo) {
+    const m = moduloAsignadoById(moduloAsignadoId);
+    const s = m && servicioById(m.servicioId);
+    const prest = m && prestadorById(m.prestadorId);
+    if (!m || !s || !prest) return;
+    const [y, mo] = periodo.split('-');
+    const desde = periodo + '-01';
+    const ultimoDia = new Date(Number(y), Number(mo), 0).getDate();
+    const hasta = periodo + '-' + String(ultimoDia).padStart(2,'0');
+    openModal('Certificar varios días — ' + nombreCompleto(prest), s.titulo,
+      '<form id="certificarRangoForm" class="form-grid">' +
+        '<div class="field"><label>Desde</label><input type="date" name="desde" value="'+desde+'" min="'+desde+'" max="'+hasta+'"></div>' +
+        '<div class="field"><label>Hasta</label><input type="date" name="hasta" value="'+hasta+'" min="'+desde+'" max="'+hasta+'"></div>' +
+        '<div class="field full"><label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer"><input type="checkbox" name="soloHabiles" checked style="width:auto"> Solo días hábiles (lunes a viernes)</label></div>' +
+        '<div class="field full"><label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer"><input type="checkbox" name="saltarExistentes" checked style="width:auto"> No tocar los días que ya tienen una certificación cargada</label></div>' +
+        '<div style="font-size:11px;color:var(--muted);margin:2px 2px 8px">Cada día marcado queda certificado como una jornada de 9 a 13hs (4hs), igual que un check-in/check-out normal.</div>' +
+        '<div class="field full"><button class="btn primary" type="submit">Certificar</button></div>' +
+      '</form>' +
+      '<div id="certificarRangoError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>'
+    );
+    document.getElementById('certificarRangoForm').onsubmit = async e => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button[type="submit"]');
+      const errEl = document.getElementById('certificarRangoError');
+      errEl.style.display = 'none';
+      const data = Object.fromEntries(new FormData(e.target).entries());
+      if (!data.desde || !data.hasta || data.desde > data.hasta) {
+        errEl.textContent = 'Revisá el rango de fechas.';
+        errEl.style.display = 'block';
+        return;
+      }
+      btn.disabled = true; btn.textContent = 'Certificando…';
+      const soloHabiles = data.soloHabiles === 'on';
+      const saltarExistentes = data.saltarExistentes === 'on';
+      const idxs = modulosElegidosDeModulo(m, s);
+      let dias = 0, errores = 0;
+      let fecha = data.desde;
+      while (fecha <= data.hasta) {
+        const d = new Date(fecha+'T00:00:00');
+        const esHabil = d.getDay() !== 0 && d.getDay() !== 6;
+        if (!soloHabiles || esHabil) {
+          for (const idx of idxs) {
+            const yaExiste = (state.certificaciones||[]).some(c => c.moduloAsignadoId===moduloAsignadoId && c.fecha===fecha && Number(c.moduloIdx||1)===Number(idx));
+            if (yaExiste && saltarExistentes) continue;
+            const ok = await guardarAsistenciaManual(moduloAsignadoId, fecha, idx, '09:00', '13:00');
+            if (ok) dias++; else errores++;
+          }
+        }
+        const next = new Date(fecha+'T00:00:00'); next.setDate(next.getDate()+1);
+        fecha = next.toISOString().slice(0,10);
+      }
+      closeModal();
+      renderModulosAsignados();
+      renderAsistenciaDiaria();
+      alert('Listo: '+dias+' día(s) certificado(s)'+(errores?', '+errores+' con error':'')+'.');
+    };
+  }
+
   function renderModulosAsignados() {
     const el = document.getElementById('modulosAsignadosListContent');
     updatePostulacionesBadge();
@@ -11897,7 +11959,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
               '<strong style="font-size:13px;text-transform:capitalize">📅 '+periodoLabel(c.periodo)+'</strong>' +
               '<span class="badge '+estadoColor+'">'+CICLO_ESTADO_LABEL[c.estado]+' · '+aprobados+'/'+items.length+'</span>' +
             '</div>' +
-            '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">🗓️ Certificación diaria: <strong>'+certs.length+(esperadas?'/'+esperadas:'')+'</strong> día'+(certs.length===1?'':'s')+' certificado'+(certs.length===1?'':'s')+(s?.horasVariables?' · <strong>'+horasCertificadasCiclo(c.id).toFixed(1)+' hs</strong> certificadas · <strong>$'+Math.round(horasCertificadasCiclo(c.id)*(s?.precioHora||0)).toLocaleString()+'</strong>':'')+'</div>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">' +
+              '<div style="font-size:12px;color:var(--muted)">🗓️ Certificación diaria: <strong>'+certs.length+(esperadas?'/'+esperadas:'')+'</strong> día'+(certs.length===1?'':'s')+' certificado'+(certs.length===1?'':'s')+(s?.horasVariables?' · <strong>'+horasCertificadasCiclo(c.id).toFixed(1)+' hs</strong> certificadas · <strong>$'+Math.round(horasCertificadasCiclo(c.id)*(s?.precioHora||0)).toLocaleString()+'</strong>':'')+'</div>' +
+              '<button class="btn secondary xs" onclick="openCertificarRangoModal(\''+m.id+'\',\''+c.periodo+'\')">📅 Certificar varios días</button>' +
+            '</div>' +
             items.map(it => {
               const porValidar = it.estado==='pendiente' && (it.evidenciaUrl||it.evidenciaNota);
               const badge = it.estado==='aprobado' ? '<span class="badge green">✓ Aprobado</span>' : it.estado==='rechazado' ? '<span class="badge red">✕ Rechazado</span>' : porValidar ? '<span class="badge" style="background:#fffbeb;color:#92400e">🔎 Por validar</span>' : '<span class="badge gray">Pendiente</span>';
