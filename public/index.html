@@ -7242,7 +7242,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const postsPendientes = (mods.length || serviciosNuevos.length) ? [] : postulacionesDe(p);
       const rolLabel = p.rol || (serviciosNuevos.length ? serviciosNuevos.map(s=>s.titulo).join(', ')
         : postsPendientes.length ? 'Postulado a ' + postsPendientes.map(po => servicioById(po.servicioId)?.titulo).filter(Boolean).join(', ')
-        : 'Sin rol');
+        : 'Sin módulo asignado todavía');
       const modsValidados = mods.filter(m => (state.modEvidencias||[]).some(e => e.moduloId===m.id && e.periodo===mes && (e.estado==='cumplido'||e.estado==='certificado'))).length;
       const totalModulos = mods.reduce((s,m) => s+(m.cantidad||1), 0);
       const totalHoras = totalModulos * 4;
@@ -7338,7 +7338,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const postsPendientes = (mods.length || serviciosNuevos.length) ? [] : postulacionesDe(p);
     const rolLabel = p.rol || (serviciosNuevos.length ? serviciosNuevos.map(s=>s.titulo).join(', ')
       : postsPendientes.length ? 'Postulado a ' + postsPendientes.map(po => servicioById(po.servicioId)?.titulo).filter(Boolean).join(', ')
-      : 'Sin rol');
+      : 'Sin módulo asignado todavía');
     const mes = new Date().toISOString().slice(0,7);
     const mesLabel = new Date().toLocaleDateString('es-AR',{month:'long',year:'numeric'});
 
