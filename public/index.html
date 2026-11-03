@@ -2487,6 +2487,7 @@
       <div class="sv-tabs">
         <button class="sv-tab active" data-svtab="servicios" onclick="switchServiciosTab('servicios')">Módulos</button>
         <button class="sv-tab" data-svtab="asignados" onclick="switchServiciosTab('asignados')">Módulos asignados <span id="asignadosTabCount" class="sv-tab-count" style="display:none">0</span></button>
+        <button class="sv-tab" data-svtab="asistencia" onclick="switchServiciosTab('asistencia')">Asistencia diaria</button>
       </div>
       <div id="serviciosTabServicios">
         <div class="card" style="margin-bottom:14px">
@@ -2509,6 +2510,21 @@
           </select>
         </div>
         <div id="modulosAsignadosListContent"></div>
+      </div>
+      <div id="serviciosTabAsistencia" style="display:none">
+        <div class="toolbar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <input type="date" id="asistenciaFecha" onchange="renderAsistenciaDiaria()" style="padding:8px 10px;border-radius:8px;border:1px solid var(--line)">
+          <select id="asistenciaEcosistemaFilter" onchange="renderAsistenciaDiaria()">
+            <option value="all">Todos los ecosistemas</option>
+          </select>
+          <select id="asistenciaEstadoFilter" onchange="renderAsistenciaDiaria()">
+            <option value="all">Todos</option>
+            <option value="presente">Presente</option>
+            <option value="en_curso">En curso (sin cierre)</option>
+            <option value="ausente">Sin marcar</option>
+          </select>
+        </div>
+        <div id="asistenciaListContent"></div>
       </div>
     </section>
 
@@ -5831,6 +5847,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     renderServicios();
     renderPostulaciones();
     renderModulosAsignados();
+    renderAsistenciaDiaria();
     await saveState();
   }
 
@@ -10813,6 +10830,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     document.querySelectorAll('#page-servicios .sv-tab').forEach(b => b.classList.toggle('active', b.dataset.svtab===tab));
     document.getElementById('serviciosTabServicios').style.display = tab==='servicios' ? 'block' : 'none';
     document.getElementById('serviciosTabAsignados').style.display = tab==='asignados' ? 'block' : 'none';
+    document.getElementById('serviciosTabAsistencia').style.display = tab==='asistencia' ? 'block' : 'none';
+    if (tab === 'asistencia') renderAsistenciaDiaria();
   }
 
   function switchLiquidacionTab(tab) {
@@ -11566,6 +11585,75 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const [y,m] = (periodo||'').split('-');
     if (!y||!m) return periodo||'';
     return new Date(Number(y), Number(m)-1, 1).toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+  }
+
+  // Asistencia diaria: la misma certificación de check-in/check-out que
+  // ya se usa para pagar (hh_certificaciones), pero mostrada día por día
+  // en vez de como un contador acumulado — para que el admin vea quién
+  // marcó (o no) un día puntual.
+  function renderAsistenciaDiaria() {
+    const el = document.getElementById('asistenciaListContent');
+    if (!el) return;
+    const fechaInput = document.getElementById('asistenciaFecha');
+    if (fechaInput && !fechaInput.value) fechaInput.value = fechaHoy();
+    const fecha = fechaInput?.value || fechaHoy();
+    const ecoFilter = document.getElementById('asistenciaEcosistemaFilter');
+    if (ecoFilter && ecoFilter.options.length <= 1) {
+      ecoFilter.innerHTML = '<option value="all">Todos los ecosistemas</option>' +
+        (state.ecosistemas||[]).map(e => '<option value="'+e.id+'">'+e.nombre+'</option>').join('');
+    }
+    const ecoVal = ecoFilter?.value || 'all';
+    const estadoVal = document.getElementById('asistenciaEstadoFilter')?.value || 'all';
+
+    const filas = (state.modulosAsignados||[]).map(m => {
+      const s = servicioById(m.servicioId);
+      const prest = prestadorById(m.prestadorId);
+      if (!s || !prest) return null;
+      const idxs = modulosElegidosDeModulo(m, s);
+      const marcas = idxs.map(idx => ({
+        idx,
+        cert: (state.certificaciones||[]).find(c => c.moduloAsignadoId === m.id && c.fecha === fecha && Number(c.moduloIdx||1) === Number(idx))
+      }));
+      const todasCompletas = marcas.every(x => x.cert?.horaIn && x.cert?.horaOut);
+      const algunaMarca = marcas.some(x => x.cert?.horaIn || x.cert?.horaOut);
+      const estado = todasCompletas ? 'presente' : algunaMarca ? 'en_curso' : 'ausente';
+      return { m, s, prest, marcas, estado };
+    }).filter(Boolean)
+      .filter(f => ecoVal === 'all' || (f.s.ecosistemaIds||[]).includes(ecoVal))
+      .filter(f => estadoVal === 'all' || f.estado === estadoVal);
+
+    if (!filas.length) {
+      el.innerHTML = '<div class="empty">No hay módulos asignados que coincidan con el filtro.</div>';
+      return;
+    }
+
+    const ESTADO_INFO = {
+      presente:  { label: '✅ Presente',  bg: '#f0fdf4', color: '#166534' },
+      en_curso:  { label: '🟡 En curso (sin cierre)', bg: '#fffbeb', color: '#92400e' },
+      ausente:   { label: '⚪ Sin marcar', bg: '#f9fafb', color: 'var(--muted)' },
+    };
+
+    filas.sort((a,b) => (a.estado==='ausente'?1:0) - (b.estado==='ausente'?1:0) || a.prest.nombre.localeCompare(b.prest.nombre));
+
+    el.innerHTML = '<div style="display:flex;flex-direction:column;gap:10px">' +
+      filas.map(f => {
+        const info = ESTADO_INFO[f.estado];
+        const horasTxt = f.marcas.map(x => {
+          if (!x.cert || (!x.cert.horaIn && !x.cert.horaOut)) return (f.marcas.length>1?'Módulo '+x.idx+': ':'')+'sin marcar';
+          const inTxt = x.cert.horaIn ? new Date(x.cert.horaIn).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '—';
+          const outTxt = x.cert.horaOut ? new Date(x.cert.horaOut).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '—';
+          return (f.marcas.length>1?'Módulo '+x.idx+': ':'')+'🕒 '+inTxt+' → '+outTxt;
+        }).join(' · ');
+        return '<div class="card" style="margin-bottom:0;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:'+info.bg+'">' +
+          '<div>' +
+            '<div style="font-weight:700;font-size:14px">'+f.prest.nombre+'</div>' +
+            '<div style="font-size:12px;color:var(--muted)">'+f.s.titulo+'</div>' +
+            '<div style="font-size:12px;margin-top:4px">'+horasTxt+'</div>' +
+          '</div>' +
+          '<span class="badge" style="background:#fff;color:'+info.color+';border-color:'+info.color+'">'+info.label+'</span>' +
+        '</div>';
+      }).join('') +
+    '</div>';
   }
 
   function renderModulosAsignados() {
