@@ -5921,6 +5921,22 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   }
   function closeModal() { modalBackdrop.classList.remove('open'); modalBody.innerHTML = ''; }
 
+  // Vista previa de un documento adjunto (constancia, foto, CV) dentro
+  // del modal de la app, en vez de abrirlo en una pestaña nueva — el
+  // admin lo pidió para no perder el contexto de la pantalla del
+  // prestador al revisar cada adjunto.
+  function verDocumento(url, label) {
+    if (!url) return;
+    const esPdf = /\.pdf(\?|$)/i.test(url);
+    openModal(label || 'Documento', '',
+      (esPdf
+        ? '<iframe src="'+url+'" style="width:100%;height:70vh;border:1px solid var(--line);border-radius:10px;background:#fff"></iframe>'
+        : '<img src="'+url+'" style="width:100%;max-height:70vh;object-fit:contain;border-radius:10px;display:block;margin:0 auto">'
+      ) +
+      '<div style="margin-top:10px;text-align:right"><a href="'+url+'" target="_blank" style="font-size:12px;color:#1a73e8">Abrir en pestaña nueva ↗</a></div>'
+    );
+  }
+
   document.getElementById('closeModalBtn').onclick = closeModal;
   document.getElementById('backToPrestadoresBtn')?.addEventListener('click', ()=>{
     currentPrestadorId = null;
@@ -7360,16 +7376,16 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '<div style="font-size:14px;color:var(--muted);margin-bottom:10px">'+rolLabel+(ecoNombres.length?' · 🌿 '+ecoNombres.join(', '):'')+(ag?' · 🏢 '+ag.name:'')+'</div>',
             '<div style="display:flex;flex-wrap:wrap;gap:6px">',
               p.tieneSeguro ? '<span class="badge green">✓ Seguro</span>' : '<span class="badge gray">✗ Seguro</span>',
-              p.numeroCuil ? (p.cuilComprobanteUrl ? '<span class="badge green">🪪 CUIL '+p.numeroCuil+' <a href="'+p.cuilComprobanteUrl+'" target="_blank" style="color:inherit">📎</a></span>' : '<span class="badge" style="background:#fffbeb;color:#92400e;border-color:#92400e">🪪 CUIL '+p.numeroCuil+' — ⚠️ falta constancia</span>') : (p.tieneCuil ? '<span class="badge green">✓ CUIL</span>' : '<span class="badge gray">✗ CUIL</span>'),
+              p.numeroCuil ? (p.cuilComprobanteUrl ? '<span class="badge green">🪪 CUIL '+p.numeroCuil+' <a href="javascript:void(0)" onclick="verDocumento(\''+p.cuilComprobanteUrl+'\',\'Constancia de CUIL\')" style="color:inherit">📎</a></span>' : '<span class="badge" style="background:#fffbeb;color:#92400e;border-color:#92400e">🪪 CUIL '+p.numeroCuil+' — ⚠️ falta constancia</span>') : (p.tieneCuil ? '<span class="badge green">✓ CUIL</span>' : '<span class="badge gray">✗ CUIL</span>'),
               p.tieneDni    ? '<span class="badge green">✓ DNI</span>'    : '<span class="badge gray">✗ DNI</span>',
-              (p.cbu||p.aliasCbu) ? '<span class="badge blue">💳 '+[p.cbu,p.aliasCbu].filter(Boolean).join(' · ')+(p.cbuComprobanteUrl?' <a href="'+p.cbuComprobanteUrl+'" target="_blank" style="color:inherit">📎</a>':'')+'</span>' : '',
-              p.cvUrl ? '<span class="badge blue">📄 <a href="'+p.cvUrl+'" target="_blank" style="color:inherit">Ver CV</a></span>' : '',
+              (p.cbu||p.aliasCbu) ? '<span class="badge blue">💳 '+[p.cbu,p.aliasCbu].filter(Boolean).join(' · ')+(p.cbuComprobanteUrl?' <a href="javascript:void(0)" onclick="verDocumento(\''+p.cbuComprobanteUrl+'\',\'Constancia de CBU\')" style="color:inherit">📎</a>':'')+'</span>' : '',
+              p.cvUrl ? '<span class="badge blue">📄 <a href="javascript:void(0)" onclick="verDocumento(\''+p.cvUrl+'\',\'CV\')" style="color:inherit">Ver CV</a></span>' : '',
               p.concursoEmprendedores ? '<span class="badge blue">🏆 Concurso</span>' : '',
               p.tipoContrato ? '<span class="badge blue">📄 '+p.tipoContrato+'</span>' : '',
               p.contacto ? '<span class="challenge-meta-tag">📱 '+p.contacto+'</span>' : '',
               p.driveLink ? '<a href="'+p.driveLink+'" target="_blank" class="challenge-meta-tag" style="background:#e8f0fe;color:#1a73e8;text-decoration:none">📁 Documentación</a>' : '',
               p.oportunaiLink ? '<a href="'+p.oportunaiLink+'" target="_blank" class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6;text-decoration:none">🔗 OportunAI</a>' : '',
-              p.docContratoUrl ? '<a href="'+p.docContratoUrl+'" target="_blank" class="challenge-meta-tag" style="background:#e8f0fe;color:#1a73e8;text-decoration:none">📎 Doc. de contrato</a>' : '',
+              p.docContratoUrl ? '<a href="javascript:void(0)" onclick="verDocumento(\''+p.docContratoUrl+'\',\'Documento de contrato\')" class="challenge-meta-tag" style="background:#e8f0fe;color:#1a73e8;text-decoration:none">📎 Doc. de contrato</a>' : '',
             '</div>',
           '</div>',
           '<div style="display:flex;gap:8px;flex-shrink:0">',
@@ -8778,10 +8794,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       { label: 'Dirección', ok: !!p.direccion, value: p.direccion },
       { label: 'Teléfono', ok: !!p.telefono, value: p.telefono },
       { label: 'Fecha de nacimiento', ok: !!p.fechaNacimiento, value: p.fechaNacimiento ? new Date(p.fechaNacimiento+'T00:00:00').toLocaleDateString('es-AR') : '' },
-      { label: 'CUIL', ok: !!(p.numeroCuil && p.cuilComprobanteUrl), warn: !!(p.numeroCuil && !p.cuilComprobanteUrl), warnLabel: 'cargó el número pero falta subir la constancia', value: p.numeroCuil, doc: p.cuilComprobanteUrl, docLabel: '📎 constancia' },
-      { label: 'CBU / Alias (para cobrar)', ok: !!(p.cbu||p.aliasCbu), value: [p.cbu,p.aliasCbu].filter(Boolean).join(' · '), doc: p.cbuComprobanteUrl, docLabel: '📎 constancia' },
-      { label: 'Foto de perfil', ok: !!p.fotoUrl, value: '', doc: p.fotoUrl, docLabel: '🖼️ ver foto' },
-      { label: 'CV (opcional)', ok: !!p.cvUrl, opcional: true, value: '', doc: p.cvUrl, docLabel: '📄 ver CV' },
+      { label: 'CUIL', ok: !!(p.numeroCuil && p.cuilComprobanteUrl), warn: !!(p.numeroCuil && !p.cuilComprobanteUrl), warnLabel: 'cargó el número pero falta subir la constancia', value: p.numeroCuil, doc: p.cuilComprobanteUrl, docLabel: '📎 constancia', docTitle: 'Constancia de CUIL' },
+      { label: 'CBU / Alias (para cobrar)', ok: !!(p.cbu||p.aliasCbu), value: [p.cbu,p.aliasCbu].filter(Boolean).join(' · '), doc: p.cbuComprobanteUrl, docLabel: '📎 constancia', docTitle: 'Constancia de CBU' },
+      { label: 'Foto de perfil', ok: !!p.fotoUrl, value: '', doc: p.fotoUrl, docLabel: '🖼️ ver foto', docTitle: 'Foto de perfil' },
+      { label: 'CV (opcional)', ok: !!p.cvUrl, opcional: true, value: '', doc: p.cvUrl, docLabel: '📄 ver CV', docTitle: 'CV' },
     ];
     return '<div class="card" style="margin-bottom:18px">' +
       '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px">📋 Checklist de perfil</div>' +
@@ -8793,7 +8809,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         const mark = r.warn ? '⚠️' : neutral ? '—' : (r.ok ? '✓' : '✗');
         return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:'+bg+'">' +
           '<div style="font-size:13px"><strong style="color:'+markColor+'">'+mark+'</strong> '+r.label+(r.value?': <span style="color:var(--muted)">'+r.value+'</span>':'')+(r.warn?' — <span style="color:#92400e">'+r.warnLabel+'</span>':'')+'</div>' +
-          (r.doc ? '<a href="'+r.doc+'" target="_blank" onclick="event.stopPropagation()" style="font-size:12px;color:#1a73e8;flex-shrink:0;white-space:nowrap">'+r.docLabel+'</a>' : '') +
+          (r.doc ? '<a href="javascript:void(0)" onclick="event.stopPropagation();verDocumento(\''+r.doc+'\',\''+r.docTitle+'\')" style="font-size:12px;color:#1a73e8;flex-shrink:0;white-space:nowrap">'+r.docLabel+'</a>' : '') +
         '</div>';
       }).join('') +
       '</div>' +
