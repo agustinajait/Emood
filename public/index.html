@@ -794,7 +794,7 @@
     .admin-topbar-fixed {
       position: fixed; top: 0; left: var(--sidebar-w); right: 0; height: 52px;
       background: #fff; border-bottom: 1px solid var(--line);
-      display: flex; align-items: center; justify-content: flex-end;
+      display: flex; align-items: center; justify-content: flex-end; gap: 10px;
       padding: 0 24px; z-index: 40;
     }
     .admin-topbar-fixed .sidebar-logout {
@@ -2355,6 +2355,7 @@
   </aside>
 
   <div class="admin-topbar-fixed">
+    <button class="btn secondary small" id="refrescarDatosBtn" onclick="refrescarDatos()" title="Trae lo último que haya en el servidor (postulaciones, prestadores, etc.) — la pantalla no se actualiza sola mientras la tenés abierta.">🔄 Actualizar</button>
     <button class="sidebar-logout" onclick="doLogout()">⏻ Cerrar sesión</button>
   </div>
 
@@ -5968,6 +5969,24 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     renderModulosAsignados();
     renderAsistenciaDiaria();
     await saveState();
+  }
+
+  // La pantalla NO se actualiza sola mientras queda abierta — si un
+  // prestador se postula o registra mientras el admin tiene la pestaña
+  // abierta, no aparece hasta que se traiga de nuevo del servidor.
+  // Este botón ("🔄 Actualizar", fijo arriba a la derecha en toda la
+  // app) hace exactamente eso sin perder en qué pantalla se está.
+  async function refrescarDatos() {
+    const btn = document.getElementById('refrescarDatosBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '🔄 Actualizando…'; }
+    try {
+      const fresh = await loadStateFromSupabase();
+      if (fresh) state = normalizeState(fresh);
+      await loadOrgName();
+      await renderAll();
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🔄 Actualizar'; }
+    }
   }
 
   /* ─── CRUD HELPERS ───────────────────────────────────── */
@@ -11715,7 +11734,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const estadoBadge = p.estado==='pendiente' ? '<span class="badge blue">Pendiente</span>' : p.estado==='aceptada' ? '<span class="badge green">Aceptada</span>' : '<span class="badge gray">Rechazada</span>';
       return '<div class="card" style="margin-bottom:10px">' +
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
-          '<div><div style="font-weight:700">'+(prest?.nombre||'Prestador eliminado')+'</div>' +
+          '<div><div style="font-weight:700">'+(prest?nombreCompleto(prest):'Prestador eliminado')+'</div>' +
           (p.mensaje?'<div style="font-size:13px;margin-top:6px">"'+p.mensaje+'"</div>':'') +
           (p.numeroDupla?'<div style="font-size:12px;color:#5b21b6;margin-top:6px">🤝 Número de dupla: <strong>'+p.numeroDupla+'</strong></div>':'') +
           (modulosArrPost.length>1?'<div style="font-size:12px;color:#5b21b6;margin-top:6px">🧩 Se postula a: Módulo '+(p.modulosElegidos&&p.modulosElegidos.length?p.modulosElegidos.join(', '):'todos')+'</div>':'') +
