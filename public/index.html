@@ -2456,10 +2456,11 @@
             <span class="search-icon">🔍</span>
             <input type="text" id="prestadorSearch" placeholder="Buscar por nombre, rol o agencia…" oninput="renderPrestadores()">
           </div>
-          <div class="toolbar">
+          <div class="toolbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
             <select id="prestadorEcosistemaFilter" onchange="renderPrestadores()">
               <option value="all">Todos los ecosistemas</option>
             </select>
+            <div id="prestadoresCount" style="font-size:13px;color:var(--muted);font-weight:600"></div>
           </div>
           <div id="prestadoresTable"></div>
         </div>
@@ -7357,6 +7358,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const ag = state.agencies.find(a => a.id === p.agencyId)?.name||'';
       return [p.nombre, p.rol||'', ag, p.contacto||''].some(v => v.toLowerCase().includes(q));
     });
+
+    const totalGeneral = (state.prestadores||[]).length;
+    const countEl = document.getElementById('prestadoresCount');
+    if (countEl) {
+      countEl.textContent = list.length === totalGeneral
+        ? totalGeneral + ' prestador' + (totalGeneral===1?'':'es')
+        : list.length + ' de ' + totalGeneral + ' prestadores';
+    }
 
     if (!list.length) {
       el.innerHTML = q ? '<div class="empty">Sin resultados para "'+q+'".</div>' : '<div class="empty">No hay prestadores registrados.</div>';
