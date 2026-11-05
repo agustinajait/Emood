@@ -4411,6 +4411,13 @@
       doc_adjunto_url: s.docAdjuntoUrl||'',
       estado: s.estado||'activo',
       visibilidad: s.visibilidad||'publico',
+      factura_cuit: s.facturaCuit||'',
+      factura_razon_social: s.facturaRazonSocial||'',
+      factura_domicilio: s.facturaDomicilio||'',
+      factura_condicion_iva: s.facturaCondicionIva||'',
+      factura_condicion_venta: s.facturaCondicionVenta||'Contado',
+      factura_descripcion: s.facturaDescripcion||'',
+      factura_notas: s.facturaNotas||'',
       created_at: s.createdAt||nowISO(),
     };
   }
@@ -4431,6 +4438,13 @@
       docAdjuntoUrl: r.doc_adjunto_url||'',
       estado: r.estado||'activo',
       visibilidad: r.visibilidad||'publico',
+      facturaCuit: r.factura_cuit||'',
+      facturaRazonSocial: r.factura_razon_social||'',
+      facturaDomicilio: r.factura_domicilio||'',
+      facturaCondicionIva: r.factura_condicion_iva||'',
+      facturaCondicionVenta: r.factura_condicion_venta||'Contado',
+      facturaDescripcion: r.factura_descripcion||'',
+      facturaNotas: r.factura_notas||'',
       createdAt: r.created_at||'',
     };
   }
@@ -4506,6 +4520,7 @@
       estado: c.estado||'en_progreso',
       remito_numero: c.remitoNumero||null, remito_fecha: c.remitoFecha||null,
       pagado: !!c.pagado, fecha_pago: c.fechaPago||null,
+      factura_url: c.facturaUrl||null,
       created_at: c.createdAt||nowISO(), updated_at: nowISO(),
     };
   }
@@ -4515,6 +4530,7 @@
       estado: r.estado||'en_progreso',
       remitoNumero: r.remito_numero||'', remitoFecha: r.remito_fecha||'',
       pagado: !!r.pagado, fechaPago: r.fecha_pago||'',
+      facturaUrl: r.factura_url||'',
       createdAt: r.created_at||'', updatedAt: r.updated_at||'',
     };
   }
@@ -7982,13 +7998,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       </div>
       <div class="card">
         <div class="table-wrap"><table>
-          <thead><tr><th>Prestador</th><th>Módulo</th><th>Período</th><th>CBU / Alias</th><th>Monto</th><th></th></tr></thead>
+          <thead><tr><th>Prestador</th><th>Módulo</th><th>Período</th><th>CBU / Alias</th><th>Factura</th><th>Monto</th><th></th></tr></thead>
           <tbody>
             ${filtradas.map(f => `<tr>
-              <td><strong>${f.prestador.nombre}</strong></td>
+              <td><strong>${nombreCompleto(f.prestador)}</strong></td>
               <td>${f.servicio?.titulo||'—'}</td>
               <td style="text-transform:capitalize">${periodoLabel(f.ciclo.periodo)}</td>
               <td style="font-size:12.5px">${f.prestador.cbu ? f.prestador.cbu : (f.prestador.aliasCbu ? '' : '<span style="color:var(--danger)">⚠️ Sin CBU/alias cargado</span>')}${f.prestador.aliasCbu ? (f.prestador.cbu?' · ':'')+f.prestador.aliasCbu : ''}${f.prestador.cbuComprobanteUrl ? ' · <a href="'+f.prestador.cbuComprobanteUrl+'" target="_blank">📎 constancia</a>' : ''}</td>
+              <td style="font-size:12.5px">${f.ciclo.facturaUrl ? '<a href="javascript:void(0)" onclick="verDocumento(\''+f.ciclo.facturaUrl+'\',\'Factura\')">🧾 Ver</a>' : '<span style="color:var(--danger)">⚠️ Sin factura</span>'}</td>
               <td><strong>$${f.monto.toLocaleString()}</strong></td>
               <td><button class="btn secondary xs" data-action="marcar-pagado" data-id="${f.ciclo.id}">✓ Marcar pagado</button></td>
             </tr>`).join('')}
@@ -10004,23 +10021,32 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   // plata; esto es solo el resumen de cuánto le deben y cuánto ya
   // le pagaron, al estilo "ingresos" de Workana.
   function buildPrestPagosSection(prest) {
-    const misCiclos = (state.moduloCiclos||[]).filter(c => {
-      if (c.estado !== 'aprobado') return false;
+    const todosMisCiclos = (state.moduloCiclos||[]).filter(c => {
+      if (c.estado !== 'completado' && c.estado !== 'aprobado') return false;
       const m = moduloAsignadoById(c.moduloAsignadoId);
       return m && m.prestadorId === prest.id;
     });
-    const pendientes = misCiclos.filter(c => !c.pagado).sort((a,b)=>b.periodo.localeCompare(a.periodo));
-    const pagados = misCiclos.filter(c => c.pagado).sort((a,b)=>b.periodo.localeCompare(a.periodo));
+    const aprobados = todosMisCiclos.filter(c => c.estado === 'aprobado');
+    const pendientes = aprobados.filter(c => !c.pagado).sort((a,b)=>b.periodo.localeCompare(a.periodo));
+    const pagados = aprobados.filter(c => c.pagado).sort((a,b)=>b.periodo.localeCompare(a.periodo));
+    const completados = todosMisCiclos.filter(c => c.estado === 'completado').sort((a,b)=>b.periodo.localeCompare(a.periodo));
     const totalPendiente = pendientes.reduce((s,c)=>s+montoCiclo(c),0);
     const totalCobrado = pagados.reduce((s,c)=>s+montoCiclo(c),0);
     const fila = c => {
       const m = moduloAsignadoById(c.moduloAsignadoId);
       const s = m && servicioById(m.servicioId);
-      return '<div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding:10px 0">' +
-        '<div><strong style="font-size:13px">'+(s?.titulo||'—')+'</strong><div style="font-size:12px;color:var(--muted);text-transform:capitalize">'+periodoLabel(c.periodo)+'</div></div>' +
-        '<div style="text-align:right"><strong style="font-size:14px">$'+montoCiclo(c).toLocaleString()+'</strong><div style="margin-top:2px">'+
-          (c.pagado ? '<span class="badge green">✓ Pagado'+(c.fechaPago?' · '+new Date(c.fechaPago).toLocaleDateString('es-AR'):'')+'</span>' : '<span class="badge blue">Pendiente de pago</span>') +
-        '</div></div>' +
+      const estadoBadge = c.estado === 'aprobado'
+        ? (c.pagado ? '<span class="badge green">✓ Pagado'+(c.fechaPago?' · '+new Date(c.fechaPago).toLocaleDateString('es-AR'):'')+'</span>' : '<span class="badge blue">Pendiente de pago</span>')
+        : '<span class="badge gray">Mes cerrado — esperando remito</span>';
+      return '<div style="border-top:1px solid var(--line);padding:10px 0">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+          '<div><strong style="font-size:13px">'+(s?.titulo||'—')+'</strong><div style="font-size:12px;color:var(--muted);text-transform:capitalize">'+periodoLabel(c.periodo)+'</div></div>' +
+          '<div style="text-align:right"><strong style="font-size:14px">$'+montoCiclo(c).toLocaleString()+'</strong><div style="margin-top:2px">'+estadoBadge+'</div></div>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:8px">' +
+          (c.facturaUrl ? '<span style="font-size:12px;color:#166534">✓ Factura subida</span>' : '') +
+          '<button class="btn secondary xs" onclick="openInstructivoFacturacionModal(\''+c.id+'\')">🧾 '+(c.facturaUrl?'Ver factura':'Subir factura')+'</button>' +
+        '</div>' +
       '</div>';
     };
     return '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px;margin-top:8px">💰 Mis pagos</div>' +
@@ -10028,9 +10054,70 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '<div class="owner-stat"><div class="owner-stat-val" style="color:#92400e">$'+totalPendiente.toLocaleString()+'</div><div class="owner-stat-label">Pendiente de cobro</div></div>' +
         '<div class="owner-stat"><div class="owner-stat-val" style="color:#166534">$'+totalCobrado.toLocaleString()+'</div><div class="owner-stat-label">Cobrado acumulado</div></div>' +
       '</div>' +
-      (misCiclos.length
-        ? '<div class="owner-card" style="margin-bottom:24px">' + [...pendientes, ...pagados].map(fila).join('') + '</div>'
-        : '<div class="empty" style="margin-bottom:24px">Todavía no tenés remitos aprobados — van a aparecer acá a medida que se vayan aprobando tus módulos.</div>');
+      (todosMisCiclos.length
+        ? '<div class="owner-card" style="margin-bottom:24px">' + [...completados, ...pendientes, ...pagados].map(fila).join('') + '</div>'
+        : '<div class="empty" style="margin-bottom:24px">Todavía no tenés meses cerrados — van a aparecer acá a medida que termine cada período.</div>');
+  }
+
+  // Instructivo de facturación: datos configurados por la organización
+  // en el módulo (CUIT, razón social, etc.), con el período y las
+  // fechas calculados según el ciclo (mes) que se está cerrando.
+  function buildInstructivoFacturacion(s, periodo) {
+    const [y,mo] = periodo.split('-').map(Number);
+    const ultimoDia = new Date(y, mo, 0).getDate();
+    const pad = n => String(n).padStart(2,'0');
+    const fecha = pad(ultimoDia)+'/'+pad(mo)+'/'+y;
+    const desde = '01/'+pad(mo)+'/'+y;
+    const tieneDatos = s.facturaCuit || s.facturaRazonSocial || s.facturaDomicilio || s.facturaCondicionIva || s.facturaDescripcion;
+    if (!tieneDatos) return '<div class="empty">Esta organización todavía no cargó los datos de facturación de este módulo — pedíselos directamente mientras tanto.</div>';
+    return '<div style="font-size:13px;line-height:1.8">' +
+      (s.facturaNotas ? '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-bottom:14px;white-space:pre-wrap">'+s.facturaNotas+'</div>' : '') +
+      '<div style="font-weight:700;margin-bottom:8px;text-transform:uppercase;font-size:12px;letter-spacing:.04em;color:var(--muted)">Datos de facturación</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;background:var(--card-soft);border-radius:10px;padding:14px">' +
+        '<div><strong>Fecha de emisión:</strong> '+fecha+'</div>' +
+        '<div><strong>Período:</strong> '+desde+' al '+fecha+'</div>' +
+        '<div><strong>Fecha de vencimiento para el pago:</strong> '+fecha+'</div>' +
+        (s.facturaCuit ? '<div><strong>CUIT:</strong> '+s.facturaCuit+'</div>' : '') +
+        (s.facturaRazonSocial ? '<div><strong>Nombre:</strong> '+s.facturaRazonSocial+'</div>' : '') +
+        (s.facturaCondicionIva ? '<div><strong>Condición del IVA:</strong> '+s.facturaCondicionIva+'</div>' : '') +
+        (s.facturaDomicilio ? '<div><strong>Domicilio:</strong> '+s.facturaDomicilio+'</div>' : '') +
+        (s.facturaCondicionVenta ? '<div><strong>Condición de venta:</strong> '+s.facturaCondicionVenta+'</div>' : '') +
+        (s.facturaDescripcion ? '<div><strong>Descripción:</strong> '+s.facturaDescripcion+'</div>' : '') +
+      '</div>' +
+    '</div>';
+  }
+  function openInstructivoFacturacionModal(cicloId) {
+    const c = cicloById(cicloId);
+    const m = c && moduloAsignadoById(c.moduloAsignadoId);
+    const s = m && servicioById(m.servicioId);
+    if (!c || !m || !s) return;
+    openModal('Instructivo de facturación — ' + periodoLabel(c.periodo), s.titulo,
+      buildInstructivoFacturacion(s, c.periodo) +
+      '<div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">' +
+        '<label style="font-weight:700;font-size:13px">📎 Adjuntar mi factura</label>' +
+        '<div><input type="file" id="facturaFileInput" accept="image/*,application/pdf" style="margin-top:6px"></div>' +
+        (c.facturaUrl ? '<div style="margin-top:6px"><a href="javascript:void(0)" onclick="verDocumento(\''+c.facturaUrl+'\',\'Factura\')" style="font-size:12px;color:#1a73e8">🔗 Ver factura ya subida</a></div>' : '') +
+        '<button class="btn primary" style="margin-top:10px" onclick="subirFacturaCiclo(\''+cicloId+'\')">Subir factura</button>' +
+      '</div>' +
+      '<div id="facturaError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>'
+    );
+  }
+  async function subirFacturaCiclo(cicloId) {
+    const c = cicloById(cicloId);
+    const m = c && moduloAsignadoById(c.moduloAsignadoId);
+    const errEl = document.getElementById('facturaError');
+    if (!c || !m) return;
+    const file = document.getElementById('facturaFileInput')?.files?.[0];
+    if (!file) { errEl.textContent = 'Elegí un archivo primero.'; errEl.style.display = 'block'; return; }
+    errEl.style.display = 'none';
+    const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
+    const uploaded = await sbUpload('prestador-docs', m.id + '/factura_' + c.periodo + '_' + Date.now() + '.' + ext, file);
+    if (!uploaded) { errEl.textContent = 'No se pudo subir. Probá de nuevo.'; errEl.style.display = 'block'; return; }
+    c.facturaUrl = uploaded;
+    const ok = await saveOne(DB.moduloCiclos, moduloCicloToRow(c));
+    if (!ok) { errEl.textContent = 'No se pudo guardar. Probá de nuevo.'; errEl.style.display = 'block'; return; }
+    closeModal();
+    renderPrestadorViewFromState(m.prestadorId);
   }
 
   // Lo primero que ve el prestador al entrar: marcar entrada (y,
@@ -11423,6 +11510,17 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '</div>' +
           '<div style="font-size:11px;color:var(--muted);margin-top:4px">"Jornada de servicio" es para tareas de campo con inicio/cierre diario (ej: Censo Flash) — se repite automáticamente "Veces por período" veces en cada ciclo, y el prestador marca inicio, marca cierre y adjunta una evidencia por jornada.</div>' +
         '</div>' +
+        '<div class="field full" style="margin-top:4px">' +
+          '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">🧾 Instructivo de facturación</div>' +
+          '<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Datos para que el prestador sepa cómo facturar al cierre de cada mes — el período y las fechas se completan solos según el ciclo que esté cerrando.</div>' +
+          '<div class="field"><label>CUIT</label><input name="facturaCuit" value="'+(existing?.facturaCuit||'')+'" placeholder="30-71553427-0"></div>' +
+          '<div class="field"><label>Razón social</label><input name="facturaRazonSocial" value="'+(existing?.facturaRazonSocial||'')+'" placeholder="Nombre de la organización"></div>' +
+          '<div class="field full"><label>Domicilio</label><input name="facturaDomicilio" value="'+(existing?.facturaDomicilio||'')+'"></div>' +
+          '<div class="field"><label>Condición del IVA</label><input name="facturaCondicionIva" value="'+(existing?.facturaCondicionIva||'')+'" placeholder="IVA Sujeto exento"></div>' +
+          '<div class="field"><label>Condición de venta</label><input name="facturaCondicionVenta" value="'+(existing?.facturaCondicionVenta||'Contado')+'"></div>' +
+          '<div class="field full"><label>Descripción / convenio (va en el campo "Descripción" de la factura)</label><input name="facturaDescripcion" value="'+(existing?.facturaDescripcion||'')+'" placeholder="HONORARIOS POR SERVICIOS PRESTADOS EN PROYECTO X POR EL CONVENIO N 12345"></div>' +
+          '<div class="field full"><label>Notas adicionales (opcional)</label><textarea name="facturaNotas" placeholder="Ej: evitar notas de crédito, usar la web de AFIP en vez de la app…">'+(existing?.facturaNotas||'')+'</textarea></div>' +
+        '</div>' +
         (existing ? '<div class="field"><label>Estado</label><select name="estado"><option value="activo"'+(existing.estado==='activo'?' selected':'')+'>Activo (publicado)</option><option value="cerrado"'+(existing.estado==='cerrado'?' selected':'')+'>Pausado (no se publica)</option></select></div>' : '') +
         '<div class="field full"><button class="btn primary" type="submit">'+(existing?'Actualizar':'Publicar')+' módulo</button></div>' +
       '</form>'
@@ -11505,6 +11603,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         horasVariables: !!data.horasVariables,
         docsRequeridos, protocolo: tempProtocolo,
         tipoContrato: data.tipoContrato||'', docAdjuntoUrl,
+        facturaCuit: (data.facturaCuit||'').trim(), facturaRazonSocial: (data.facturaRazonSocial||'').trim(),
+        facturaDomicilio: (data.facturaDomicilio||'').trim(), facturaCondicionIva: (data.facturaCondicionIva||'').trim(),
+        facturaCondicionVenta: (data.facturaCondicionVenta||'Contado').trim(),
+        facturaDescripcion: (data.facturaDescripcion||'').trim(), facturaNotas: (data.facturaNotas||'').trim(),
       };
       if (existing) {
         Object.assign(existing, fields, { estado: data.estado || existing.estado });
