@@ -2366,6 +2366,7 @@
         </div>
         <div class="actions">
           <button class="btn secondary" onclick="openPerfilOrgModal()">🏢 Perfil público</button>
+          <button class="btn secondary" onclick="openDocumentacionLegalModal()">📋 Documentación legal</button>
           <button class="btn secondary" id="invitarAdminBtn" onclick="openInvitarAdminModal()" style="display:none">👤 Invitar administrador</button>
           <button class="btn secondary" onclick="openIntegracionesModal()">🔌 Integraciones</button>
         </div>
@@ -3400,6 +3401,79 @@
       } catch(err) {
         errEl.textContent = err.message || 'No se pudo guardar.';
         errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Guardar';
+      }
+    };
+  }
+
+  // Documentación legal/institucional de la organización — separada
+  // del perfil público (no se muestra a nadie afuera), se va
+  // completando de a poco como cualquier checklist de habilitación.
+  const DOCS_LEGALES_ORG = [
+    { col: 'doc_constancia_arca_url', label: 'Constancia de inscripción ARCA' },
+    { col: 'doc_dni_titular_url', label: 'DNI titular' },
+    { col: 'doc_cuit_representante_url', label: 'CUIT/CUIL representante' },
+    { col: 'doc_inscripcion_cioba_url', label: 'Inscripción CIOBA' },
+    { col: 'doc_inscripcion_registro_ong_url', label: 'Inscripción Registro ONG (CDNNyA)', nota: 'Solo si trabaja con menores' },
+    { col: 'doc_anexo_i_url', label: 'Anexo I (Acreditación de pagos)' },
+    { col: 'doc_acta_constitutiva_url', label: 'Acta Constitutiva' },
+    { col: 'doc_estatuto_vigente_url', label: 'Estatuto Vigente' },
+    { col: 'doc_personeria_juridica_url', label: 'Personería Jurídica (IGJ o equivalente)' },
+    { col: 'doc_acta_designacion_autoridades_url', label: 'Acta Designación autoridades' },
+    { col: 'doc_certificado_exencion_ganancias_url', label: 'Certificado de Exención en el impuesto a las ganancias' },
+  ];
+  const DOCS_LEGALES_ORG_INMUEBLE = [
+    { col: 'doc_situacion_juridica_inmueble_url', label: 'Situación Jurídica del Inmueble (título, contrato, cesión, etc)' },
+    { col: 'doc_poliza_seguro_url', label: 'Póliza de seguro y cobertura (espacio, vida y responsabilidad civil)' },
+  ];
+  function openDocumentacionLegalModal() {
+    const org = currentOrgFull;
+    if (!org) { alert('Todavía no cargó la organización — probá de nuevo en un segundo.'); return; }
+    function campoDoc(doc) {
+      return '<div class="field full" style="border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:4px">' +
+        '<label>' + doc.label + '</label>' +
+        (doc.nota ? '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">' + doc.nota + '</div>' : '') +
+        '<input type="file" name="' + doc.col + '" accept="image/*,application/pdf">' +
+        (org[doc.col] ? '<div style="margin-top:6px"><a href="javascript:void(0)" onclick="verDocumento(\''+org[doc.col]+'\',\''+doc.label.replace(/'/g,'’')+'\')" style="font-size:12px;color:#1a73e8">🔗 Ver archivo actual</a></div>' : '') +
+      '</div>';
+    }
+    openModal('Documentación legal de ' + (org.name||'tu organización'), 'Documentación institucional para habilitación — no se muestra en el perfil público.', `
+      <form id="docsLegalesForm" class="form-grid">
+        ${DOCS_LEGALES_ORG.map(campoDoc).join('')}
+        <div class="field full" style="margin-top:8px;font-weight:700;font-size:13px">En caso de tener inmueble</div>
+        ${DOCS_LEGALES_ORG_INMUEBLE.map(campoDoc).join('')}
+        <div class="field full"><button class="btn primary" type="submit">Guardar</button></div>
+      </form>
+      <div id="docsLegalesError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>
+    `);
+    document.getElementById('docsLegalesForm').onsubmit = async e => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button[type="submit"]');
+      const errEl = document.getElementById('docsLegalesError');
+      errEl.style.display = 'none';
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      try {
+        const todas = [...DOCS_LEGALES_ORG, ...DOCS_LEGALES_ORG_INMUEBLE];
+        const updates = {};
+        for (const doc of todas) {
+          const file = e.target.querySelector('[name="'+doc.col+'"]')?.files?.[0];
+          if (!file) continue;
+          const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
+          const uploaded = await sbUpload('org-docs', org.id + '/' + doc.col + '_' + Date.now() + '.' + ext, file);
+          if (!uploaded) throw new Error('No se pudo subir "' + doc.label + '". Probá de nuevo.');
+          updates[doc.col] = uploaded;
+        }
+        if (Object.keys(updates).length) {
+          const ok = await sbUpdate('organizations', org.id, updates);
+          if (!ok) throw new Error('No se pudo guardar. Revisá la consola.');
+          Object.assign(org, updates);
+        }
+        closeModal();
+        alert('Documentación actualizada.');
+      } catch(err) {
+        errEl.textContent = err.message || 'No se pudo guardar.';
+        errEl.style.display = 'block';
+      } finally {
         btn.disabled = false; btn.textContent = 'Guardar';
       }
     };
