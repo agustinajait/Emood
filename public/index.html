@@ -3269,7 +3269,8 @@
       moduloItems: Array.isArray(data?.moduloItems) ? data.moduloItems : [],
       moduloCiclos: Array.isArray(data?.moduloCiclos) ? data.moduloCiclos : [],
       duplas: Array.isArray(data?.duplas) ? data.duplas : [],
-      certificaciones: Array.isArray(data?.certificaciones) ? data.certificaciones : []
+      certificaciones: Array.isArray(data?.certificaciones) ? data.certificaciones : [],
+      organizations: Array.isArray(data?.organizations) ? data.organizations : []
     };
   }
 
@@ -4578,7 +4579,7 @@
       // al final), así que se piden todas EN PARALELO en vez de una por
       // una — antes esto era una cadena de ~20 awaits en serie, lo que
       // con más datos se sentía como que la pantalla "se colgaba".
-      const [ag, ch, ci, pr, ce, co, prest, prot, ig, seg, mod, mev, eco, serv, post, masig, mit, cic, dup, cert] = await Promise.all([
+      const [ag, ch, ci, pr, ce, co, prest, prot, ig, seg, mod, mev, eco, serv, post, masig, mit, cic, dup, cert, orgs] = await Promise.all([
         sbSelect(DB.agencies, 'name'),
         sbSelect(DB.challenges, 'created_at'),
         sbSelect(DB.checkins, 'created_at.desc'),
@@ -4599,6 +4600,7 @@
         sbSelect(DB.moduloCiclos, 'periodo.desc').catch(()=>({data:[],errMsg:null})),
         sbSelect(DB.duplas, 'created_at.desc').catch(()=>({data:[],errMsg:null})),
         sbSelect(DB.certificaciones, 'fecha.desc').catch(()=>({data:[],errMsg:null})),
+        sbSelect('organizations', 'name').catch(()=>({data:[],errMsg:null})),
       ]);
       if (ag.errMsg) { console.warn('Load agencies error:', ag.errMsg); return null; }
       if (ch.errMsg) { console.warn('Load challenges error:', ch.errMsg); return null; }
@@ -4623,6 +4625,7 @@
         moduloCiclos:     cic.data.map(rowToModuloCiclo),
         duplas:           dup.data.map(rowToDupla),
         certificaciones:  cert.data.map(rowToCertificacion),
+        organizations:    orgs.data||[],
       };
     } catch(e) {
       console.warn('Supabase unavailable:', e.message || e);
@@ -6640,6 +6643,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function protocoloById(id) { return state.protocolos.find(p => p.id === id); }
   function prestadorById(id) { return state.prestadores.find(p => p.id === id); }
   function nombreCompleto(p) { return [p?.nombre, p?.apellido].filter(Boolean).join(' ') || p?.nombre || '—'; }
+  function orgNombre(id) { return (state.organizations||[]).find(o => o.id === id)?.name || ''; }
 
   function getMesOptions() {
     const meses = [];
@@ -7399,10 +7403,13 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       '</div>',
 
       buildPerfilChecklist(p),
+      buildModulosActivosConCobro(p),
 
-      // Módulos fijos
-      '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px">📦 Módulos asignados</div>',
+      // Módulos fijos (sistema viejo) — si el prestador ya tiene
+      // módulos del sistema nuevo, esos se ven arriba en
+      // buildModulosActivosConCobro(), no hace falta repetirlos acá.
       mods.length ? [
+        '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px">📦 Módulos asignados (sistema viejo)</div>',
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px">',
           mods.map(m => [
             '<div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafaf8">',
@@ -7418,16 +7425,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '</div>',
           ].join('')).join(''),
         '</div>',
-      ].join('') : (serviciosNuevos.length ? [
-        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px">',
-          serviciosNuevos.map(s => [
-            '<div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafaf8">',
-              '<div style="font-size:14px;font-weight:700;margin-bottom:6px">'+s.titulo+'</div>',
-              '<div style="font-size:11px;color:var(--muted)">Asignado por postulación — ver detalle en "Postulaciones" o "Módulos".</div>',
-            '</div>',
-          ].join('')).join(''),
-        '</div>',
-      ].join('') : '<div class="empty" style="margin-bottom:20px">Sin módulos asignados todavía.</div>'),
+      ].join('') : (serviciosNuevos.length ? '' : (postsPendientes.length ?
+        '<div class="empty" style="margin-bottom:20px">Postulado a: '+postsPendientes.map(po => servicioById(po.servicioId)?.titulo).filter(Boolean).join(', ')+' — esperando que se acepte la postulación.</div>'
+        : '<div class="empty" style="margin-bottom:20px">Sin módulos asignados todavía.</div>')),
 
       // Evolución mensual
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">',
@@ -8817,6 +8817,46 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       }).join('') +
       '</div>' +
     '</div>';
+  }
+  // Perfil "de a poco" del prestador: todos sus módulos activos del
+  // sistema nuevo (postulación), sin importar a qué organización
+  // pertenezcan — el superadmin necesita ver esto completo, no solo
+  // lo de la organización en la que está parado — más el total que
+  // se le debe en todas ellas.
+  function buildModulosActivosConCobro(p) {
+    const misModulos = (state.modulosAsignados||[]).filter(m => m.prestadorId === p.id);
+    if (!misModulos.length) return '';
+    const totalPendiente = misModulos.reduce((sum, m) => {
+      const ciclos = ciclosByModuloAsignado(m.id).filter(c => c.estado === 'aprobado' && !c.pagado);
+      return sum + ciclos.reduce((s2,c) => s2 + montoCiclo(c), 0);
+    }, 0);
+    const activos = misModulos.filter(m => m.estado === 'en_progreso');
+    return '<div class="card" style="margin-bottom:18px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">' +
+        '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">📦 Módulos activos (todas las organizaciones)</div>' +
+        '<div style="text-align:right">' +
+          '<div style="font-size:11px;color:var(--muted)">💰 Total pendiente de cobro</div>' +
+          '<div style="font-size:20px;font-weight:800;color:#166534">$'+totalPendiente.toLocaleString('es-AR')+'</div>' +
+        '</div>' +
+      '</div>' +
+      (activos.length ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">' +
+        activos.map(m => {
+          const s = servicioById(m.servicioId);
+          const org = orgNombre(m.organizationId || s?.organizationId);
+          const ecoNombres = (state.ecosistemas||[]).filter(e => (s?.ecosistemaIds||[]).includes(e.id)).map(e=>e.nombre);
+          const cicloActual = (state.moduloCiclos||[]).find(c => c.moduloAsignadoId===m.id && c.periodo===periodoActual());
+          const montoActual = cicloActual ? montoCiclo(cicloActual) : 0;
+          return '<div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafaf8">' +
+            '<div style="font-size:14px;font-weight:700;margin-bottom:4px">'+(s?.titulo||'—')+'</div>' +
+            (org ? '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">🏢 '+org+'</div>' : '') +
+            (ecoNombres.length ? '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">🌿 '+ecoNombres.join(', ')+'</div>' : '') +
+            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+              (cicloActual ? '<span class="badge '+(cicloActual.estado==='aprobado'?'green':cicloActual.estado==='completado'?'blue':'gray')+'">'+CICLO_ESTADO_LABEL[cicloActual.estado]+'</span>' : '<span class="badge gray">Sin ciclo este mes</span>') +
+              (montoActual ? '<span style="font-size:12px;color:#166534;font-weight:700">$'+montoActual.toLocaleString('es-AR')+' este mes</span>' : '') +
+            '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>' : '<div class="empty">No tiene módulos activos en este momento.</div>');
   }
   function modulosByPrestador(prestadorId) {
     return (state.modulos||[]).filter(m => m.prestadorId === prestadorId && m.prestadorId !== '__libre__' && m.prestadorId.trim() !== '')
