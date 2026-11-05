@@ -2366,6 +2366,7 @@
         </div>
         <div class="actions">
           <button class="btn secondary" onclick="openPerfilOrgModal()">🏢 Perfil público</button>
+          <button class="btn secondary" onclick="openDocumentacionLegalModal()">📋 Documentación legal</button>
           <button class="btn secondary" id="invitarAdminBtn" onclick="openInvitarAdminModal()" style="display:none">👤 Invitar administrador</button>
           <button class="btn secondary" onclick="openIntegracionesModal()">🔌 Integraciones</button>
         </div>
@@ -3269,7 +3270,8 @@
       moduloItems: Array.isArray(data?.moduloItems) ? data.moduloItems : [],
       moduloCiclos: Array.isArray(data?.moduloCiclos) ? data.moduloCiclos : [],
       duplas: Array.isArray(data?.duplas) ? data.duplas : [],
-      certificaciones: Array.isArray(data?.certificaciones) ? data.certificaciones : []
+      certificaciones: Array.isArray(data?.certificaciones) ? data.certificaciones : [],
+      organizations: Array.isArray(data?.organizations) ? data.organizations : []
     };
   }
 
@@ -3399,6 +3401,79 @@
       } catch(err) {
         errEl.textContent = err.message || 'No se pudo guardar.';
         errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Guardar';
+      }
+    };
+  }
+
+  // Documentación legal/institucional de la organización — separada
+  // del perfil público (no se muestra a nadie afuera), se va
+  // completando de a poco como cualquier checklist de habilitación.
+  const DOCS_LEGALES_ORG = [
+    { col: 'doc_constancia_arca_url', label: 'Constancia de inscripción ARCA' },
+    { col: 'doc_dni_titular_url', label: 'DNI titular' },
+    { col: 'doc_cuit_representante_url', label: 'CUIT/CUIL representante' },
+    { col: 'doc_inscripcion_cioba_url', label: 'Inscripción CIOBA' },
+    { col: 'doc_inscripcion_registro_ong_url', label: 'Inscripción Registro ONG (CDNNyA)', nota: 'Solo si trabaja con menores' },
+    { col: 'doc_anexo_i_url', label: 'Anexo I (Acreditación de pagos)' },
+    { col: 'doc_acta_constitutiva_url', label: 'Acta Constitutiva' },
+    { col: 'doc_estatuto_vigente_url', label: 'Estatuto Vigente' },
+    { col: 'doc_personeria_juridica_url', label: 'Personería Jurídica (IGJ o equivalente)' },
+    { col: 'doc_acta_designacion_autoridades_url', label: 'Acta Designación autoridades' },
+    { col: 'doc_certificado_exencion_ganancias_url', label: 'Certificado de Exención en el impuesto a las ganancias' },
+  ];
+  const DOCS_LEGALES_ORG_INMUEBLE = [
+    { col: 'doc_situacion_juridica_inmueble_url', label: 'Situación Jurídica del Inmueble (título, contrato, cesión, etc)' },
+    { col: 'doc_poliza_seguro_url', label: 'Póliza de seguro y cobertura (espacio, vida y responsabilidad civil)' },
+  ];
+  function openDocumentacionLegalModal() {
+    const org = currentOrgFull;
+    if (!org) { alert('Todavía no cargó la organización — probá de nuevo en un segundo.'); return; }
+    function campoDoc(doc) {
+      return '<div class="field full" style="border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:4px">' +
+        '<label>' + doc.label + '</label>' +
+        (doc.nota ? '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">' + doc.nota + '</div>' : '') +
+        '<input type="file" name="' + doc.col + '" accept="image/*,application/pdf">' +
+        (org[doc.col] ? '<div style="margin-top:6px"><a href="javascript:void(0)" onclick="verDocumento(\''+org[doc.col]+'\',\''+doc.label.replace(/'/g,'’')+'\')" style="font-size:12px;color:#1a73e8">🔗 Ver archivo actual</a></div>' : '') +
+      '</div>';
+    }
+    openModal('Documentación legal de ' + (org.name||'tu organización'), 'Documentación institucional para habilitación — no se muestra en el perfil público.', `
+      <form id="docsLegalesForm" class="form-grid">
+        ${DOCS_LEGALES_ORG.map(campoDoc).join('')}
+        <div class="field full" style="margin-top:8px;font-weight:700;font-size:13px">En caso de tener inmueble</div>
+        ${DOCS_LEGALES_ORG_INMUEBLE.map(campoDoc).join('')}
+        <div class="field full"><button class="btn primary" type="submit">Guardar</button></div>
+      </form>
+      <div id="docsLegalesError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>
+    `);
+    document.getElementById('docsLegalesForm').onsubmit = async e => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button[type="submit"]');
+      const errEl = document.getElementById('docsLegalesError');
+      errEl.style.display = 'none';
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      try {
+        const todas = [...DOCS_LEGALES_ORG, ...DOCS_LEGALES_ORG_INMUEBLE];
+        const updates = {};
+        for (const doc of todas) {
+          const file = e.target.querySelector('[name="'+doc.col+'"]')?.files?.[0];
+          if (!file) continue;
+          const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
+          const uploaded = await sbUpload('org-docs', org.id + '/' + doc.col + '_' + Date.now() + '.' + ext, file);
+          if (!uploaded) throw new Error('No se pudo subir "' + doc.label + '". Probá de nuevo.');
+          updates[doc.col] = uploaded;
+        }
+        if (Object.keys(updates).length) {
+          const ok = await sbUpdate('organizations', org.id, updates);
+          if (!ok) throw new Error('No se pudo guardar. Revisá la consola.');
+          Object.assign(org, updates);
+        }
+        closeModal();
+        alert('Documentación actualizada.');
+      } catch(err) {
+        errEl.textContent = err.message || 'No se pudo guardar.';
+        errEl.style.display = 'block';
+      } finally {
         btn.disabled = false; btn.textContent = 'Guardar';
       }
     };
@@ -4578,7 +4653,7 @@
       // al final), así que se piden todas EN PARALELO en vez de una por
       // una — antes esto era una cadena de ~20 awaits en serie, lo que
       // con más datos se sentía como que la pantalla "se colgaba".
-      const [ag, ch, ci, pr, ce, co, prest, prot, ig, seg, mod, mev, eco, serv, post, masig, mit, cic, dup, cert] = await Promise.all([
+      const [ag, ch, ci, pr, ce, co, prest, prot, ig, seg, mod, mev, eco, serv, post, masig, mit, cic, dup, cert, orgs] = await Promise.all([
         sbSelect(DB.agencies, 'name'),
         sbSelect(DB.challenges, 'created_at'),
         sbSelect(DB.checkins, 'created_at.desc'),
@@ -4599,6 +4674,7 @@
         sbSelect(DB.moduloCiclos, 'periodo.desc').catch(()=>({data:[],errMsg:null})),
         sbSelect(DB.duplas, 'created_at.desc').catch(()=>({data:[],errMsg:null})),
         sbSelect(DB.certificaciones, 'fecha.desc').catch(()=>({data:[],errMsg:null})),
+        sbSelect('organizations', 'name').catch(()=>({data:[],errMsg:null})),
       ]);
       if (ag.errMsg) { console.warn('Load agencies error:', ag.errMsg); return null; }
       if (ch.errMsg) { console.warn('Load challenges error:', ch.errMsg); return null; }
@@ -4623,6 +4699,7 @@
         moduloCiclos:     cic.data.map(rowToModuloCiclo),
         duplas:           dup.data.map(rowToDupla),
         certificaciones:  cert.data.map(rowToCertificacion),
+        organizations:    orgs.data||[],
       };
     } catch(e) {
       console.warn('Supabase unavailable:', e.message || e);
@@ -6640,6 +6717,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function protocoloById(id) { return state.protocolos.find(p => p.id === id); }
   function prestadorById(id) { return state.prestadores.find(p => p.id === id); }
   function nombreCompleto(p) { return [p?.nombre, p?.apellido].filter(Boolean).join(' ') || p?.nombre || '—'; }
+  function orgNombre(id) { return (state.organizations||[]).find(o => o.id === id)?.name || ''; }
 
   function getMesOptions() {
     const meses = [];
@@ -7399,10 +7477,13 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       '</div>',
 
       buildPerfilChecklist(p),
+      buildModulosActivosConCobro(p),
 
-      // Módulos fijos
-      '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px">📦 Módulos asignados</div>',
+      // Módulos fijos (sistema viejo) — si el prestador ya tiene
+      // módulos del sistema nuevo, esos se ven arriba en
+      // buildModulosActivosConCobro(), no hace falta repetirlos acá.
       mods.length ? [
+        '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px">📦 Módulos asignados (sistema viejo)</div>',
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px">',
           mods.map(m => [
             '<div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafaf8">',
@@ -7418,16 +7499,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '</div>',
           ].join('')).join(''),
         '</div>',
-      ].join('') : (serviciosNuevos.length ? [
-        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px">',
-          serviciosNuevos.map(s => [
-            '<div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafaf8">',
-              '<div style="font-size:14px;font-weight:700;margin-bottom:6px">'+s.titulo+'</div>',
-              '<div style="font-size:11px;color:var(--muted)">Asignado por postulación — ver detalle en "Postulaciones" o "Módulos".</div>',
-            '</div>',
-          ].join('')).join(''),
-        '</div>',
-      ].join('') : '<div class="empty" style="margin-bottom:20px">Sin módulos asignados todavía.</div>'),
+      ].join('') : (serviciosNuevos.length ? '' : (postsPendientes.length ?
+        '<div class="empty" style="margin-bottom:20px">Postulado a: '+postsPendientes.map(po => servicioById(po.servicioId)?.titulo).filter(Boolean).join(', ')+' — esperando que se acepte la postulación.</div>'
+        : '<div class="empty" style="margin-bottom:20px">Sin módulos asignados todavía.</div>')),
 
       // Evolución mensual
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">',
@@ -8817,6 +8891,46 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       }).join('') +
       '</div>' +
     '</div>';
+  }
+  // Perfil "de a poco" del prestador: todos sus módulos activos del
+  // sistema nuevo (postulación), sin importar a qué organización
+  // pertenezcan — el superadmin necesita ver esto completo, no solo
+  // lo de la organización en la que está parado — más el total que
+  // se le debe en todas ellas.
+  function buildModulosActivosConCobro(p) {
+    const misModulos = (state.modulosAsignados||[]).filter(m => m.prestadorId === p.id);
+    if (!misModulos.length) return '';
+    const totalPendiente = misModulos.reduce((sum, m) => {
+      const ciclos = ciclosByModuloAsignado(m.id).filter(c => c.estado === 'aprobado' && !c.pagado);
+      return sum + ciclos.reduce((s2,c) => s2 + montoCiclo(c), 0);
+    }, 0);
+    const activos = misModulos.filter(m => m.estado === 'en_progreso');
+    return '<div class="card" style="margin-bottom:18px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">' +
+        '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">📦 Módulos activos (todas las organizaciones)</div>' +
+        '<div style="text-align:right">' +
+          '<div style="font-size:11px;color:var(--muted)">💰 Total pendiente de cobro</div>' +
+          '<div style="font-size:20px;font-weight:800;color:#166534">$'+totalPendiente.toLocaleString('es-AR')+'</div>' +
+        '</div>' +
+      '</div>' +
+      (activos.length ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">' +
+        activos.map(m => {
+          const s = servicioById(m.servicioId);
+          const org = orgNombre(m.organizationId || s?.organizationId);
+          const ecoNombres = (state.ecosistemas||[]).filter(e => (s?.ecosistemaIds||[]).includes(e.id)).map(e=>e.nombre);
+          const cicloActual = (state.moduloCiclos||[]).find(c => c.moduloAsignadoId===m.id && c.periodo===periodoActual());
+          const montoActual = cicloActual ? montoCiclo(cicloActual) : 0;
+          return '<div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafaf8">' +
+            '<div style="font-size:14px;font-weight:700;margin-bottom:4px">'+(s?.titulo||'—')+'</div>' +
+            (org ? '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">🏢 '+org+'</div>' : '') +
+            (ecoNombres.length ? '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">🌿 '+ecoNombres.join(', ')+'</div>' : '') +
+            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+              (cicloActual ? '<span class="badge '+(cicloActual.estado==='aprobado'?'green':cicloActual.estado==='completado'?'blue':'gray')+'">'+CICLO_ESTADO_LABEL[cicloActual.estado]+'</span>' : '<span class="badge gray">Sin ciclo este mes</span>') +
+              (montoActual ? '<span style="font-size:12px;color:#166534;font-weight:700">$'+montoActual.toLocaleString('es-AR')+' este mes</span>' : '') +
+            '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>' : '<div class="empty">No tiene módulos activos en este momento.</div>');
   }
   function modulosByPrestador(prestadorId) {
     return (state.modulos||[]).filter(m => m.prestadorId === prestadorId && m.prestadorId !== '__libre__' && m.prestadorId.trim() !== '')
