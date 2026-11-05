@@ -8763,6 +8763,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function ecosistemaIdsEfectivos(p) {
     const ids = new Set();
     if (p.ecosistemaId) ids.add(p.ecosistemaId);
+    (state.modulos||[]).filter(m => m.prestadorId === p.id).forEach(m => {
+      (m.ecosistemaIds||[]).forEach(id => ids.add(id));
+    });
     (state.modulosAsignados||[]).filter(m => m.prestadorId === p.id).forEach(m => {
       const s = servicioById(m.servicioId);
       (s?.ecosistemaIds||[]).forEach(id => ids.add(id));
@@ -8865,7 +8868,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     }
     el.innerHTML = ecos.map(eco => {
       const modulos = (state.modulos||[]).filter(m => (m.ecosistemaIds||[]).includes(eco.id));
-      const prestadoresIds = [...new Set(modulos.map(m => m.prestadorId).filter(Boolean))];
+      const prestadoresDelEco = (state.prestadores||[]).filter(p => ecosistemaIdsEfectivos(p).includes(eco.id));
       const presupuestoUsado = modulos.reduce((s, m) => s + (m.monto||0) * (m.cantidad||1), 0);
       const estadoColor = {activo:'#dcfce7;color:#166534', pausado:'#fef9c3;color:#92400e', cerrado:'#fee2e2;color:#991b1b'}[eco.estado] || '#f3f4f6;color:#374151';
       return '<div class="card" style="margin-bottom:18px">' +
@@ -8895,7 +8898,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '<div style="font-size:11px;color:var(--muted);margin-top:2px">Módulos</div>' +
           '</div>' +
           '<div style="background:var(--card-soft);border-radius:10px;padding:12px 18px;text-align:center;flex:1;min-width:100px">' +
-            '<div style="font-size:22px;font-weight:800;color:#2563eb">' + prestadoresIds.length + '</div>' +
+            '<div style="font-size:22px;font-weight:800;color:#2563eb">' + prestadoresDelEco.length + '</div>' +
             '<div style="font-size:11px;color:var(--muted);margin-top:2px">Prestadores</div>' +
           '</div>' +
           '<div style="background:var(--card-soft);border-radius:10px;padding:12px 18px;text-align:center;flex:1;min-width:100px">' +
