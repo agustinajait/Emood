@@ -2343,6 +2343,9 @@
 
         <div class="nav-section-label">Análisis</div>
         <button data-page="reportes"><span class="nav-icon">≡</span>Reportes</button>
+
+        <div class="nav-section-label" id="superadminNavLabel" style="display:none">Superadmin</div>
+        <button data-page="organizaciones" id="organizacionesNavBtn" style="display:none"><span class="nav-icon">🏢</span>Organizaciones</button>
       </nav>
     </div>
 
@@ -2625,6 +2628,17 @@
         </div>
       </div>
       <div class="grid-2-eq" id="reportAgencyCards"></div>
+    </section>
+
+    <!-- ORGANIZACIONES (superadmin) -->
+    <section class="page" id="page-organizaciones">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h2>Organizaciones</h2>
+          <p>Todas las organizaciones de E-Mood — entrá a cualquiera para ver/editar su perfil.</p>
+        </div>
+      </div>
+      <div id="organizacionesContent"></div>
     </section>
 
   </main>
@@ -3314,6 +3328,11 @@
       // organización no puede sumar colegas por su cuenta.
       const invitarAdminBtn = document.getElementById('invitarAdminBtn');
       if (invitarAdminBtn) invitarAdminBtn.style.display = myProfile?.role === 'superadmin' ? '' : 'none';
+      const esSuperadmin = myProfile?.role === 'superadmin';
+      const organizacionesNavBtn = document.getElementById('organizacionesNavBtn');
+      const superadminNavLabel = document.getElementById('superadminNavLabel');
+      if (organizacionesNavBtn) organizacionesNavBtn.style.display = esSuperadmin ? '' : 'none';
+      if (superadminNavLabel) superadminNavLabel.style.display = esSuperadmin ? '' : 'none';
     } catch(_) {}
   }
 
@@ -5917,6 +5936,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     renderLiquidacion();
     renderOrdenesPago();
     renderEcosistemas();
+    renderOrganizaciones();
     updateUnreadBadge();
     if (currentChallengeId) renderChallengeDetail(currentChallengeId);
     fillModulosFilters();
@@ -7331,6 +7351,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const ag = state.agencies.find(a => a.id === p.agencyId);
       const ecoIds = ecosistemaIdsEfectivos(p);
       const ecoNombres = (state.ecosistemas||[]).filter(e => ecoIds.includes(e.id)).map(e => e.nombre);
+      const orgIds = organizacionesEfectivas(p);
+      const orgNombres = orgIds.map(orgNombre).filter(Boolean);
       const mods = modulosByPrestador(p.id);
       const serviciosNuevos = mods.length ? [] : serviciosAsignadosDe(p);
       const postsPendientes = (mods.length || serviciosNuevos.length) ? [] : postulacionesDe(p);
@@ -7364,7 +7386,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
                 p.activo !== false ? '<span class="badge green">● Activo</span>' : '<span class="badge gray">– Inactivo</span>',
                 !perfilPrestadorCompleto(p) ? '<span class="badge" style="background:#fef2f2;color:#dc2626" title="'+camposPerfilFaltantes(p).join(', ')+'">⚠️ Perfil incompleto</span>' : '',
               '</div>',
-              '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+rolLabel+(ecoNombres.length?' · 🌿 '+ecoNombres.join(', '):'')+(ag?' · 🏢 '+ag.name:'')+'</div>',
+              '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+rolLabel+(orgNombres.length?' · 🏛️ '+orgNombres.join(', '):'')+(ecoNombres.length?' · 🌿 '+ecoNombres.join(', '):'')+(ag?' · 🏢 '+ag.name:'')+'</div>',
               // Módulos fijos summary (sistema viejo) o, si no tiene
               // ninguno ahí, los módulos a los que se postuló y le
               // aceptaron (sistema nuevo, postulación).
@@ -7427,6 +7449,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const ag = state.agencies.find(a => a.id === p.agencyId);
     const ecoIds = ecosistemaIdsEfectivos(p);
     const ecoNombres = (state.ecosistemas||[]).filter(e => ecoIds.includes(e.id)).map(e => e.nombre);
+    const orgIds = organizacionesEfectivas(p);
+    const orgNombres = orgIds.map(orgNombre).filter(Boolean);
     const mods = modulosByPrestador(prestadorId);
     const serviciosNuevos = mods.length ? [] : serviciosAsignadosDe(p);
     const postsPendientes = (mods.length || serviciosNuevos.length) ? [] : postulacionesDe(p);
@@ -7451,7 +7475,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">',
           '<div>',
             '<h2 style="margin:0 0 4px;font-family:var(--font-display)">'+nombreCompleto(p)+'</h2>',
-            '<div style="font-size:14px;color:var(--muted);margin-bottom:10px">'+rolLabel+(ecoNombres.length?' · 🌿 '+ecoNombres.join(', '):'')+(ag?' · 🏢 '+ag.name:'')+'</div>',
+            '<div style="font-size:14px;color:var(--muted);margin-bottom:10px">'+rolLabel+(orgNombres.length?' · 🏛️ '+orgNombres.join(', '):'')+(ecoNombres.length?' · 🌿 '+ecoNombres.join(', '):'')+(ag?' · 🏢 '+ag.name:'')+'</div>',
             '<div style="display:flex;flex-wrap:wrap;gap:6px">',
               p.tieneSeguro ? '<span class="badge green">✓ Seguro</span>' : '<span class="badge gray">✗ Seguro</span>',
               p.numeroCuil ? (p.cuilComprobanteUrl ? '<span class="badge green">🪪 CUIL '+p.numeroCuil+' <a href="javascript:void(0)" onclick="verDocumento(\''+p.cuilComprobanteUrl+'\',\'Constancia de CUIL\')" style="color:inherit">📎</a></span>' : '<span class="badge" style="background:#fffbeb;color:#92400e;border-color:#92400e">🪪 CUIL '+p.numeroCuil+' — ⚠️ falta constancia</span>') : (p.tieneCuil ? '<span class="badge green">✓ CUIL</span>' : '<span class="badge gray">✗ CUIL</span>'),
@@ -8846,6 +8870,18 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     });
     return [...ids];
   }
+  // Organizaciones en las que este prestador tiene AL MENOS un módulo
+  // activo (en_progreso) — un mismo prestador puede estar activo en
+  // varias a la vez (sistema nuevo, postulación).
+  function organizacionesEfectivas(p) {
+    const ids = new Set();
+    (state.modulosAsignados||[]).filter(m => m.prestadorId === p.id && m.estado === 'en_progreso').forEach(m => {
+      const s = servicioById(m.servicioId);
+      const orgId = m.organizationId || s?.organizationId;
+      if (orgId) ids.add(orgId);
+    });
+    return [...ids];
+  }
   // Los servicios (sistema nuevo, postulación) a los que este
   // prestador tiene un módulo asignado — para mostrar "rol"/módulos
   // en la lista de "Prestadores" aunque nunca se le haya cargado un
@@ -8971,6 +9007,34 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   }
 
   /* ─── ECOSISTEMAS ──────────────────────────────────── */
+
+  // Vista superadmin: todas las organizaciones de la plataforma, con
+  // acceso directo para entrar a cualquiera (switchSuperadminOrg) y
+  // ver/editar su perfil, documentación legal, prestadores, etc.
+  function renderOrganizaciones() {
+    const el = document.getElementById('organizacionesContent');
+    if (!el) return;
+    if (myProfile?.role !== 'superadmin') { el.innerHTML = ''; return; }
+    const orgs = [...(state.organizations||[])].sort((a,b) => (a.name||'').localeCompare(b.name||''));
+    if (!orgs.length) { el.innerHTML = '<div class="empty">No hay organizaciones todavía.</div>'; return; }
+    el.innerHTML = orgs.map(org => {
+      const prestadoresCount = (state.prestadores||[]).filter(p => organizacionesEfectivas(p).includes(org.id)).length;
+      const serviciosActivos = (state.servicios||[]).filter(s => s.organizationId === org.id && s.estado === 'activo').length;
+      const esActual = org.id === myProfile?.organization_id;
+      return '<div class="card" style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">' +
+        '<div style="display:flex;align-items:center;gap:12px">' +
+          (org.logo_url ? '<img src="'+org.logo_url+'" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0">' : '<div style="width:44px;height:44px;border-radius:10px;background:var(--primary-soft);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏢</div>') +
+          '<div>' +
+            '<div style="font-weight:700;font-size:15px">'+(org.name||'—')+(esActual?' <span class="badge green" style="margin-left:4px">Actual</span>':'')+'</div>' +
+            '<div style="font-size:12px;color:var(--muted)">👥 '+prestadoresCount+' prestador'+(prestadoresCount===1?'':'es')+' activo'+(prestadoresCount===1?'':'s')+' · 📦 '+serviciosActivos+' módulo'+(serviciosActivos===1?'':'s')+' activo'+(serviciosActivos===1?'':'s')+'</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          (esActual ? '' : '<button class="btn secondary small" onclick="switchSuperadminOrg(\''+org.id+'\')">🔀 Entrar a esta organización</button>') +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
 
   function renderEcosistemas() {
     const el = document.getElementById('ecosistemasContent');
