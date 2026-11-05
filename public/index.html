@@ -3340,9 +3340,10 @@
   // Perfil público de la organización (bio, logo, sitio web): lo que
   // ve cualquier prestador — logueado o no — cuando toca "Ver
   // organización" en un módulo. Lo edita el admin desde acá.
-  function openPerfilOrgModal() {
-    const org = currentOrgFull;
+  function openPerfilOrgModal(orgParam) {
+    const org = orgParam || currentOrgFull;
     if (!org) { alert('Todavía no cargó la organización — probá de nuevo en un segundo.'); return; }
+    const esOrgActual = org.id === currentOrgFull?.id;
     const link = window.location.origin + window.location.pathname + '?org=' + org.id;
     openModal('Perfil público de ' + (org.name||'tu organización'), 'Esto es lo que ve cualquier prestador cuando mira quién publica un módulo.', `
       <div style="display:flex;gap:6px;margin-bottom:16px">
@@ -3408,13 +3409,17 @@
         org.sitio_web = (data.sitioWeb||'').trim();
         org.logo_url = logoUrl;
         org.cover_url = coverUrl;
-        // org === currentOrgFull, así que esto ya alcanza para reflejar
-        // el logo nuevo en la barra lateral sin recargar todo.
-        const logoEl = document.getElementById('sidebarOrgLogo');
-        const iconEl = document.getElementById('sidebarBrandIcon');
-        if (logoEl && iconEl) {
-          if (logoUrl) { logoEl.src = logoUrl; logoEl.style.display = ''; iconEl.style.display = 'none'; }
-          else { logoEl.style.display = 'none'; iconEl.style.display = ''; }
+        // Solo tocar el logo de la barra lateral si estamos editando la
+        // organización en la que la sesión está parada — si un
+        // superadmin edita OTRA desde "Organizaciones" sin entrar a
+        // ella, su propia barra lateral no tiene que cambiar.
+        if (esOrgActual) {
+          const logoEl = document.getElementById('sidebarOrgLogo');
+          const iconEl = document.getElementById('sidebarBrandIcon');
+          if (logoEl && iconEl) {
+            if (logoUrl) { logoEl.src = logoUrl; logoEl.style.display = ''; iconEl.style.display = 'none'; }
+            else { logoEl.style.display = 'none'; iconEl.style.display = ''; }
+          }
         }
         closeModal();
         alert('Perfil público actualizado.');
@@ -3446,8 +3451,8 @@
     { col: 'doc_situacion_juridica_inmueble_url', label: 'Situación Jurídica del Inmueble (título, contrato, cesión, etc)' },
     { col: 'doc_poliza_seguro_url', label: 'Póliza de seguro y cobertura (espacio, vida y responsabilidad civil)' },
   ];
-  function openDocumentacionLegalModal() {
-    const org = currentOrgFull;
+  function openDocumentacionLegalModal(orgParam) {
+    const org = orgParam || currentOrgFull;
     if (!org) { alert('Todavía no cargó la organización — probá de nuevo en un segundo.'); return; }
     function campoDoc(doc) {
       return '<div class="field full" style="border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:4px">' +
@@ -6755,6 +6760,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function prestadorById(id) { return state.prestadores.find(p => p.id === id); }
   function nombreCompleto(p) { return [p?.nombre, p?.apellido].filter(Boolean).join(' ') || p?.nombre || '—'; }
   function orgNombre(id) { return (state.organizations||[]).find(o => o.id === id)?.name || ''; }
+  function orgById(id) { return (state.organizations||[]).find(o => o.id === id); }
 
   function getMesOptions() {
     const meses = [];
@@ -9056,6 +9062,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '</div>' +
         '</div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<button class="btn secondary small" onclick="openPerfilOrgModal(orgById(\''+org.id+'\'))">👁 Perfil público</button>' +
+          '<button class="btn secondary small" onclick="openDocumentacionLegalModal(orgById(\''+org.id+'\'))">📋 Documentación legal</button>' +
           (esActual ? '' : '<button class="btn secondary small" onclick="switchSuperadminOrg(\''+org.id+'\')">🔀 Entrar a esta organización</button>') +
         '</div>' +
       '</div>';
