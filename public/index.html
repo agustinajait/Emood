@@ -11757,6 +11757,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '</div>' +
           '<div style="display:flex;align-items:center;gap:8px">' +
             '<span class="badge" style="background:#fff;color:'+info.color+';border-color:'+info.color+'">'+info.label+'</span>' +
+            '<button class="btn secondary xs" onclick="verHistorialAsistencia(\''+f.m.id+'\')">📊 Historial</button>' +
             '<button class="btn secondary xs" onclick="openEditarAsistenciaModal(\''+f.m.id+'\',\''+fecha+'\')">✏️ Editar</button>' +
           '</div>' +
         '</div>';
@@ -11907,6 +11908,35 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     };
   }
 
+  // Historial completo de días certificados de un módulo asignado —
+  // "Asistencia diaria" solo muestra un día a la vez; esto es para ver
+  // la progresión de un prestador puntual a lo largo del tiempo.
+  function verHistorialAsistencia(moduloAsignadoId) {
+    const m = moduloAsignadoById(moduloAsignadoId);
+    const s = m && servicioById(m.servicioId);
+    const prest = m && prestadorById(m.prestadorId);
+    if (!m || !s || !prest) return;
+    const idxs = modulosElegidosDeModulo(m, s);
+    const certs = (state.certificaciones||[]).filter(c => c.moduloAsignadoId === moduloAsignadoId)
+      .sort((a,b) => b.fecha.localeCompare(a.fecha) || Number(a.moduloIdx||1)-Number(b.moduloIdx||1));
+    const totalHoras = certs.reduce((sum,c) => sum + horasCertificadasDia(c), 0);
+    openModal('Historial de asistencia — ' + nombreCompleto(prest), s.titulo,
+      '<div style="margin-bottom:12px;font-size:13px;color:var(--muted)">'+certs.length+' día'+(certs.length===1?'':'s')+' certificado'+(certs.length===1?'':'s')+(s?.horasVariables?' · <strong>'+totalHoras.toFixed(1)+' hs</strong> totales':'')+'</div>' +
+      (certs.length ? '<div style="max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:6px">' +
+        certs.map(c => {
+          const horas = horasCertificadasDia(c);
+          const inTxt = c.horaIn ? new Date(c.horaIn).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '—';
+          const outTxt = c.horaOut ? new Date(c.horaOut).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '—';
+          const fechaLabel = new Date(c.fecha+'T00:00:00').toLocaleDateString('es-AR',{weekday:'short', day:'numeric', month:'short', year:'numeric'});
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px">' +
+            '<div style="text-transform:capitalize">'+fechaLabel+(idxs.length>1?' · Módulo '+c.moduloIdx:'')+'</div>' +
+            '<div style="color:var(--muted)">🕒 '+inTxt+' → '+outTxt+(horas?' · '+horas.toFixed(1)+'hs':'')+'</div>' +
+          '</div>';
+        }).join('') +
+      '</div>' : '<div class="empty">Todavía no certificó ningún día.</div>')
+    );
+  }
+
   function renderModulosAsignados() {
     const el = document.getElementById('modulosAsignadosListContent');
     updatePostulacionesBadge();
@@ -11961,7 +11991,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '</div>' +
             '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">' +
               '<div style="font-size:12px;color:var(--muted)">🗓️ Certificación diaria: <strong>'+certs.length+(esperadas?'/'+esperadas:'')+'</strong> día'+(certs.length===1?'':'s')+' certificado'+(certs.length===1?'':'s')+(s?.horasVariables?' · <strong>'+horasCertificadasCiclo(c.id).toFixed(1)+' hs</strong> certificadas · <strong>$'+Math.round(horasCertificadasCiclo(c.id)*(s?.precioHora||0)).toLocaleString()+'</strong>':'')+'</div>' +
-              '<button class="btn secondary xs" onclick="openCertificarRangoModal(\''+m.id+'\',\''+c.periodo+'\')">📅 Certificar varios días</button>' +
+              '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+                '<button class="btn secondary xs" onclick="verHistorialAsistencia(\''+m.id+'\')">📊 Historial</button>' +
+                '<button class="btn secondary xs" onclick="openCertificarRangoModal(\''+m.id+'\',\''+c.periodo+'\')">📅 Certificar varios días</button>' +
+              '</div>' +
             '</div>' +
             items.map(it => {
               const porValidar = it.estado==='pendiente' && (it.evidenciaUrl||it.evidenciaNota);
