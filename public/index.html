@@ -11960,6 +11960,42 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     return { ok: true };
   }
 
+  // Elimina directo la asignación de un prestador a un módulo (ej:
+  // se cargó por error o duplicada) — a diferencia de "Cambiar de
+  // módulo", esto no lo reemplaza por otro, lo saca del todo. En el
+  // servidor se lleva en cascada los ciclos, ítems y certificaciones
+  // de este módulo asignado (están definidos "on delete cascade"); acá
+  // reflejamos lo mismo en el estado local para que no quede basura.
+  // También borra la postulación que lo originó, si tenía una, para
+  // que no quede una postulación "aceptada" sin módulo asignado.
+  async function eliminarModuloAsignado(moduloAsignadoId) {
+    const m = moduloAsignadoById(moduloAsignadoId);
+    if (!m) return { ok: false, motivo: 'Módulo asignado no encontrado.' };
+    const ok = await deleteOne(DB.modulosAsignados, m.id);
+    if (!ok) return { ok: false, motivo: 'Falló al eliminar en el servidor — revisá la consola del navegador (F12) para el detalle.' };
+    state.modulosAsignados = (state.modulosAsignados||[]).filter(x => x.id !== m.id);
+    const ciclosIds = (state.moduloCiclos||[]).filter(c => c.moduloAsignadoId === m.id).map(c => c.id);
+    state.moduloCiclos = (state.moduloCiclos||[]).filter(c => c.moduloAsignadoId !== m.id);
+    state.moduloItems = (state.moduloItems||[]).filter(it => it.moduloAsignadoId !== m.id);
+    state.certificaciones = (state.certificaciones||[]).filter(c => !ciclosIds.includes(c.cicloId));
+    if (m.postulacionId) {
+      await deleteOne(DB.postulaciones, m.postulacionId);
+      state.postulaciones = (state.postulaciones||[]).filter(p => p.id !== m.postulacionId);
+    }
+    return { ok: true };
+  }
+  function confirmarEliminarModuloAsignado(moduloAsignadoId) {
+    const m = moduloAsignadoById(moduloAsignadoId);
+    const s = m && servicioById(m.servicioId);
+    const prest = m && prestadorById(m.prestadorId);
+    if (!confirm('¿Eliminar la asignación de ' + (prest?nombreCompleto(prest):'este prestador') + ' a "' + (s?.titulo||'este módulo') + '"?\n\nSe borran también sus ciclos, certificaciones y evidencias de este módulo. No se puede deshacer.')) return;
+    eliminarModuloAsignado(moduloAsignadoId).then(res => {
+      if (!res.ok) { alert('No se pudo eliminar: ' + res.motivo); return; }
+      renderModulosAsignados();
+      renderPrestadores();
+    });
+  }
+
   async function acceptPostulacion(id) {
     const p = postulacionById(id);
     const s = p && servicioById(p.servicioId);
@@ -12414,6 +12450,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '</div>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
             '<button class="btn secondary xs" onclick="openCambiarServicioModal(\''+m.id+'\')">🔀 Cambiar de módulo</button>' +
+            '<button class="btn danger xs" onclick="confirmarEliminarModuloAsignado(\''+m.id+'\')">🗑️ Eliminar asignación</button>' +
             (tieneJornadas ? '<button class="btn secondary xs" data-action="set-codigo-externo" data-id="'+m.id+'">🔗 '+(m.codigoExterno?'Código: '+m.codigoExterno:'Vincular código externo')+'</button>' : '') +
           '</div>' +
         '</div>' +
