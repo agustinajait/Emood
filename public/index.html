@@ -2453,6 +2453,9 @@
       <div id="prestadoresTabPrestadores">
       <!-- LIST VIEW -->
       <div id="prestadoresListView">
+        <div id="prestadoresSuperadminAviso" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#1e40af">
+          👁️ Como superadmin estás viendo <strong>todos los prestadores de la plataforma</strong> (de cualquier organización, incluidos los que todavía no se postularon a nada) — no solo los de la organización en la que estás parada. Por eso este número puede ser mayor al que ve el admin de esa organización.
+        </div>
         <div class="card">
           <div class="search-bar">
             <span class="search-icon">🔍</span>
@@ -7377,6 +7380,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function renderPrestadores() {
     const el = document.getElementById('prestadoresTable');
     if (!el) return;
+    const avisoEl = document.getElementById('prestadoresSuperadminAviso');
+    if (avisoEl) avisoEl.style.display = myProfile?.role === 'superadmin' ? '' : 'none';
     const q = (document.getElementById('prestadorSearch')?.value||'').toLowerCase().trim();
     const ecoFilter = document.getElementById('prestadorEcosistemaFilter');
     if (ecoFilter && ecoFilter.options.length <= 1) {
