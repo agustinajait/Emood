@@ -2463,9 +2463,16 @@
             <input type="text" id="prestadorSearch" placeholder="Buscar por nombre, rol o agencia…" oninput="renderPrestadores()">
           </div>
           <div class="toolbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-            <select id="prestadorEcosistemaFilter" onchange="renderPrestadores()">
-              <option value="all">Todos los ecosistemas</option>
-            </select>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <select id="prestadorEcosistemaFilter" onchange="renderPrestadores()">
+                <option value="all">Todos los ecosistemas</option>
+              </select>
+              <select id="prestadorModuloFilter" onchange="renderPrestadores()">
+                <option value="all">Con o sin módulos</option>
+                <option value="sin">Sin módulos asignados</option>
+                <option value="con">Con módulos asignados</option>
+              </select>
+            </div>
             <div id="prestadoresCount" style="font-size:13px;color:var(--muted);font-weight:600"></div>
           </div>
           <div id="prestadoresTable"></div>
@@ -7404,10 +7411,17 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         (state.ecosistemas||[]).map(e => '<option value="'+e.id+'">'+e.nombre+'</option>').join('');
     }
     const ecoVal = ecoFilter?.value || 'all';
+    const moduloFilter = document.getElementById('prestadorModuloFilter');
+    const moduloVal = moduloFilter?.value || 'all';
     const mes = new Date().toISOString().slice(0,7);
 
     const list = (state.prestadores||[]).filter(p => {
       if (ecoVal !== 'all' && !ecosistemaIdsEfectivos(p).includes(ecoVal)) return false;
+      if (moduloVal !== 'all') {
+        const tieneModulos = modulosByPrestador(p.id).length > 0 || serviciosAsignadosDe(p).length > 0;
+        if (moduloVal === 'sin' && tieneModulos) return false;
+        if (moduloVal === 'con' && !tieneModulos) return false;
+      }
       if (!q) return true;
       const ag = state.agencies.find(a => a.id === p.agencyId)?.name||'';
       return [p.nombre, p.rol||'', ag, p.contacto||''].some(v => v.toLowerCase().includes(q));
