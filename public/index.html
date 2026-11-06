@@ -2473,7 +2473,10 @@
                 <option value="con">Con módulos asignados</option>
               </select>
             </div>
-            <div id="prestadoresCount" style="font-size:13px;color:var(--muted);font-weight:600"></div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <button class="btn secondary small" onclick="exportarPrestadoresCSV()">⬇ Exportar CSV</button>
+              <div id="prestadoresCount" style="font-size:13px;color:var(--muted);font-weight:600"></div>
+            </div>
           </div>
           <div id="prestadoresTable"></div>
         </div>
@@ -7396,6 +7399,49 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   }
 
   /* ─── RENDER PRESTADORES ─────────────────────────────── */
+  // Misma lógica de filtrado que usa la lista de "Prestadores" en
+  // pantalla (búsqueda + ecosistema + con/sin módulos) — factoreada
+  // para que "Exportar CSV" exporte exactamente lo que se está viendo
+  // filtrado en ese momento, no todo el listado.
+  function prestadoresFiltrados() {
+    const q = (document.getElementById('prestadorSearch')?.value||'').toLowerCase().trim();
+    const ecoVal = document.getElementById('prestadorEcosistemaFilter')?.value || 'all';
+    const moduloVal = document.getElementById('prestadorModuloFilter')?.value || 'all';
+    return (state.prestadores||[]).filter(p => {
+      if (ecoVal !== 'all' && !ecosistemaIdsEfectivos(p).includes(ecoVal)) return false;
+      if (moduloVal !== 'all') {
+        const tieneModulos = modulosByPrestador(p.id).length > 0 || serviciosAsignadosDe(p).length > 0;
+        if (moduloVal === 'sin' && tieneModulos) return false;
+        if (moduloVal === 'con' && !tieneModulos) return false;
+      }
+      if (!q) return true;
+      const ag = state.agencies.find(a => a.id === p.agencyId)?.name||'';
+      return [p.nombre, p.rol||'', ag, p.contacto||''].some(v => v.toLowerCase().includes(q));
+    });
+  }
+  function exportarPrestadoresCSV() {
+    const list = prestadoresFiltrados();
+    if (!list.length) { alert('No hay prestadores para exportar con el filtro actual.'); return; }
+    const rows = [['Nombre','Apellido','Rol','Estado','Ecosistema(s)','Organización(es)','Teléfono','CUIL','Seguro','DNI']];
+    list.forEach(p => {
+      const ecoNombres = ecosistemaIdsEfectivos(p).map(id => (state.ecosistemas||[]).find(e=>e.id===id)?.nombre).filter(Boolean);
+      const orgNombres = organizacionesEfectivas(p).map(orgNombre).filter(Boolean);
+      rows.push([
+        p.nombre||'', p.apellido||'', p.rol||'', p.activo!==false?'Activo':'Inactivo',
+        ecoNombres.join(' / '), orgNombres.join(' / '), p.contacto||'',
+        p.numeroCuil||'', p.tieneSeguro?'Sí':'No', p.tieneDni?'Sí':'No',
+      ]);
+    });
+    const csv = rows.map(r => r.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const ecoVal = document.getElementById('prestadorEcosistemaFilter')?.value || 'all';
+    const ecoNombre = ecoVal !== 'all' ? (state.ecosistemas||[]).find(e=>e.id===ecoVal)?.nombre : null;
+    a.download = 'prestadores' + (ecoNombre ? '_'+ecoNombre.toLowerCase().replace(/[^a-z0-9]+/g,'_') : '') + '.csv';
+    a.click();
+  }
+
   function renderPrestadores() {
     const el = document.getElementById('prestadoresTable');
     if (!el) return;
@@ -7407,28 +7453,15 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const cantSueltos = esSuperadmin ? (state.prestadores||[]).filter(prestadorSinOrganizacion).length : 0;
       sueltosAvisoEl.textContent = cantSueltos ? ' Hay ' + cantSueltos + ' prestador' + (cantSueltos===1?'':'es') + ' que se registró pero nunca quedó vinculado a ninguna organización (buscá el badge "🔗 Sin organización" más abajo para vincularlos).' : '';
     }
-    const q = (document.getElementById('prestadorSearch')?.value||'').toLowerCase().trim();
     const ecoFilter = document.getElementById('prestadorEcosistemaFilter');
     if (ecoFilter && ecoFilter.options.length <= 1) {
       ecoFilter.innerHTML = '<option value="all">Todos los ecosistemas</option>' +
         (state.ecosistemas||[]).map(e => '<option value="'+e.id+'">'+e.nombre+'</option>').join('');
     }
-    const ecoVal = ecoFilter?.value || 'all';
-    const moduloFilter = document.getElementById('prestadorModuloFilter');
-    const moduloVal = moduloFilter?.value || 'all';
+    const q = (document.getElementById('prestadorSearch')?.value||'').toLowerCase().trim();
     const mes = new Date().toISOString().slice(0,7);
 
-    const list = (state.prestadores||[]).filter(p => {
-      if (ecoVal !== 'all' && !ecosistemaIdsEfectivos(p).includes(ecoVal)) return false;
-      if (moduloVal !== 'all') {
-        const tieneModulos = modulosByPrestador(p.id).length > 0 || serviciosAsignadosDe(p).length > 0;
-        if (moduloVal === 'sin' && tieneModulos) return false;
-        if (moduloVal === 'con' && !tieneModulos) return false;
-      }
-      if (!q) return true;
-      const ag = state.agencies.find(a => a.id === p.agencyId)?.name||'';
-      return [p.nombre, p.rol||'', ag, p.contacto||''].some(v => v.toLowerCase().includes(q));
-    });
+    const list = prestadoresFiltrados();
 
     const totalGeneral = (state.prestadores||[]).length;
     const countEl = document.getElementById('prestadoresCount');
