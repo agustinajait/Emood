@@ -12456,7 +12456,11 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     modulos.forEach(m => {
       const s = servicioById(m.servicioId);
       const ecoIdsDelServicio = s?.ecosistemaIds?.length ? s.ecosistemaIds : ['_sin'];
-      ecoIdsDelServicio.forEach(ecoId => { (porEco[ecoId] = porEco[ecoId]||[]).push(m); });
+      // Si ya se filtró por un ecosistema puntual, agrupar solo bajo
+      // ese — si no, un módulo que pertenece a Norte Y Sur a la vez
+      // aparecía bajo "Norte" aunque se hubiera filtrado por "Sur".
+      const gruposParaEsteModulo = ecoVal !== 'all' ? [ecoVal] : ecoIdsDelServicio;
+      gruposParaEsteModulo.forEach(ecoId => { (porEco[ecoId] = porEco[ecoId]||[]).push(m); });
     });
     const ecoIds = Object.keys(porEco).sort((a,b) => {
       if (a==='_sin') return 1;
