@@ -2526,13 +2526,16 @@
           <span class="search-icon">🔍</span>
           <input type="text" id="asignadosPrestadorSearch" placeholder="Buscar por nombre o apellido…" oninput="renderModulosAsignados()">
         </div>
-        <div class="toolbar">
-          <select id="asignadosServicioFilter" onchange="renderModulosAsignados()">
-            <option value="all">Todos los módulos</option>
-          </select>
-          <select id="asignadosEcosistemaFilter" onchange="renderModulosAsignados()">
-            <option value="all">Todos los ecosistemas</option>
-          </select>
+        <div class="toolbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <select id="asignadosServicioFilter" onchange="renderModulosAsignados()">
+              <option value="all">Todos los módulos</option>
+            </select>
+            <select id="asignadosEcosistemaFilter" onchange="renderModulosAsignados()">
+              <option value="all">Todos los ecosistemas</option>
+            </select>
+          </div>
+          <div id="asignadosCupoInfo" style="font-size:13px;font-weight:700"></div>
         </div>
         <div id="modulosAsignadosListContent"></div>
       </div>
@@ -12418,6 +12421,30 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         (state.ecosistemas||[]).map(e => '<option value="'+e.id+'">'+e.nombre+'</option>').join('');
     }
     const ecoVal = ecoFilter?.value || 'all';
+    // Cupos cubiertos del filtro activo (no de toda la plataforma):
+    // con un módulo puntual elegido, el cupo de ESE módulo; con un
+    // ecosistema elegido (y "todos los módulos"), la suma de cupos de
+    // los módulos que pertenecen a ese ecosistema.
+    const cupoInfoEl = document.getElementById('asignadosCupoInfo');
+    if (cupoInfoEl) {
+      let cupoTexto = '';
+      if (servicioVal !== 'all') {
+        const s = servicioById(servicioVal);
+        if (s) {
+          const ocupados = cuposOcupados(s.id);
+          const cupos = s.cupos||1;
+          cupoInfoEl.style.color = ocupados>=cupos ? '#dc2626' : '#1d4ed8';
+          cupoTexto = '👤 ' + ocupados + '/' + cupos + ' cupos cubiertos';
+        }
+      } else if (ecoVal !== 'all') {
+        const serviciosDelEco = (state.servicios||[]).filter(s => (s.ecosistemaIds||[]).includes(ecoVal));
+        const ocupados = serviciosDelEco.reduce((acc,s) => acc + cuposOcupados(s.id), 0);
+        const cupos = serviciosDelEco.reduce((acc,s) => acc + (s.cupos||1), 0);
+        cupoInfoEl.style.color = ocupados>=cupos ? '#dc2626' : '#1d4ed8';
+        cupoTexto = '👤 ' + ocupados + '/' + cupos + ' cupos cubiertos';
+      }
+      cupoInfoEl.textContent = cupoTexto;
+    }
     const q = (document.getElementById('asignadosPrestadorSearch')?.value||'').toLowerCase().trim();
     const todosLosModulos = [...(state.modulosAsignados || [])];
     if (!todosLosModulos.length) {
