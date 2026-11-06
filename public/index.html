@@ -794,7 +794,7 @@
     .admin-topbar-fixed {
       position: fixed; top: 0; left: var(--sidebar-w); right: 0; height: 52px;
       background: #fff; border-bottom: 1px solid var(--line);
-      display: flex; align-items: center; justify-content: flex-end;
+      display: flex; align-items: center; justify-content: flex-end; gap: 10px;
       padding: 0 24px; z-index: 40;
     }
     .admin-topbar-fixed .sidebar-logout {
@@ -2355,6 +2355,7 @@
   </aside>
 
   <div class="admin-topbar-fixed">
+    <button class="btn secondary small" id="refrescarDatosBtn" onclick="refrescarDatos()" title="Trae lo último que haya en el servidor (postulaciones, prestadores, etc.) — la pantalla no se actualiza sola mientras la tenés abierta.">🔄 Actualizar</button>
     <button class="sidebar-logout" onclick="doLogout()">⏻ Cerrar sesión</button>
   </div>
 
@@ -2370,7 +2371,8 @@
         <div class="actions">
           <button class="btn secondary" onclick="openPerfilOrgModal()">🏢 Perfil público</button>
           <button class="btn secondary" onclick="openDocumentacionLegalModal()">📋 Documentación legal</button>
-          <button class="btn secondary" id="invitarAdminBtn" onclick="openInvitarAdminModal()" style="display:none">👤 Invitar administrador</button>
+          <button class="btn secondary" id="invitarAdminBtn" onclick="openInvitarAdminModal('admin')" style="display:none">👤 Invitar administrador</button>
+          <button class="btn secondary" id="invitarCoordinadorBtn" onclick="openInvitarAdminModal('coordinador')" style="display:none">🧑‍💼 Invitar coordinador</button>
           <button class="btn secondary" onclick="openIntegracionesModal()">🔌 Integraciones</button>
         </div>
       </div>
@@ -3329,6 +3331,8 @@
       // organización no puede sumar colegas por su cuenta.
       const invitarAdminBtn = document.getElementById('invitarAdminBtn');
       if (invitarAdminBtn) invitarAdminBtn.style.display = myProfile?.role === 'superadmin' ? '' : 'none';
+      const invitarCoordinadorBtn = document.getElementById('invitarCoordinadorBtn');
+      if (invitarCoordinadorBtn) invitarCoordinadorBtn.style.display = ['admin','coordinador','superadmin'].includes(myProfile?.role) ? '' : 'none';
       const esSuperadmin = myProfile?.role === 'superadmin';
       const organizacionesNavBtn = document.getElementById('organizacionesNavBtn');
       const superadminNavLabel = document.getElementById('superadminNavLabel');
@@ -3555,13 +3559,19 @@
   }
   // Genera un link para que alguien cree SU PROPIO usuario admin de
   // esta organización (permanente — no puede cambiar de organización
-  // como el superadmin). Lo puede generar el superadmin o un admin ya
-  // existente de la organización (para sumar un colega).
-  async function openInvitarAdminModal() {
+  // como el superadmin). "admin" sigue siendo exclusivo del
+  // superadmin (cada organización tiene un admin "fijo" que decide
+  // el superadmin); "coordinador" lo puede generar cualquier
+  // admin/coordinador ya existente de la organización, para sumar
+  // colegas con el mismo nivel de acceso sin pasar por el superadmin
+  // — la RPC valida el permiso según el rol pedido.
+  async function openInvitarAdminModal(role) {
+    role = role === 'coordinador' ? 'coordinador' : 'admin';
     const org = currentOrgFull;
     if (!org) { alert('Todavía no cargó la organización — probá de nuevo en un segundo.'); return; }
-    openModal('Invitar administrador de ' + org.name, 'Generá un link único para que cree su cuenta y quede como admin de esta organización.', '<div id="invitarAdminBody" style="font-size:13px;color:var(--muted)">Generando link…</div>');
-    const rpc = await callRpc('generar_invitacion_admin', { target_org_id: org.id });
+    const label = role === 'coordinador' ? 'coordinador' : 'administrador';
+    openModal('Invitar ' + label + ' de ' + org.name, 'Generá un link único para que cree su cuenta y quede como ' + label + ' de esta organización.', '<div id="invitarAdminBody" style="font-size:13px;color:var(--muted)">Generando link…</div>');
+    const rpc = await callRpc('generar_invitacion_admin', { target_org_id: org.id, p_role: role });
     const body = document.getElementById('invitarAdminBody');
     if (!body) return;
     if (rpc.error || !rpc.data?.[0]) {
@@ -3571,7 +3581,7 @@
     const token = rpc.data[0];
     const link = window.location.origin + window.location.pathname + '?admin_invite=' + token;
     body.innerHTML =
-      '<div style="font-size:13px;margin-bottom:10px">Compartile este link a quien va a administrar '+org.name+' — al abrirlo va a poder crear su email y contraseña, y va a quedar como admin de esta organización (no de otras). Es de un solo uso.</div>' +
+      '<div style="font-size:13px;margin-bottom:10px">Compartile este link a quien va a ser '+label+' de '+org.name+' — al abrirlo va a poder crear su email y contraseña, y va a quedar como '+label+' de esta organización (no de otras), con el mismo acceso que un admin. Es de un solo uso.</div>' +
       '<div style="display:flex;gap:6px">' +
         '<input readonly id="inviteLinkInput" value="'+link+'" style="flex:1;font-size:12px;padding:8px;border:1px solid var(--line);border-radius:8px" onclick="this.select()">' +
         '<button type="button" class="btn secondary small" onclick="copiarInviteLink()">📋 Copiar</button>' +
@@ -5968,6 +5978,24 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     renderModulosAsignados();
     renderAsistenciaDiaria();
     await saveState();
+  }
+
+  // La pantalla NO se actualiza sola mientras queda abierta — si un
+  // prestador se postula o registra mientras el admin tiene la pestaña
+  // abierta, no aparece hasta que se traiga de nuevo del servidor.
+  // Este botón ("🔄 Actualizar", fijo arriba a la derecha en toda la
+  // app) hace exactamente eso sin perder en qué pantalla se está.
+  async function refrescarDatos() {
+    const btn = document.getElementById('refrescarDatosBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '🔄 Actualizando…'; }
+    try {
+      const fresh = await loadStateFromSupabase();
+      if (fresh) state = normalizeState(fresh);
+      await loadOrgName();
+      await renderAll();
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🔄 Actualizar'; }
+    }
   }
 
   /* ─── CRUD HELPERS ───────────────────────────────────── */
@@ -11715,7 +11743,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const estadoBadge = p.estado==='pendiente' ? '<span class="badge blue">Pendiente</span>' : p.estado==='aceptada' ? '<span class="badge green">Aceptada</span>' : '<span class="badge gray">Rechazada</span>';
       return '<div class="card" style="margin-bottom:10px">' +
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
-          '<div><div style="font-weight:700">'+(prest?.nombre||'Prestador eliminado')+'</div>' +
+          '<div><div style="font-weight:700">'+(prest?nombreCompleto(prest):'Prestador eliminado')+'</div>' +
           (p.mensaje?'<div style="font-size:13px;margin-top:6px">"'+p.mensaje+'"</div>':'') +
           (p.numeroDupla?'<div style="font-size:12px;color:#5b21b6;margin-top:6px">🤝 Número de dupla: <strong>'+p.numeroDupla+'</strong></div>':'') +
           (modulosArrPost.length>1?'<div style="font-size:12px;color:#5b21b6;margin-top:6px">🧩 Se postula a: Módulo '+(p.modulosElegidos&&p.modulosElegidos.length?p.modulosElegidos.join(', '):'todos')+'</div>':'') +
