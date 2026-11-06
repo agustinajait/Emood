@@ -2515,9 +2515,16 @@
         <div id="serviciosListContent"></div>
       </div>
       <div id="serviciosTabAsignados" style="display:none">
+        <div class="search-bar">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="asignadosPrestadorSearch" placeholder="Buscar por nombre o apellido…" oninput="renderModulosAsignados()">
+        </div>
         <div class="toolbar">
           <select id="asignadosServicioFilter" onchange="renderModulosAsignados()">
             <option value="all">Todos los módulos</option>
+          </select>
+          <select id="asignadosEcosistemaFilter" onchange="renderModulosAsignados()">
+            <option value="all">Todos los ecosistemas</option>
           </select>
         </div>
         <div id="modulosAsignadosListContent"></div>
@@ -12352,14 +12359,27 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         (state.servicios||[]).map(s => '<option value="'+s.id+'">'+s.titulo+'</option>').join('');
     }
     const servicioVal = servicioFilter?.value || 'all';
+    const ecoFilter = document.getElementById('asignadosEcosistemaFilter');
+    if (ecoFilter && ecoFilter.options.length <= 1) {
+      ecoFilter.innerHTML = '<option value="all">Todos los ecosistemas</option>' +
+        (state.ecosistemas||[]).map(e => '<option value="'+e.id+'">'+e.nombre+'</option>').join('');
+    }
+    const ecoVal = ecoFilter?.value || 'all';
+    const q = (document.getElementById('asignadosPrestadorSearch')?.value||'').toLowerCase().trim();
     const todosLosModulos = [...(state.modulosAsignados || [])];
     if (!todosLosModulos.length) {
       el.innerHTML = '<div class="empty">Todavía no hay módulos asignados (se crean al aceptar una postulación).</div>';
       return;
     }
-    const modulos = servicioVal === 'all' ? todosLosModulos : todosLosModulos.filter(m => m.servicioId === servicioVal);
+    let modulos = servicioVal === 'all' ? todosLosModulos : todosLosModulos.filter(m => m.servicioId === servicioVal);
+    if (ecoVal !== 'all') {
+      modulos = modulos.filter(m => (servicioById(m.servicioId)?.ecosistemaIds||[]).includes(ecoVal));
+    }
+    if (q) {
+      modulos = modulos.filter(m => nombreCompleto(prestadorById(m.prestadorId)||{}).toLowerCase().includes(q));
+    }
     if (!modulos.length) {
-      el.innerHTML = '<div class="empty">Ningún prestador asignado a ese módulo todavía.</div>';
+      el.innerHTML = '<div class="empty">Ningún prestador asignado que coincida con el filtro.</div>';
       return;
     }
     function tienePorValidar(moduloId) {
