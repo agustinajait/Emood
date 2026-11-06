@@ -2455,6 +2455,7 @@
       <div id="prestadoresListView">
         <div id="prestadoresSuperadminAviso" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#1e40af">
           👁️ Como superadmin estás viendo <strong>todos los prestadores de la plataforma</strong> (de cualquier organización, incluidos los que todavía no se postularon a nada) — no solo los de la organización en la que estás parada. Por eso este número puede ser mayor al que ve el admin de esa organización.
+          <span id="prestadoresSueltosAviso"></span>
         </div>
         <div class="card">
           <div class="search-bar">
@@ -6569,6 +6570,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='vincular-modulos-dupla') await vincularModulosDupla(id);
     else if (action==='delete-dupla') await deleteDupla(id);
     else if (action==='postular-servicio') { const sid=btn.dataset.sid; openPostularModal(sid, id); }
+    else if (action==='vincular-suelto') openVincularSueltoModal(id);
     else if (action==='subir-evidencia-item') { openSubirEvidenciaModal(id, btn.dataset.pid); }
     else if (action==='marcar-inicio-jornada') await marcarInicioJornada(id, btn.dataset.pid);
     else if (action==='marcar-in-todos') await marcarInTodosModulos(id, btn.dataset.mid, btn.dataset.pid, btn.dataset.idxs.split(',').map(Number));
@@ -7381,7 +7383,13 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const el = document.getElementById('prestadoresTable');
     if (!el) return;
     const avisoEl = document.getElementById('prestadoresSuperadminAviso');
-    if (avisoEl) avisoEl.style.display = myProfile?.role === 'superadmin' ? '' : 'none';
+    const esSuperadmin = myProfile?.role === 'superadmin';
+    if (avisoEl) avisoEl.style.display = esSuperadmin ? '' : 'none';
+    const sueltosAvisoEl = document.getElementById('prestadoresSueltosAviso');
+    if (sueltosAvisoEl) {
+      const cantSueltos = esSuperadmin ? (state.prestadores||[]).filter(prestadorSinOrganizacion).length : 0;
+      sueltosAvisoEl.textContent = cantSueltos ? ' Hay ' + cantSueltos + ' prestador' + (cantSueltos===1?'':'es') + ' que se registró pero nunca quedó vinculado a ninguna organización (buscá el badge "🔗 Sin organización" más abajo para vincularlos).' : '';
+    }
     const q = (document.getElementById('prestadorSearch')?.value||'').toLowerCase().trim();
     const ecoFilter = document.getElementById('prestadorEcosistemaFilter');
     if (ecoFilter && ecoFilter.options.length <= 1) {
@@ -7420,6 +7428,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const mods = modulosByPrestador(p.id);
       const serviciosNuevos = mods.length ? [] : serviciosAsignadosDe(p);
       const postsPendientes = (mods.length || serviciosNuevos.length) ? [] : postulacionesDe(p);
+      const suelto = myProfile?.role === 'superadmin' && prestadorSinOrganizacion(p);
       const rolLabel = p.rol || (serviciosNuevos.length ? serviciosNuevos.map(s=>s.titulo).join(', ')
         : postsPendientes.length ? 'Postulado a ' + postsPendientes.map(po => servicioById(po.servicioId)?.titulo).filter(Boolean).join(', ')
         : 'Sin módulo asignado todavía');
@@ -7449,6 +7458,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
                 '<strong style="font-size:16px">'+nombreCompleto(p)+'</strong>',
                 p.activo !== false ? '<span class="badge green">● Activo</span>' : '<span class="badge gray">– Inactivo</span>',
                 !perfilPrestadorCompleto(p) ? '<span class="badge" style="background:#fef2f2;color:#dc2626" title="'+camposPerfilFaltantes(p).join(', ')+'">⚠️ Perfil incompleto</span>' : '',
+                suelto ? '<span class="badge" style="background:#fffbeb;color:#92400e" title="Se registró pero nunca se postuló ni quedó vinculado a ninguna organización.">🔗 Sin organización</span>' : '',
               '</div>',
               '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+rolLabel+(orgNombres.length?' · 🏛️ '+orgNombres.join(', '):'')+(ecoNombres.length?' · 🌿 '+ecoNombres.join(', '):'')+(ag?' · 🏢 '+ag.name:'')+'</div>',
               // Módulos fijos summary (sistema viejo) o, si no tiene
@@ -7487,6 +7497,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '<button class="btn secondary xs" data-action="share-prestador" data-id="'+p.id+'">🔗 Link</button>',
             '<button class="btn secondary xs" data-action="remito-modulos" data-id="'+p.id+'" data-per="'+mes+'">📄 Remito</button>',
             '<button class="btn secondary xs" data-action="edit-prestador" data-id="'+p.id+'">Editar</button>',
+            suelto ? '<button class="btn primary xs" data-action="vincular-suelto" data-id="'+p.id+'">🔗 Vincular a un módulo</button>' : '',
             '<button class="btn danger xs" data-action="delete-prestador" data-id="'+p.id+'">✕</button>',
           '</div>',
         '</div>',
@@ -8949,6 +8960,64 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       if (orgId) ids.add(orgId);
     });
     return [...ids];
+  }
+  // "Suelto": se creó la cuenta (típicamente por el link general de
+  // autoregistro, ?alta=prestador, que no pide organización) pero
+  // nunca quedó vinculado a ninguna — ni se postuló a un módulo, ni
+  // un admin lo dio de alta directo. Solo lo ve el superadmin (por el
+  // bypass global de hh_prestadores_select); para cualquier
+  // organización es invisible hasta que se lo vincule.
+  function prestadorSinOrganizacion(p) {
+    if (p.createdByOrgId) return false;
+    if ((state.postulaciones||[]).some(po => po.prestadorId === p.id)) return false;
+    if ((state.modulosAsignados||[]).some(m => m.prestadorId === p.id)) return false;
+    if ((state.modulos||[]).some(m => m.prestadorId === p.id)) return false;
+    return true;
+  }
+  // Toma un prestador "suelto" (ver prestadorSinOrganizacion) y lo dej
+  // asignado directo a un módulo de la organización en la que está
+  // parado el superadmin — reusa asignarPrestadorDirecto (la misma
+  // lógica que ya usa "Importar nómina" y "Asignar prestadores"), así
+  // que no hace falta que la persona vuelva a entrar a postularse ella
+  // misma.
+  function openVincularSueltoModal(prestadorId) {
+    const prest = prestadorById(prestadorId);
+    if (!prest) return;
+    const org = currentOrgFull;
+    if (!org) { alert('No se pudo determinar la organización actual.'); return; }
+    const opciones = (state.servicios||[]).filter(s => s.organizationId === org.id && s.estado === 'activo');
+    if (!opciones.length) { alert('"'+org.name+'" todavía no tiene módulos activos a los que vincularlo.'); return; }
+    openModal('Vincular a ' + nombreCompleto(prest), 'Lo deja asignado directo a un módulo de ' + org.name + ' — como si se hubiera postulado y se lo hubieras aceptado. No hace falta que vuelva a entrar.', `
+      <form id="vincularSueltoForm" class="form-grid">
+        <div class="field full"><label>Módulo</label><select name="servicioId" required>
+          <option value="">— Elegí un módulo —</option>
+          ${opciones.map(s => '<option value="'+s.id+'">'+s.titulo+' ('+cuposOcupados(s.id)+'/'+(s.cupos||1)+' cupos)</option>').join('')}
+        </select></div>
+        <div class="field full"><button class="btn primary" type="submit">Vincular</button></div>
+      </form>
+      <div id="vincularSueltoError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>
+    `);
+    document.getElementById('vincularSueltoForm').onsubmit = async e => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button[type="submit"]');
+      const errEl = document.getElementById('vincularSueltoError');
+      errEl.style.display = 'none';
+      const servicioId = e.target.servicioId.value;
+      if (!servicioId) return;
+      const s = servicioById(servicioId);
+      if (!s) return;
+      btn.disabled = true; btn.textContent = 'Vinculando…';
+      const res = await asignarPrestadorDirecto(prest, s);
+      if (!res.ok) {
+        errEl.textContent = 'No se pudo vincular: ' + res.motivo;
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Vincular';
+        return;
+      }
+      closeModal();
+      renderPrestadores();
+      alert(nombreCompleto(prest) + ' quedó vinculado a "' + s.titulo + '".');
+    };
   }
   // Los servicios (sistema nuevo, postulación) a los que este
   // prestador tiene un módulo asignado — para mostrar "rol"/módulos
