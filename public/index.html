@@ -7476,7 +7476,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
                 '<div style="font-size:11px;color:var(--muted)">módulos / mes</div>',
                 '<div style="font-size:12px;font-weight:700;color:#92400e;margin-top:2px">⏱ '+totalHoras+'hs</div>',
                 '<div style="font-size:11px;color:var(--muted)">'+modsValidados+'/'+mods.length+' validados</div>',
-              ].join('') : '<div style="font-size:12px;color:var(--muted)">Sin módulos</div>',
+              ].join('') : (serviciosNuevos.length ? [
+                '<div style="font-size:22px;font-weight:800;font-family:var(--font-display);color:#5b21b6">'+serviciosNuevos.length+'</div>',
+                '<div style="font-size:11px;color:var(--muted)">módulo'+(serviciosNuevos.length===1?'':'s')+' asignado'+(serviciosNuevos.length===1?'':'s')+'</div>',
+              ].join('') : '<div style="font-size:12px;color:var(--muted)">Sin módulos</div>'),
             '</div>',
           '</div>',
           '<div style="display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">',
