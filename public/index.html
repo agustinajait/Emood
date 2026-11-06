@@ -11872,9 +11872,12 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const s = servicioById(sid);
       const grupo = [...porServicio[sid]].sort((a,b) => (a.estado==='pendiente'?0:1)-(b.estado==='pendiente'?0:1));
       const pendientes = grupo.filter(p=>p.estado==='pendiente').length;
+      const ocupados = s ? cuposOcupados(s.id) : 0;
+      const cupos = s ? (s.cupos||1) : 0;
       return '<div style="margin-bottom:20px">' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">' +
           '<h3 style="margin:0;font-size:15px">'+(s?.titulo||'Módulo eliminado')+'</h3>' +
+          (s ? '<span class="badge" style="background:'+(ocupados>=cupos?'#fef2f2':'#eff6ff')+';color:'+(ocupados>=cupos?'#dc2626':'#1d4ed8')+'">👤 '+ocupados+'/'+cupos+' cupos cubiertos</span>' : '') +
           (pendientes?'<span class="badge blue">'+pendientes+' pendiente(s)</span>':'') +
         '</div>' +
         grupo.map(cardPostulacion).join('') +
