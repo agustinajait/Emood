@@ -3212,6 +3212,21 @@
     if (!p?.tieneDni) faltan.push('DNI');
     if (!p?.cbu && !p?.aliasCbu) faltan.push('CBU o alias (para cobrar)');
     if (!p?.fotoUrl) faltan.push('Foto de perfil');
+
+    // Documentación puntual que pide cada módulo al que está
+    // asignado (docsRequeridos del servicio) y que no quedó
+    // confirmada en su postulación — pasa sobre todo con altas
+    // directas ("Importar nómina", "Asignar prestadores", "Vincular a
+    // un módulo"), que no piden nada en el momento de asignar.
+    (state.modulosAsignados||[]).filter(m => m.prestadorId === p.id).forEach(m => {
+      const s = servicioById(m.servicioId);
+      const post = m.postulacionId ? postulacionById(m.postulacionId) : null;
+      const confirmados = new Set((post?.docsConfirmados||[]).map(d => d.doc));
+      (s?.docsRequeridos||[]).forEach(doc => {
+        if (!confirmados.has(doc)) faltan.push(doc + ' (para ' + s.titulo + ')');
+      });
+    });
+
     return faltan;
   }
   // Link de WhatsApp (wa.me) con el mensaje de lo que le falta ya
