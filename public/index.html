@@ -7865,25 +7865,65 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const protocolo = protocoloById(prest.protocoloId);
       const items = getItemsForProtocolo(prest.protocoloId);
       const seg = state.seguimientos.find(s => s.prestadorId === prest.id && s.mes === mes) || { checks:{}, horas:{}, evidencias:[] };
-      const cumplidos = items.filter(it => seg.checks?.[it.id]).length;
-      const pct = items.length ? Math.round(cumplidos/items.length*100) : 0;
-      const pago = calcularPago(prest, seg);
+      const cumplidosLegacy = items.filter(it => seg.checks?.[it.id]).length;
+      const pagoLegacy = calcularPago(prest, seg);
       const evidencias = seg.evidencias || [];
+
+      // Sistema nuevo (postulación → módulo asignado → ciclo): el
+      // checklist de arriba solo sabe de protocolos viejos
+      // (prestador.protocoloId) — un prestador que solo tiene módulos
+      // del sistema nuevo (sin protocoloId) quedaba siempre en "Sin
+      // protocolo", 0% y $0 acá, aunque ya estuviera certificando días
+      // y ganando plata en "Módulos asignados". Se suma ese progreso.
+      const ciclosNuevos = (state.modulosAsignados||[]).filter(m => m.prestadorId === prest.id)
+        .map(m => ({ m, s: servicioById(m.servicioId), ciclo: ciclosByModuloAsignado(m.id).find(c => c.periodo === mes) }))
+        .filter(x => x.ciclo);
+      let cumplidosNuevo = 0, totalItemsNuevo = 0, pagoNuevo = 0;
+      ciclosNuevos.forEach(({ ciclo }) => {
+        const itemsC = itemsByCiclo(ciclo.id);
+        totalItemsNuevo += itemsC.length;
+        cumplidosNuevo += itemsC.filter(it => it.estado==='aprobado').length;
+        pagoNuevo += montoCiclo(ciclo);
+      });
+
+      const cumplidos = cumplidosLegacy + cumplidosNuevo;
+      const totalItems = items.length + totalItemsNuevo;
+      const pct = totalItems ? Math.round(cumplidos/totalItems*100) : 0;
+      const pago = pagoLegacy + pagoNuevo;
 
       return `
         <div class="proto-card" style="margin-bottom:18px">
           <div class="proto-card-header">
             <div>
               <strong style="font-size:16px">${nombreCompleto(prest)}</strong>
-              <div style="font-size:12px;color:var(--muted)">${prest.rol||''} · ${protocolo?.nombre||'Sin protocolo'}</div>
+              <div style="font-size:12px;color:var(--muted)">${prest.rol||''} · ${protocolo?.nombre||(ciclosNuevos.length?ciclosNuevos.map(x=>x.s?.titulo).filter(Boolean).join(', '):'Sin protocolo')}</div>
             </div>
             <div style="text-align:right">
               <div style="font-size:22px;font-weight:800;font-family:var(--font-display);color:var(--primary)">${pct}%</div>
-              <div style="font-size:11px;color:var(--muted)">${cumplidos}/${items.length} ítems</div>
+              <div style="font-size:11px;color:var(--muted)">${cumplidos}/${totalItems} ítems</div>
               <div style="font-size:14px;font-weight:700;color:var(--primary)">$${pago.toLocaleString()}</div>
             </div>
           </div>
           <div class="pct-bar" style="margin-bottom:14px"><div style="width:${pct}%"></div></div>
+
+          ${ciclosNuevos.length ? `
+            <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+              ${ciclosNuevos.map(({ m, s, ciclo }) => {
+                const certs = certificacionesByCiclo(ciclo.id);
+                const esperadas = (s?.cantidadPorPeriodo||0) * modulosElegidosDeModulo(m, s).length;
+                const montoEste = montoCiclo(ciclo);
+                return `
+                  <div style="border:1px solid var(--line);border-radius:10px;padding:10px;background:#fafaf8">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+                      <strong style="font-size:13px">📦 ${s?.titulo||'Módulo'}</strong>
+                      <span class="badge ${ciclo.estado==='aprobado'?'green':ciclo.estado==='completado'?'blue':'gray'}">${CICLO_ESTADO_LABEL[ciclo.estado]}</span>
+                    </div>
+                    <div style="font-size:12px;color:var(--muted);margin-top:4px">🗓️ Certificación diaria: <strong>${certs.length}${esperadas?'/'+esperadas:''}</strong> día${certs.length===1?'':'s'} certificado${certs.length===1?'':'s'}${s?.horasVariables?' · <strong>'+horasCertificadasCiclo(ciclo.id).toFixed(1)+' hs</strong> certificadas':''} · <strong>$${Math.round(montoEste).toLocaleString()}</strong></div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          ` : ''}
 
           ${items.length ? items.map(item => `
             <div style="border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px;background:${seg.checks?.[item.id]?'#f0fdf4':'#fafaf8'}">
