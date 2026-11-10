@@ -2613,6 +2613,15 @@
           <select id="seguimientoMesFilter" style="border-radius:9px;padding:8px 12px;border:1px solid var(--line);font-size:13px"></select>
         </div>
       </div>
+      <div class="search-bar">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="seguimientoPrestadorSearch" placeholder="Buscar por nombre o apellido…" oninput="renderSeguimiento()">
+      </div>
+      <div class="toolbar">
+        <select id="seguimientoEcosistemaFilter" onchange="renderSeguimiento()">
+          <option value="all">Todos los ecosistemas</option>
+        </select>
+      </div>
       <div id="seguimientoContent"></div>
     </section>
 
@@ -7833,9 +7842,22 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const el = document.getElementById('seguimientoContent');
     if (!el || !mes) return;
 
-    const activos = state.prestadores.filter(p => p.activo !== false);
+    const ecoFilter = document.getElementById('seguimientoEcosistemaFilter');
+    if (ecoFilter && ecoFilter.options.length <= 1) {
+      ecoFilter.innerHTML = '<option value="all">Todos los ecosistemas</option>' +
+        (state.ecosistemas||[]).map(e => '<option value="'+e.id+'">'+e.nombre+'</option>').join('');
+    }
+    const ecoVal = ecoFilter?.value || 'all';
+    const q = (document.getElementById('seguimientoPrestadorSearch')?.value||'').toLowerCase().trim();
+
+    const activos = state.prestadores.filter(p => {
+      if (p.activo === false) return false;
+      if (ecoVal !== 'all' && !ecosistemaIdsEfectivos(p).includes(ecoVal)) return false;
+      if (q && !nombreCompleto(p).toLowerCase().includes(q)) return false;
+      return true;
+    });
     if (!activos.length) {
-      el.innerHTML = '<div class="empty">No hay prestadores activos.</div>';
+      el.innerHTML = '<div class="empty">Ningún prestador coincide con el filtro.</div>';
       return;
     }
 
