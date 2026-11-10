@@ -2472,6 +2472,10 @@
                 <option value="sin">Sin módulos asignados</option>
                 <option value="con">Con módulos asignados</option>
               </select>
+              <select id="prestadorDocsFilter" onchange="renderPrestadores()">
+                <option value="all">Cualquier documentación</option>
+                <option value="falta">Con documentación incompleta</option>
+              </select>
             </div>
             <div style="display:flex;align-items:center;gap:10px">
               <button class="btn secondary small" onclick="exportarPrestadoresCSV()">⬇ Exportar CSV</button>
@@ -3194,6 +3198,34 @@
     const faltan = Object.keys(req).filter(k => !p?.[k]).map(k => req[k]);
     if (!p?.cbu && !p?.aliasCbu) faltan.push('CBU o alias (para cobrar)');
     return faltan;
+  }
+  // Documentación (no solo datos de perfil) que le falta a un
+  // prestador — para verlo de un vistazo en la lista y para armarle
+  // el reclamo por WhatsApp. "CUIL" contempla las dos formas en que
+  // se carga: el tilde viejo (tieneCuil) o el número + constancia
+  // real (numeroCuil/cuilComprobanteUrl, que si está cargado el
+  // número pero no la constancia, falta igual).
+  function documentacionFaltante(p) {
+    const faltan = [];
+    if (!p?.tieneSeguro) faltan.push('Seguro');
+    if (p?.numeroCuil ? !p.cuilComprobanteUrl : !p?.tieneCuil) faltan.push(p?.numeroCuil ? 'Constancia de CUIL' : 'CUIL');
+    if (!p?.tieneDni) faltan.push('DNI');
+    if (!p?.cbu && !p?.aliasCbu) faltan.push('CBU o alias (para cobrar)');
+    if (!p?.fotoUrl) faltan.push('Foto de perfil');
+    return faltan;
+  }
+  // Link de WhatsApp (wa.me) con el mensaje de lo que le falta ya
+  // armado, listo para que el admin solo lo revise y apriete enviar
+  // -- no manda nada solo: E-Mood no tiene conectada ninguna API de
+  // WhatsApp Business.
+  function whatsappReclamoLink(p) {
+    const tel = (p?.telefono || p?.contacto || '').replace(/[^0-9+]/g,'');
+    if (!tel) return null;
+    const faltan = documentacionFaltante(p);
+    if (!faltan.length) return null;
+    const org = currentOrgFull?.name ? ' de ' + currentOrgFull.name : '';
+    const mensaje = 'Hola ' + (p?.nombre||'') + '! Te escribimos' + org + ' — nos falta que nos envíes: ' + faltan.join(', ') + '. ¡Gracias!';
+    return 'https://wa.me/' + tel.replace(/^\+/,'') + '?text=' + encodeURIComponent(mensaje);
   }
 
   function moduloToRow(m) {
@@ -7416,6 +7448,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const q = (document.getElementById('prestadorSearch')?.value||'').toLowerCase().trim();
     const ecoVal = document.getElementById('prestadorEcosistemaFilter')?.value || 'all';
     const moduloVal = document.getElementById('prestadorModuloFilter')?.value || 'all';
+    const docsVal = document.getElementById('prestadorDocsFilter')?.value || 'all';
     return (state.prestadores||[]).filter(p => {
       if (ecoVal !== 'all' && !ecosistemaIdsEfectivos(p).includes(ecoVal)) return false;
       if (moduloVal !== 'all') {
@@ -7423,6 +7456,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         if (moduloVal === 'sin' && tieneModulos) return false;
         if (moduloVal === 'con' && !tieneModulos) return false;
       }
+      if (docsVal === 'falta' && !documentacionFaltante(p).length) return false;
       if (!q) return true;
       const ag = state.agencies.find(a => a.id === p.agencyId)?.name||'';
       return [p.nombre, p.rol||'', ag, p.contacto||''].some(v => v.toLowerCase().includes(q));
@@ -7431,7 +7465,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function exportarPrestadoresCSV() {
     const list = prestadoresFiltrados();
     if (!list.length) { alert('No hay prestadores para exportar con el filtro actual.'); return; }
-    const rows = [['Nombre','Apellido','Rol','Estado','Ecosistema(s)','Organización(es)','Teléfono','CUIL','Seguro','DNI']];
+    const rows = [['Nombre','Apellido','Rol','Estado','Ecosistema(s)','Organización(es)','Teléfono','CUIL','Seguro','DNI','Documentación faltante']];
     list.forEach(p => {
       const ecoNombres = ecosistemaIdsEfectivos(p).map(id => (state.ecosistemas||[]).find(e=>e.id===id)?.nombre).filter(Boolean);
       const orgNombres = organizacionesEfectivas(p).map(orgNombre).filter(Boolean);
@@ -7439,6 +7473,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         p.nombre||'', p.apellido||'', p.rol||'', p.activo!==false?'Activo':'Inactivo',
         ecoNombres.join(' / '), orgNombres.join(' / '), p.contacto||'',
         p.numeroCuil||'', p.tieneSeguro?'Sí':'No', p.tieneDni?'Sí':'No',
+        documentacionFaltante(p).join(' / ') || 'Completa',
       ]);
     });
     const csv = rows.map(r => r.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
@@ -7495,6 +7530,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const serviciosNuevos = mods.length ? [] : serviciosAsignadosDe(p);
       const postsPendientes = (mods.length || serviciosNuevos.length) ? [] : postulacionesDe(p);
       const suelto = myProfile?.role === 'superadmin' && prestadorSinOrganizacion(p);
+      const faltanDocs = documentacionFaltante(p);
+      const waLink = whatsappReclamoLink(p);
       const rolLabel = p.rol || (serviciosNuevos.length ? serviciosNuevos.map(s=>s.titulo).join(', ')
         : postsPendientes.length ? 'Postulado a ' + postsPendientes.map(po => servicioById(po.servicioId)?.titulo).filter(Boolean).join(', ')
         : 'Sin módulo asignado todavía');
@@ -7545,6 +7582,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
                 p.driveLink ? '<a href="'+p.driveLink+'" target="_blank" onclick="event.stopPropagation()" class="challenge-meta-tag" style="background:#e8f0fe;color:#1a73e8;text-decoration:none">📁 Drive</a>' : '',
                 p.oportunaiLink ? '<a href="'+p.oportunaiLink+'" target="_blank" onclick="event.stopPropagation()" class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6;text-decoration:none">🔗 OportunAI</a>' : '',
               '</div>',
+              faltanDocs.length ? '<div style="font-size:11px;color:#dc2626;margin-top:6px">📋 Falta: '+faltanDocs.join(', ')+'</div>' : '',
             '</div>',
             '<div style="text-align:right;flex-shrink:0;min-width:90px">',
               mods.length ? [
@@ -7563,6 +7601,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '<button class="btn secondary xs" data-action="share-prestador" data-id="'+p.id+'">🔗 Link</button>',
             '<button class="btn secondary xs" data-action="remito-modulos" data-id="'+p.id+'" data-per="'+mes+'">📄 Remito</button>',
             '<button class="btn secondary xs" data-action="edit-prestador" data-id="'+p.id+'">Editar</button>',
+            waLink ? '<a href="'+waLink+'" target="_blank" onclick="event.stopPropagation()" class="btn secondary xs" style="background:#dcfce7;color:#166534;text-decoration:none">📱 Reclamar por WhatsApp</a>' : '',
             suelto ? '<button class="btn primary xs" data-action="vincular-suelto" data-id="'+p.id+'">🔗 Vincular a un módulo</button>' : '',
             '<button class="btn danger xs" data-action="delete-prestador" data-id="'+p.id+'">✕</button>',
           '</div>',
