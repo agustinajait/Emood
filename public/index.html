@@ -2472,6 +2472,10 @@
                 <option value="sin">Sin módulos asignados</option>
                 <option value="con">Con módulos asignados</option>
               </select>
+              <select id="prestadorDocsFilter" onchange="renderPrestadores()">
+                <option value="all">Cualquier documentación</option>
+                <option value="falta">Con documentación incompleta</option>
+              </select>
             </div>
             <div style="display:flex;align-items:center;gap:10px">
               <button class="btn secondary small" onclick="exportarPrestadoresCSV()">⬇ Exportar CSV</button>
@@ -2612,6 +2616,15 @@
         <div class="actions">
           <select id="seguimientoMesFilter" style="border-radius:9px;padding:8px 12px;border:1px solid var(--line);font-size:13px"></select>
         </div>
+      </div>
+      <div class="search-bar">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="seguimientoPrestadorSearch" placeholder="Buscar por nombre o apellido…" oninput="renderSeguimiento()">
+      </div>
+      <div class="toolbar">
+        <select id="seguimientoEcosistemaFilter" onchange="renderSeguimiento()">
+          <option value="all">Todos los ecosistemas</option>
+        </select>
       </div>
       <div id="seguimientoContent"></div>
     </section>
@@ -3185,6 +3198,49 @@
     const faltan = Object.keys(req).filter(k => !p?.[k]).map(k => req[k]);
     if (!p?.cbu && !p?.aliasCbu) faltan.push('CBU o alias (para cobrar)');
     return faltan;
+  }
+  // Documentación (no solo datos de perfil) que le falta a un
+  // prestador — para verlo de un vistazo en la lista y para armarle
+  // el reclamo por WhatsApp. "CUIL" contempla las dos formas en que
+  // se carga: el tilde viejo (tieneCuil) o el número + constancia
+  // real (numeroCuil/cuilComprobanteUrl, que si está cargado el
+  // número pero no la constancia, falta igual).
+  function documentacionFaltante(p) {
+    const faltan = [];
+    if (!p?.tieneSeguro) faltan.push('Seguro');
+    if (p?.numeroCuil ? !p.cuilComprobanteUrl : !p?.tieneCuil) faltan.push(p?.numeroCuil ? 'Constancia de CUIL' : 'CUIL');
+    if (!p?.tieneDni) faltan.push('DNI');
+    if (!p?.cbu && !p?.aliasCbu) faltan.push('CBU o alias (para cobrar)');
+    if (!p?.fotoUrl) faltan.push('Foto de perfil');
+
+    // Documentación puntual que pide cada módulo al que está
+    // asignado (docsRequeridos del servicio) y que no quedó
+    // confirmada en su postulación — pasa sobre todo con altas
+    // directas ("Importar nómina", "Asignar prestadores", "Vincular a
+    // un módulo"), que no piden nada en el momento de asignar.
+    (state.modulosAsignados||[]).filter(m => m.prestadorId === p.id).forEach(m => {
+      const s = servicioById(m.servicioId);
+      const post = m.postulacionId ? postulacionById(m.postulacionId) : null;
+      const confirmados = new Set((post?.docsConfirmados||[]).map(d => d.doc));
+      (s?.docsRequeridos||[]).forEach(doc => {
+        if (!confirmados.has(doc)) faltan.push(doc + ' (para ' + s.titulo + ')');
+      });
+    });
+
+    return faltan;
+  }
+  // Link de WhatsApp (wa.me) con el mensaje de lo que le falta ya
+  // armado, listo para que el admin solo lo revise y apriete enviar
+  // -- no manda nada solo: E-Mood no tiene conectada ninguna API de
+  // WhatsApp Business.
+  function whatsappReclamoLink(p) {
+    const tel = (p?.telefono || p?.contacto || '').replace(/[^0-9+]/g,'');
+    if (!tel) return null;
+    const faltan = documentacionFaltante(p);
+    if (!faltan.length) return null;
+    const org = currentOrgFull?.name ? ' de ' + currentOrgFull.name : '';
+    const mensaje = 'Hola ' + (p?.nombre||'') + '! Te escribimos' + org + ' — nos falta que nos envíes: ' + faltan.join(', ') + '. ¡Gracias!';
+    return 'https://wa.me/' + tel.replace(/^\+/,'') + '?text=' + encodeURIComponent(mensaje);
   }
 
   function moduloToRow(m) {
@@ -7407,6 +7463,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const q = (document.getElementById('prestadorSearch')?.value||'').toLowerCase().trim();
     const ecoVal = document.getElementById('prestadorEcosistemaFilter')?.value || 'all';
     const moduloVal = document.getElementById('prestadorModuloFilter')?.value || 'all';
+    const docsVal = document.getElementById('prestadorDocsFilter')?.value || 'all';
     return (state.prestadores||[]).filter(p => {
       if (ecoVal !== 'all' && !ecosistemaIdsEfectivos(p).includes(ecoVal)) return false;
       if (moduloVal !== 'all') {
@@ -7414,6 +7471,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         if (moduloVal === 'sin' && tieneModulos) return false;
         if (moduloVal === 'con' && !tieneModulos) return false;
       }
+      if (docsVal === 'falta' && !documentacionFaltante(p).length) return false;
       if (!q) return true;
       const ag = state.agencies.find(a => a.id === p.agencyId)?.name||'';
       return [p.nombre, p.rol||'', ag, p.contacto||''].some(v => v.toLowerCase().includes(q));
@@ -7422,7 +7480,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   function exportarPrestadoresCSV() {
     const list = prestadoresFiltrados();
     if (!list.length) { alert('No hay prestadores para exportar con el filtro actual.'); return; }
-    const rows = [['Nombre','Apellido','Rol','Estado','Ecosistema(s)','Organización(es)','Teléfono','CUIL','Seguro','DNI']];
+    const rows = [['Nombre','Apellido','Rol','Estado','Ecosistema(s)','Organización(es)','Teléfono','CUIL','Seguro','DNI','Documentación faltante']];
     list.forEach(p => {
       const ecoNombres = ecosistemaIdsEfectivos(p).map(id => (state.ecosistemas||[]).find(e=>e.id===id)?.nombre).filter(Boolean);
       const orgNombres = organizacionesEfectivas(p).map(orgNombre).filter(Boolean);
@@ -7430,6 +7488,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         p.nombre||'', p.apellido||'', p.rol||'', p.activo!==false?'Activo':'Inactivo',
         ecoNombres.join(' / '), orgNombres.join(' / '), p.contacto||'',
         p.numeroCuil||'', p.tieneSeguro?'Sí':'No', p.tieneDni?'Sí':'No',
+        documentacionFaltante(p).join(' / ') || 'Completa',
       ]);
     });
     const csv = rows.map(r => r.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
@@ -7486,6 +7545,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const serviciosNuevos = mods.length ? [] : serviciosAsignadosDe(p);
       const postsPendientes = (mods.length || serviciosNuevos.length) ? [] : postulacionesDe(p);
       const suelto = myProfile?.role === 'superadmin' && prestadorSinOrganizacion(p);
+      const faltanDocs = documentacionFaltante(p);
+      const waLink = whatsappReclamoLink(p);
       const rolLabel = p.rol || (serviciosNuevos.length ? serviciosNuevos.map(s=>s.titulo).join(', ')
         : postsPendientes.length ? 'Postulado a ' + postsPendientes.map(po => servicioById(po.servicioId)?.titulo).filter(Boolean).join(', ')
         : 'Sin módulo asignado todavía');
@@ -7536,6 +7597,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
                 p.driveLink ? '<a href="'+p.driveLink+'" target="_blank" onclick="event.stopPropagation()" class="challenge-meta-tag" style="background:#e8f0fe;color:#1a73e8;text-decoration:none">📁 Drive</a>' : '',
                 p.oportunaiLink ? '<a href="'+p.oportunaiLink+'" target="_blank" onclick="event.stopPropagation()" class="challenge-meta-tag" style="background:#ede9fe;color:#5b21b6;text-decoration:none">🔗 OportunAI</a>' : '',
               '</div>',
+              faltanDocs.length ? '<div style="font-size:11px;color:#dc2626;margin-top:6px">📋 Falta: '+faltanDocs.join(', ')+'</div>' : '',
             '</div>',
             '<div style="text-align:right;flex-shrink:0;min-width:90px">',
               mods.length ? [
@@ -7554,6 +7616,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '<button class="btn secondary xs" data-action="share-prestador" data-id="'+p.id+'">🔗 Link</button>',
             '<button class="btn secondary xs" data-action="remito-modulos" data-id="'+p.id+'" data-per="'+mes+'">📄 Remito</button>',
             '<button class="btn secondary xs" data-action="edit-prestador" data-id="'+p.id+'">Editar</button>',
+            waLink ? '<a href="'+waLink+'" target="_blank" onclick="event.stopPropagation()" class="btn secondary xs" style="background:#dcfce7;color:#166534;text-decoration:none">📱 Reclamar por WhatsApp</a>' : '',
             suelto ? '<button class="btn primary xs" data-action="vincular-suelto" data-id="'+p.id+'">🔗 Vincular a un módulo</button>' : '',
             '<button class="btn danger xs" data-action="delete-prestador" data-id="'+p.id+'">✕</button>',
           '</div>',
@@ -7833,9 +7896,22 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const el = document.getElementById('seguimientoContent');
     if (!el || !mes) return;
 
-    const activos = state.prestadores.filter(p => p.activo !== false);
+    const ecoFilter = document.getElementById('seguimientoEcosistemaFilter');
+    if (ecoFilter && ecoFilter.options.length <= 1) {
+      ecoFilter.innerHTML = '<option value="all">Todos los ecosistemas</option>' +
+        (state.ecosistemas||[]).map(e => '<option value="'+e.id+'">'+e.nombre+'</option>').join('');
+    }
+    const ecoVal = ecoFilter?.value || 'all';
+    const q = (document.getElementById('seguimientoPrestadorSearch')?.value||'').toLowerCase().trim();
+
+    const activos = state.prestadores.filter(p => {
+      if (p.activo === false) return false;
+      if (ecoVal !== 'all' && !ecosistemaIdsEfectivos(p).includes(ecoVal)) return false;
+      if (q && !nombreCompleto(p).toLowerCase().includes(q)) return false;
+      return true;
+    });
     if (!activos.length) {
-      el.innerHTML = '<div class="empty">No hay prestadores activos.</div>';
+      el.innerHTML = '<div class="empty">Ningún prestador coincide con el filtro.</div>';
       return;
     }
 
@@ -7843,25 +7919,65 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const protocolo = protocoloById(prest.protocoloId);
       const items = getItemsForProtocolo(prest.protocoloId);
       const seg = state.seguimientos.find(s => s.prestadorId === prest.id && s.mes === mes) || { checks:{}, horas:{}, evidencias:[] };
-      const cumplidos = items.filter(it => seg.checks?.[it.id]).length;
-      const pct = items.length ? Math.round(cumplidos/items.length*100) : 0;
-      const pago = calcularPago(prest, seg);
+      const cumplidosLegacy = items.filter(it => seg.checks?.[it.id]).length;
+      const pagoLegacy = calcularPago(prest, seg);
       const evidencias = seg.evidencias || [];
+
+      // Sistema nuevo (postulación → módulo asignado → ciclo): el
+      // checklist de arriba solo sabe de protocolos viejos
+      // (prestador.protocoloId) — un prestador que solo tiene módulos
+      // del sistema nuevo (sin protocoloId) quedaba siempre en "Sin
+      // protocolo", 0% y $0 acá, aunque ya estuviera certificando días
+      // y ganando plata en "Módulos asignados". Se suma ese progreso.
+      const ciclosNuevos = (state.modulosAsignados||[]).filter(m => m.prestadorId === prest.id)
+        .map(m => ({ m, s: servicioById(m.servicioId), ciclo: ciclosByModuloAsignado(m.id).find(c => c.periodo === mes) }))
+        .filter(x => x.ciclo);
+      let cumplidosNuevo = 0, totalItemsNuevo = 0, pagoNuevo = 0;
+      ciclosNuevos.forEach(({ ciclo }) => {
+        const itemsC = itemsByCiclo(ciclo.id);
+        totalItemsNuevo += itemsC.length;
+        cumplidosNuevo += itemsC.filter(it => it.estado==='aprobado').length;
+        pagoNuevo += montoCiclo(ciclo);
+      });
+
+      const cumplidos = cumplidosLegacy + cumplidosNuevo;
+      const totalItems = items.length + totalItemsNuevo;
+      const pct = totalItems ? Math.round(cumplidos/totalItems*100) : 0;
+      const pago = pagoLegacy + pagoNuevo;
 
       return `
         <div class="proto-card" style="margin-bottom:18px">
           <div class="proto-card-header">
             <div>
               <strong style="font-size:16px">${nombreCompleto(prest)}</strong>
-              <div style="font-size:12px;color:var(--muted)">${prest.rol||''} · ${protocolo?.nombre||'Sin protocolo'}</div>
+              <div style="font-size:12px;color:var(--muted)">${prest.rol||''} · ${protocolo?.nombre||(ciclosNuevos.length?ciclosNuevos.map(x=>x.s?.titulo).filter(Boolean).join(', '):'Sin protocolo')}</div>
             </div>
             <div style="text-align:right">
               <div style="font-size:22px;font-weight:800;font-family:var(--font-display);color:var(--primary)">${pct}%</div>
-              <div style="font-size:11px;color:var(--muted)">${cumplidos}/${items.length} ítems</div>
+              <div style="font-size:11px;color:var(--muted)">${cumplidos}/${totalItems} ítems</div>
               <div style="font-size:14px;font-weight:700;color:var(--primary)">$${pago.toLocaleString()}</div>
             </div>
           </div>
           <div class="pct-bar" style="margin-bottom:14px"><div style="width:${pct}%"></div></div>
+
+          ${ciclosNuevos.length ? `
+            <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+              ${ciclosNuevos.map(({ m, s, ciclo }) => {
+                const certs = certificacionesByCiclo(ciclo.id);
+                const esperadas = (s?.cantidadPorPeriodo||0) * modulosElegidosDeModulo(m, s).length;
+                const montoEste = montoCiclo(ciclo);
+                return `
+                  <div style="border:1px solid var(--line);border-radius:10px;padding:10px;background:#fafaf8">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+                      <strong style="font-size:13px">📦 ${s?.titulo||'Módulo'}</strong>
+                      <span class="badge ${ciclo.estado==='aprobado'?'green':ciclo.estado==='completado'?'blue':'gray'}">${CICLO_ESTADO_LABEL[ciclo.estado]}</span>
+                    </div>
+                    <div style="font-size:12px;color:var(--muted);margin-top:4px">🗓️ Certificación diaria: <strong>${certs.length}${esperadas?'/'+esperadas:''}</strong> día${certs.length===1?'':'s'} certificado${certs.length===1?'':'s'}${s?.horasVariables?' · <strong>'+horasCertificadasCiclo(ciclo.id).toFixed(1)+' hs</strong> certificadas':''} · <strong>$${Math.round(montoEste).toLocaleString()}</strong></div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          ` : ''}
 
           ${items.length ? items.map(item => `
             <div style="border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px;background:${seg.checks?.[item.id]?'#f0fdf4':'#fafaf8'}">
