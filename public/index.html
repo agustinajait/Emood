@@ -3144,6 +3144,7 @@
       foto_url: p.fotoUrl||'',
       numero_cuil: p.numeroCuil||'',
       cuil_comprobante_url: p.cuilComprobanteUrl||'',
+      numero_dni: p.numeroDni||'',
       cv_url: p.cvUrl||'',
       created_by_org_id: p.createdByOrgId||null,
       created_at: p.createdAt||new Date().toISOString(),
@@ -3179,6 +3180,7 @@
       fotoUrl: r.foto_url||'',
       numeroCuil: r.numero_cuil||'',
       cuilComprobanteUrl: r.cuil_comprobante_url||'',
+      numeroDni: r.numero_dni||'',
       cvUrl: r.cv_url||'',
       createdByOrgId: r.created_by_org_id||null,
       createdAt: r.created_at||'',
@@ -7696,7 +7698,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '<div style="display:flex;flex-wrap:wrap;gap:6px">',
               p.tieneSeguro ? '<span class="badge green">✓ Seguro</span>' : '<span class="badge gray">✗ Seguro</span>',
               p.numeroCuil ? (p.cuilComprobanteUrl ? '<span class="badge green">🪪 CUIL '+p.numeroCuil+' <a href="javascript:void(0)" onclick="verDocumento(\''+p.cuilComprobanteUrl+'\',\'Constancia de CUIL\')" style="color:inherit">📎</a></span>' : '<span class="badge" style="background:#fffbeb;color:#92400e;border-color:#92400e">🪪 CUIL '+p.numeroCuil+' — ⚠️ falta constancia</span>') : (p.tieneCuil ? '<span class="badge green">✓ CUIL</span>' : '<span class="badge gray">✗ CUIL</span>'),
-              p.tieneDni    ? '<span class="badge green">✓ DNI</span>'    : '<span class="badge gray">✗ DNI</span>',
+              p.tieneDni ? '<span class="badge green">✓ DNI'+(p.numeroDni?' '+p.numeroDni:'')+'</span>' : (p.numeroDni ? '<span class="badge" style="background:#fffbeb;color:#92400e;border-color:#92400e">🪪 DNI '+p.numeroDni+' — ⚠️ falta presentarlo</span>' : '<span class="badge gray">✗ DNI</span>'),
               (p.cbu||p.aliasCbu) ? '<span class="badge blue">💳 '+[p.cbu,p.aliasCbu].filter(Boolean).join(' · ')+(p.cbuComprobanteUrl?' <a href="javascript:void(0)" onclick="verDocumento(\''+p.cbuComprobanteUrl+'\',\'Constancia de CBU\')" style="color:inherit">📎</a>':'')+'</span>' : '',
               p.cvUrl ? '<span class="badge blue">📄 <a href="javascript:void(0)" onclick="verDocumento(\''+p.cvUrl+'\',\'CV\')" style="color:inherit">Ver CV</a></span>' : '',
               p.concursoEmprendedores ? '<span class="badge blue">🏆 Concurso</span>' : '',
@@ -8938,6 +8940,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     function buildForm() {
       return '<form id="prestadorForm" class="form-grid">' +
       '<div class="field"><label>Nombre completo</label><input name="nombre" required value="' + (existing?.nombre||'')+'"></div>' +
+      '<div class="field"><label>Número de DNI</label><input name="numeroDni" value="' + (existing?.numeroDni||'')+'"></div>' +
       '<div class="field"><label>Rol / Servicio</label><input name="rol" placeholder="ej: Coach, Lider pedagógico" value="' + (existing?.rol||'')+'"></div>' +
       '<div class="field"><label>Ecosistema</label><select name="ecosistemaId"><option value="">Sin ecosistema</option>' + (state.ecosistemas||[]).map(e=>'<option value="'+e.id+'"' +(e.id===existing?.ecosistemaId?' selected':'')+'>'+e.nombre+'</option>').join('')+'</select></div>' +
       '<div class="field"><label>Agencia</label><select name="agencyId"><option value="">Sin agencia</option>' + state.agencies.map(a=>'<option value="'+a.id+'"' +(a.id===existing?.agencyId?' selected':'')+'>'+a.name+'</option>').join('')+'</select></div>' +
@@ -9074,6 +9077,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
       const fields = {
         nombre: data.nombre.trim(),
+        numeroDni: (data.numeroDni||'').trim(),
         rol: (data.rol||'').trim(),
         agencyId: data.agencyId||null,
         ecosistemaId: data.ecosistemaId||null,
