@@ -10623,8 +10623,11 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         const key = !ciclo ? 'sin_ciclo' : ciclo.estado==='aprobado' ? 'aprobado' : ciclo.estado==='completado' ? 'completado' : 'en_progreso';
         const est = MODULO_ESTADO_ESTILO[key];
         return '<div style="border-radius:16px;background:'+est.bg+';border:1px solid '+est.border+';padding:18px 20px">' +
-          '<div><strong style="font-size:15px">'+(s?.titulo||'—')+'</strong>' +
-          (s?.fechaFin?' <span style="font-size:12px;color:var(--muted)">· hasta '+s.fechaFin+'</span>':'') +'</div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">' +
+            '<div><strong style="font-size:15px">'+(s?.titulo||'—')+'</strong>' +
+            (s?.fechaFin?' <span style="font-size:12px;color:var(--muted)">· hasta '+s.fechaFin+'</span>':'') +'</div>' +
+            '<button class="btn secondary xs" onclick="prestadorEditarNumeroDupla(\''+m.id+'\')">🤝 '+(m.codigoExterno?'Dupla: '+m.codigoExterno:'Agregar número de dupla')+'</button>' +
+          '</div>' +
           cuerpo +
         '</div>';
       }).join('');
@@ -11626,6 +11629,21 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     if (!ok) { alert('No se pudo guardar el código. Probá de nuevo.'); return; }
     renderModulosAsignados();
     if (currentPrestadorId === m.prestadorId) renderPrestadorDetail(m.prestadorId);
+  }
+  // Mismo dato que setCodigoExternoModulo, pero para que lo cargue el
+  // propio prestador desde su panel ("Mis módulos activos") -- usa un
+  // RPC acotado (set_numero_dupla) en vez del UPDATE genérico, porque
+  // el prestador no tiene (ni debería tener) permiso para tocar
+  // cualquier campo de su módulo asignado, solo este.
+  async function prestadorEditarNumeroDupla(moduloAsignadoId) {
+    const m = moduloAsignadoById(moduloAsignadoId);
+    if (!m) return;
+    const nuevo = prompt('Número de dupla (el mismo código que usa Censo Flash/Umbral 0 para identificar tu dupla):', m.codigoExterno || '');
+    if (nuevo === null) return; // canceló
+    const rpc = await callRpc('set_numero_dupla', { p_modulo_asignado_id: moduloAsignadoId, p_numero_dupla: nuevo.trim() });
+    if (rpc.error) { alert('No se pudo guardar: ' + rpc.error); return; }
+    m.codigoExterno = nuevo.trim();
+    renderPrestadorViewFromState(m.prestadorId);
   }
 
   const FRECUENCIA_LABEL = { diaria:'Diaria', semanal:'Semanal', mensual:'Mensual', unica:'Única' };
