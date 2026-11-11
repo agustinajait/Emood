@@ -12616,11 +12616,19 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           cupoTexto = '👤 ' + ocupados + '/' + cupos + ' cupos cubiertos';
         }
       } else if (ecoVal !== 'all') {
+        // Un mismo prestador puede ocupar un cupo en más de un módulo
+        // de este ecosistema a la vez (ej: hace Censo Flash Y Umbral
+        // 0) — "cupos cubiertos" suma esas vacantes (correcto, cada
+        // módulo tiene su propio cupo), pero eso NO es lo mismo que
+        // cuánta gente distinta hay: se muestran los dos números por
+        // separado para no confundirlos.
         const serviciosDelEco = (state.servicios||[]).filter(s => (s.ecosistemaIds||[]).includes(ecoVal));
+        const serviciosIdsDelEco = serviciosDelEco.map(s => s.id);
         const ocupados = serviciosDelEco.reduce((acc,s) => acc + cuposOcupados(s.id), 0);
         const cupos = serviciosDelEco.reduce((acc,s) => acc + (s.cupos||1), 0);
+        const personasUnicas = new Set((state.postulaciones||[]).filter(p => serviciosIdsDelEco.includes(p.servicioId) && p.estado === 'aceptada').map(p => p.prestadorId)).size;
         cupoInfoEl.style.color = ocupados>=cupos ? '#dc2626' : '#1d4ed8';
-        cupoTexto = '👤 ' + ocupados + '/' + cupos + ' cupos cubiertos';
+        cupoTexto = '👤 ' + ocupados + '/' + cupos + ' cupos cubiertos · 🧑 ' + personasUnicas + ' persona' + (personasUnicas===1?'':'s') + ' distinta' + (personasUnicas===1?'':'s');
       }
       cupoInfoEl.textContent = cupoTexto;
     }
