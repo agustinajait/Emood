@@ -7636,7 +7636,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '<button class="btn secondary xs" data-action="remito-modulos" data-id="'+p.id+'" data-per="'+mes+'">📄 Remito</button>',
             '<button class="btn secondary xs" data-action="edit-prestador" data-id="'+p.id+'">Editar</button>',
             waLink ? '<a href="'+waLink+'" target="_blank" onclick="event.stopPropagation()" class="btn secondary xs" style="background:#dcfce7;color:#166534;text-decoration:none">📱 Reclamar por WhatsApp</a>' : '',
-            suelto ? '<button class="btn primary xs" data-action="vincular-suelto" data-id="'+p.id+'">🔗 Vincular a un módulo</button>' : '',
+            '<button class="btn primary xs" data-action="vincular-suelto" data-id="'+p.id+'">🔗 Vincular a '+((mods.length||serviciosNuevos.length)?'otro':'un')+' módulo</button>',
             '<button class="btn danger xs" data-action="delete-prestador" data-id="'+p.id+'">✕</button>',
           '</div>',
         '</div>',
@@ -9177,8 +9177,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     if (!prest) return;
     const org = currentOrgFull;
     if (!org) { alert('No se pudo determinar la organización actual.'); return; }
-    const opciones = (state.servicios||[]).filter(s => s.organizationId === org.id && s.estado === 'activo');
-    if (!opciones.length) { alert('"'+org.name+'" todavía no tiene módulos activos a los que vincularlo.'); return; }
+    const yaAsignadoAIds = new Set((state.modulosAsignados||[]).filter(m => m.prestadorId === prestadorId && m.estado === 'en_progreso').map(m => m.servicioId));
+    const opciones = (state.servicios||[]).filter(s => s.organizationId === org.id && s.estado === 'activo' && !yaAsignadoAIds.has(s.id));
+    if (!opciones.length) { alert('"'+org.name+'" no tiene más módulos activos disponibles para vincularlo (ya está en todos, o no hay ninguno creado).'); return; }
     openModal('Vincular a ' + nombreCompleto(prest), 'Lo deja asignado directo a un módulo de ' + org.name + ' — como si se hubiera postulado y se lo hubieras aceptado. No hace falta que vuelva a entrar.', `
       <form id="vincularSueltoForm" class="form-grid">
         <div class="field full"><label>Módulo</label><select name="servicioId" required>
