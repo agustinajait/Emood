@@ -3205,13 +3205,19 @@
   // se carga: el tilde viejo (tieneCuil) o el número + constancia
   // real (numeroCuil/cuilComprobanteUrl, que si está cargado el
   // número pero no la constancia, falta igual).
+  // Devuelve [{label, modulo}] -- modulo es null para lo general de
+  // perfil, o el título del servicio cuando es documentación puntual
+  // de un módulo. Separado así (en vez de un string ya armado) para
+  // que cada lugar que lo usa (tarjeta, CSV, WhatsApp) lo muestre
+  // agrupado como corresponda, sin repetir "(para tal módulo)" en
+  // cada ítem.
   function documentacionFaltante(p) {
     const faltan = [];
-    if (!p?.tieneSeguro) faltan.push('Seguro');
-    if (p?.numeroCuil ? !p.cuilComprobanteUrl : !p?.tieneCuil) faltan.push(p?.numeroCuil ? 'Constancia de CUIL' : 'CUIL');
-    if (!p?.tieneDni) faltan.push('DNI');
-    if (!p?.cbu && !p?.aliasCbu) faltan.push('CBU o alias (para cobrar)');
-    if (!p?.fotoUrl) faltan.push('Foto de perfil');
+    if (!p?.tieneSeguro) faltan.push({ label: 'Seguro', modulo: null });
+    if (p?.numeroCuil ? !p.cuilComprobanteUrl : !p?.tieneCuil) faltan.push({ label: p?.numeroCuil ? 'Constancia de CUIL' : 'CUIL', modulo: null });
+    if (!p?.tieneDni) faltan.push({ label: 'DNI', modulo: null });
+    if (!p?.cbu && !p?.aliasCbu) faltan.push({ label: 'CBU o alias (para cobrar)', modulo: null });
+    if (!p?.fotoUrl) faltan.push({ label: 'Foto de perfil', modulo: null });
 
     // Documentación puntual que pide cada módulo al que está
     // asignado (docsRequeridos del servicio) y que no quedó
@@ -3223,23 +3229,36 @@
       const post = m.postulacionId ? postulacionById(m.postulacionId) : null;
       const confirmados = new Set((post?.docsConfirmados||[]).map(d => d.doc));
       (s?.docsRequeridos||[]).forEach(doc => {
-        if (!confirmados.has(doc)) faltan.push(doc + ' (para ' + s.titulo + ')');
+        if (!confirmados.has(doc)) faltan.push({ label: doc, modulo: s.titulo });
       });
     });
 
     return faltan;
   }
+  // Mismo contenido que documentacionFaltante(), como lista de textos
+  // listos para mostrar (uno por ítem, con "(para X)" cuando
+  // corresponde) -- para la tarjeta de Prestadores y el CSV.
+  function documentacionFaltanteTexto(p) {
+    return documentacionFaltante(p).map(d => d.label + (d.modulo ? ' (para '+d.modulo+')' : ''));
+  }
   // Link de WhatsApp (wa.me) con el mensaje de lo que le falta ya
   // armado, listo para que el admin solo lo revise y apriete enviar
   // -- no manda nada solo: E-Mood no tiene conectada ninguna API de
-  // WhatsApp Business.
+  // WhatsApp Business. Agrupa por módulo en vez de repetir "(para
+  // tal módulo)" en cada ítem.
   function whatsappReclamoLink(p) {
     const tel = (p?.telefono || p?.contacto || '').replace(/[^0-9+]/g,'');
     if (!tel) return null;
     const faltan = documentacionFaltante(p);
     if (!faltan.length) return null;
+    const generales = faltan.filter(d => !d.modulo).map(d => d.label);
+    const porModulo = {};
+    faltan.filter(d => d.modulo).forEach(d => { (porModulo[d.modulo] = porModulo[d.modulo]||[]).push(d.label); });
+    const partes = [];
+    if (generales.length) partes.push(generales.join(', '));
+    Object.keys(porModulo).forEach(modulo => partes.push('para ' + modulo + ': ' + porModulo[modulo].join(', ')));
     const org = currentOrgFull?.name ? ' de ' + currentOrgFull.name : '';
-    const mensaje = 'Hola ' + (p?.nombre||'') + '! Te escribimos' + org + ' — nos falta que nos envíes: ' + faltan.join(', ') + '. ¡Gracias!';
+    const mensaje = 'Hola ' + (p?.nombre||'') + '! Te escribimos' + org + ' — nos falta que nos envíes: ' + partes.join('; ') + '. ¡Gracias!';
     return 'https://wa.me/' + tel.replace(/^\+/,'') + '?text=' + encodeURIComponent(mensaje);
   }
 
@@ -7488,7 +7507,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         p.nombre||'', p.apellido||'', p.rol||'', p.activo!==false?'Activo':'Inactivo',
         ecoNombres.join(' / '), orgNombres.join(' / '), p.contacto||'',
         p.numeroCuil||'', p.tieneSeguro?'Sí':'No', p.tieneDni?'Sí':'No',
-        documentacionFaltante(p).join(' / ') || 'Completa',
+        documentacionFaltanteTexto(p).join(' / ') || 'Completa',
       ]);
     });
     const csv = rows.map(r => r.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
@@ -7545,7 +7564,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const serviciosNuevos = mods.length ? [] : serviciosAsignadosDe(p);
       const postsPendientes = (mods.length || serviciosNuevos.length) ? [] : postulacionesDe(p);
       const suelto = myProfile?.role === 'superadmin' && prestadorSinOrganizacion(p);
-      const faltanDocs = documentacionFaltante(p);
+      const faltanDocs = documentacionFaltanteTexto(p);
       const waLink = whatsappReclamoLink(p);
       const rolLabel = p.rol || (serviciosNuevos.length ? serviciosNuevos.map(s=>s.titulo).join(', ')
         : postsPendientes.length ? 'Postulado a ' + postsPendientes.map(po => servicioById(po.servicioId)?.titulo).filter(Boolean).join(', ')
@@ -7617,7 +7636,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '<button class="btn secondary xs" data-action="remito-modulos" data-id="'+p.id+'" data-per="'+mes+'">📄 Remito</button>',
             '<button class="btn secondary xs" data-action="edit-prestador" data-id="'+p.id+'">Editar</button>',
             waLink ? '<a href="'+waLink+'" target="_blank" onclick="event.stopPropagation()" class="btn secondary xs" style="background:#dcfce7;color:#166534;text-decoration:none">📱 Reclamar por WhatsApp</a>' : '',
-            suelto ? '<button class="btn primary xs" data-action="vincular-suelto" data-id="'+p.id+'">🔗 Vincular a un módulo</button>' : '',
+            '<button class="btn primary xs" data-action="vincular-suelto" data-id="'+p.id+'">🔗 Vincular a '+((mods.length||serviciosNuevos.length)?'otro':'un')+' módulo</button>',
             '<button class="btn danger xs" data-action="delete-prestador" data-id="'+p.id+'">✕</button>',
           '</div>',
         '</div>',
@@ -9158,8 +9177,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     if (!prest) return;
     const org = currentOrgFull;
     if (!org) { alert('No se pudo determinar la organización actual.'); return; }
-    const opciones = (state.servicios||[]).filter(s => s.organizationId === org.id && s.estado === 'activo');
-    if (!opciones.length) { alert('"'+org.name+'" todavía no tiene módulos activos a los que vincularlo.'); return; }
+    const yaAsignadoAIds = new Set((state.modulosAsignados||[]).filter(m => m.prestadorId === prestadorId && m.estado === 'en_progreso').map(m => m.servicioId));
+    const opciones = (state.servicios||[]).filter(s => s.organizationId === org.id && s.estado === 'activo' && !yaAsignadoAIds.has(s.id));
+    if (!opciones.length) { alert('"'+org.name+'" no tiene más módulos activos disponibles para vincularlo (ya está en todos, o no hay ninguno creado).'); return; }
     openModal('Vincular a ' + nombreCompleto(prest), 'Lo deja asignado directo a un módulo de ' + org.name + ' — como si se hubiera postulado y se lo hubieras aceptado. No hace falta que vuelva a entrar.', `
       <form id="vincularSueltoForm" class="form-grid">
         <div class="field full"><label>Módulo</label><select name="servicioId" required>
