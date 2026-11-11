@@ -7260,14 +7260,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
      nombre (requiere la política de INSERT ampliada de
      20260829_admin_asigna_prestador_directo.sql) y el módulo
      asignado con su primer ciclo, igual que acceptPostulacion(). ── */
-  async function asignarPrestadorDirecto(prestador, servicio) {
+  async function asignarPrestadorDirecto(prestador, servicio, numeroDupla) {
     const yaAsignado = (state.modulosAsignados||[]).some(m => m.servicioId === servicio.id && m.prestadorId === prestador.id && m.estado === 'en_progreso');
     if (yaAsignado) return { ok: false, motivo: 'ya tiene un módulo asignado activo en este servicio' };
     if (cuposOcupados(servicio.id) >= (servicio.cupos||1)) return { ok: false, motivo: 'no hay cupos disponibles en el módulo' };
 
     const p = {
       id: uid(), organizationId: servicio.organizationId, servicioId: servicio.id, prestadorId: prestador.id,
-      mensaje: 'Asignación directa por administrador', docsConfirmados: [], estado: 'aceptada', createdAt: nowISO(),
+      mensaje: 'Asignación directa por administrador', docsConfirmados: [], estado: 'aceptada', numeroDupla: (numeroDupla||'').trim(), createdAt: nowISO(),
     };
     const okPost = await saveOne(DB.postulaciones, postulacionToRow(p));
     if (!okPost) return { ok: false, motivo: 'falló al crear la postulación (revisá la consola)' };
@@ -7275,8 +7275,12 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     state.postulaciones.push(p);
 
     const modulo = {
+      // El número de dupla también queda como "código externo" del
+      // módulo -- es el mismo dato que usa el webhook de Censo
+      // Flash/Umbral 0 para saber a qué módulo corresponde cada
+      // cierre de jornada (ver openIntegracionesModal).
       id: uid(), organizationId: servicio.organizationId, servicioId: servicio.id, postulacionId: p.id, prestadorId: prestador.id,
-      protocolo: JSON.parse(JSON.stringify(servicio.protocolo||[])), estado: 'en_progreso', createdAt: nowISO(),
+      protocolo: JSON.parse(JSON.stringify(servicio.protocolo||[])), estado: 'en_progreso', codigoExterno: (numeroDupla||'').trim(), createdAt: nowISO(),
     };
     const okModulo = await saveOne(DB.modulosAsignados, moduloAsignadoToRow(modulo));
     if (!okModulo) return { ok: false, motivo: 'la postulación se creó pero falló al crear el módulo asignado' };
@@ -9190,6 +9194,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           <option value="">— Elegí un módulo —</option>
           ${opciones.map(s => '<option value="'+s.id+'">'+s.titulo+' ('+cuposOcupados(s.id)+'/'+(s.cupos||1)+' cupos)</option>').join('')}
         </select></div>
+        <div class="field full"><label>Número de dupla (opcional)</label><input name="numeroDupla" placeholder="Ej: 14 — completalo solo si ya tiene uno asignado"></div>
         <div class="field full"><button class="btn primary" type="submit">Vincular</button></div>
       </form>
       <div id="vincularSueltoError" style="display:none;color:#dc2626;font-size:13px;margin-top:8px"></div>
@@ -9203,8 +9208,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       if (!servicioId) return;
       const s = servicioById(servicioId);
       if (!s) return;
+      const numeroDupla = (e.target.numeroDupla.value||'').trim();
       btn.disabled = true; btn.textContent = 'Vinculando…';
-      const res = await asignarPrestadorDirecto(prest, s);
+      const res = await asignarPrestadorDirecto(prest, s, numeroDupla);
       if (!res.ok) {
         errEl.textContent = 'No se pudo vincular: ' + res.motivo;
         errEl.style.display = 'block';
@@ -11612,7 +11618,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
   async function setCodigoExternoModulo(moduloId) {
     const m = moduloAsignadoById(moduloId);
     if (!m) return;
-    const nuevo = prompt('Código externo (ej: número de dupla en Censo Flash):', m.codigoExterno || '');
+    const nuevo = prompt('Número de dupla (el mismo código que usa Censo Flash/Umbral 0 para identificar esta dupla):', m.codigoExterno || '');
     if (nuevo === null) return; // canceló
     m.codigoExterno = nuevo.trim();
     const ok = await saveOne(DB.modulosAsignados, moduloAsignadoToRow(m));
@@ -12654,7 +12660,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
             '<button class="btn secondary xs" onclick="openCambiarServicioModal(\''+m.id+'\')">🔀 Cambiar de módulo</button>' +
             '<button class="btn danger xs" onclick="confirmarEliminarModuloAsignado(\''+m.id+'\')">🗑️ Eliminar asignación</button>' +
-            (tieneJornadas ? '<button class="btn secondary xs" data-action="set-codigo-externo" data-id="'+m.id+'">🔗 '+(m.codigoExterno?'Código: '+m.codigoExterno:'Vincular código externo')+'</button>' : '') +
+            (tieneJornadas ? '<button class="btn secondary xs" data-action="set-codigo-externo" data-id="'+m.id+'">🔗 '+(m.codigoExterno?'Dupla: '+m.codigoExterno:'Número de dupla')+'</button>' : '') +
           '</div>' +
         '</div>' +
         (ciclos.length ? ciclos.map(c => {
