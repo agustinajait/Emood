@@ -9300,10 +9300,11 @@ ${renderBeforeAfterOwner(c, state.checkins)}
             '<div style="font-size:14px;font-weight:700;margin-bottom:4px">'+(s?.titulo||'—')+'</div>' +
             (org ? '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">🏢 '+org+'</div>' : '') +
             (ecoNombres.length ? '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">🌿 '+ecoNombres.join(', ')+'</div>' : '') +
-            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">' +
               (cicloActual ? '<span class="badge '+(cicloActual.estado==='aprobado'?'green':cicloActual.estado==='completado'?'blue':'gray')+'">'+CICLO_ESTADO_LABEL[cicloActual.estado]+'</span>' : '<span class="badge gray">Sin ciclo este mes</span>') +
               (montoActual ? '<span style="font-size:12px;color:#166534;font-weight:700">$'+montoActual.toLocaleString('es-AR')+' este mes</span>' : '') +
             '</div>' +
+            '<button class="btn secondary xs" onclick="event.stopPropagation();setCodigoExternoModulo(\''+m.id+'\')">🤝 '+(m.codigoExterno?'Dupla: '+m.codigoExterno:'Agregar número de dupla')+'</button>' +
           '</div>';
         }).join('') +
       '</div>' : '<div class="empty">No tiene módulos activos en este momento.</div>');
@@ -11624,6 +11625,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const ok = await saveOne(DB.modulosAsignados, moduloAsignadoToRow(m));
     if (!ok) { alert('No se pudo guardar el código. Probá de nuevo.'); return; }
     renderModulosAsignados();
+    if (currentPrestadorId === m.prestadorId) renderPrestadorDetail(m.prestadorId);
   }
 
   const FRECUENCIA_LABEL = { diaria:'Diaria', semanal:'Semanal', mensual:'Mensual', unica:'Única' };
