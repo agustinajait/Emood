@@ -2476,6 +2476,10 @@
                 <option value="all">Cualquier documentación</option>
                 <option value="falta">Con documentación incompleta</option>
               </select>
+              <select id="prestadorDuplaFilter" onchange="renderPrestadores()">
+                <option value="all">Con o sin número de dupla</option>
+                <option value="falta">Sin número de dupla</option>
+              </select>
             </div>
             <div style="display:flex;align-items:center;gap:10px">
               <button class="btn secondary small" onclick="exportarPrestadoresCSV()">⬇ Exportar CSV</button>
@@ -3226,16 +3230,34 @@
     // confirmada en su postulación — pasa sobre todo con altas
     // directas ("Importar nómina", "Asignar prestadores", "Vincular a
     // un módulo"), que no piden nada en el momento de asignar.
-    (state.modulosAsignados||[]).filter(m => m.prestadorId === p.id).forEach(m => {
+    (state.modulosAsignados||[]).filter(m => m.prestadorId === p.id && m.estado === 'en_progreso').forEach(m => {
       const s = servicioById(m.servicioId);
       const post = m.postulacionId ? postulacionById(m.postulacionId) : null;
       const confirmados = new Set((post?.docsConfirmados||[]).map(d => d.doc));
       (s?.docsRequeridos||[]).forEach(doc => {
         if (!confirmados.has(doc)) faltan.push({ label: doc, modulo: s.titulo });
       });
+      // Módulos con ítems de "Jornada de servicio" (los que integran
+      // con Censo Flash/Umbral 0 vía webhook) necesitan el número de
+      // dupla cargado para que el check-in/check-out le llegue a esta
+      // persona -- sin eso, puede estar marcando presente en Censo
+      // Flash/Umbral 0 y en E-Mood no se entera nunca.
+      if ((m.protocolo||[]).some(it => it.tipo === 'jornada') && !m.codigoExterno) {
+        faltan.push({ label: 'Número de dupla', modulo: s?.titulo });
+      }
     });
 
     return faltan;
+  }
+  // Para el filtro dedicado "Sin número de dupla" -- mismo chequeo
+  // que arriba, pero sin recorrer toda la documentación de perfil
+  // (más rápido para filtrar listas grandes de prestadores).
+  function prestadorSinNumeroDupla(p) {
+    return (state.modulosAsignados||[]).some(m =>
+      m.prestadorId === p.id && m.estado === 'en_progreso' &&
+      (m.protocolo||[]).some(it => it.tipo === 'jornada') &&
+      !m.codigoExterno
+    );
   }
   // Mismo contenido que documentacionFaltante(), como lista de textos
   // listos para mostrar (uno por ítem, con "(para X)" cuando
@@ -7489,6 +7511,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const ecoVal = document.getElementById('prestadorEcosistemaFilter')?.value || 'all';
     const moduloVal = document.getElementById('prestadorModuloFilter')?.value || 'all';
     const docsVal = document.getElementById('prestadorDocsFilter')?.value || 'all';
+    const duplaVal = document.getElementById('prestadorDuplaFilter')?.value || 'all';
     return (state.prestadores||[]).filter(p => {
       if (ecoVal !== 'all' && !ecosistemaIdsEfectivos(p).includes(ecoVal)) return false;
       if (moduloVal !== 'all') {
@@ -7497,6 +7520,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         if (moduloVal === 'con' && !tieneModulos) return false;
       }
       if (docsVal === 'falta' && !documentacionFaltante(p).length) return false;
+      if (duplaVal === 'falta' && !prestadorSinNumeroDupla(p)) return false;
       if (!q) return true;
       const ag = state.agencies.find(a => a.id === p.agencyId)?.name||'';
       return [p.nombre, p.rol||'', ag, p.contacto||''].some(v => v.toLowerCase().includes(q));
