@@ -413,25 +413,21 @@
     @keyframes casoArrowBounce { 0%,100% { transform: translateY(0); opacity:.55; } 50% { transform: translateY(6px); opacity:1; } }
     .caso-uso-arrow { text-align:center; font-size:26px; line-height:1; color:#e6bf00; margin:4px 0; animation: casoArrowBounce 1.6s ease-in-out infinite; }
     .caso-uso-hub {
-      max-width:320px; margin:0 auto; text-align:center; border-radius:18px; padding:22px;
-      background: radial-gradient(ellipse 90% 80% at 70% 15%, rgba(255,212,0,0.28), transparent 65%), #202020;
-      color:#fff; box-shadow:0 16px 40px rgba(10,10,10,0.25);
+      max-width:420px; margin:0 auto; text-align:center; border-radius:16px; padding:24px;
+      background:#fff; border:1.5px solid rgba(10,10,10,0.12);
+      box-shadow:0 16px 40px rgba(10,10,10,0.1);
       animation: casoFloat 6s ease-in-out infinite; animation-delay: .2s;
     }
-    .caso-uso-hub-eyebrow { font-family:var(--font-mono); font-size:10px; letter-spacing:.1em; color:var(--accent); }
-    .caso-uso-hub-name { font-size:19px; font-weight:700; margin:5px 0 3px; }
-    .caso-uso-hub-sub { font-size:13px; color:rgba(255,255,255,0.7); }
-    .caso-uso-total {
-      max-width:560px; margin:0 auto; text-align:center; border:2px solid var(--text); border-radius:18px; padding:24px;
-      background:#fff; box-shadow:0 16px 40px rgba(10,10,10,0.1);
-      animation: casoFloat 7s ease-in-out infinite; animation-delay: .5s;
-    }
-    .caso-uso-total-eyebrow { font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; color:rgba(10,10,10,0.55); }
-    .caso-uso-total-amount { font-family: var(--font-display-xl); font-weight:800; font-size:clamp(32px,5vw,44px); color:#141413; margin:6px 0; }
-    .caso-uso-total-sub { font-size:13px; color:rgba(10,10,10,0.6); }
+    .caso-uso-hub-eyebrow { font-family:var(--font-mono); font-size:10px; letter-spacing:.1em; color:#a98a00; }
+    .caso-uso-hub-name { font-size:19px; font-weight:700; color:#141413; margin:5px 0 3px; }
+    .caso-uso-hub-sub { font-size:13px; color:rgba(10,10,10,0.6); }
+    .caso-uso-hub-divider { height:1px; background:rgba(10,10,10,0.1); margin:18px 0; }
+    .caso-uso-hub-total-eyebrow { font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; color:rgba(10,10,10,0.55); }
+    .caso-uso-hub-total-amount { font-family: var(--font-display-xl); font-weight:800; font-size:clamp(28px,4.5vw,38px); color:#141413; margin:6px 0; }
+    .caso-uso-hub-total-sub { font-size:13px; color:rgba(10,10,10,0.6); }
     .caso-uso-footnote { text-align:center; font-size:12px; font-style:italic; color:rgba(10,10,10,0.45); margin-top:20px; }
     @media (prefers-reduced-motion: reduce) {
-      .caso-uso-card, .caso-uso-hub, .caso-uso-total, .caso-uso-arrow { animation: none; }
+      .caso-uso-card, .caso-uso-hub, .caso-uso-arrow { animation: none; }
     }
 
     /* ── Hero del perfil público de una organización ── */
@@ -2231,14 +2227,10 @@
       <div class="caso-uso-hub-eyebrow">PRESTADORA EN E-MOOD</div>
       <div class="caso-uso-hub-name">Juana Pérez</div>
       <div class="caso-uso-hub-sub">4 módulos activos en 4 organizaciones distintas</div>
-    </div>
-
-    <div class="caso-uso-arrow">⌄</div>
-
-    <div class="caso-uso-total">
-      <div class="caso-uso-total-eyebrow">TOTAL RECAUDADO POR JUANA ESTE MES</div>
-      <div class="caso-uso-total-amount">$2.000.000</div>
-      <div class="caso-uso-total-sub">Sin techo: cada módulo y cada organización nueva que sume se suma a su ingreso total</div>
+      <div class="caso-uso-hub-divider"></div>
+      <div class="caso-uso-hub-total-eyebrow">TOTAL RECAUDADO POR JUANA ESTE MES</div>
+      <div class="caso-uso-hub-total-amount">$2.000.000</div>
+      <div class="caso-uso-hub-total-sub">Sin techo: cada módulo y cada organización nueva que sume se suma a su ingreso total</div>
     </div>
 
     <div class="caso-uso-footnote">* Organizaciones y montos son un ejemplo ilustrativo, no datos reales.</div>
@@ -3150,6 +3142,8 @@
       cuil_comprobante_url: p.cuilComprobanteUrl||'',
       numero_dni: p.numeroDni||'',
       cv_url: p.cvUrl||'',
+      portafolio_rol: p.portafolioRol||'',
+      portafolio_proyecto: p.portafolioProyecto||'',
       created_by_org_id: p.createdByOrgId||null,
       created_at: p.createdAt||new Date().toISOString(),
     };
@@ -3186,6 +3180,8 @@
       cuilComprobanteUrl: r.cuil_comprobante_url||'',
       numeroDni: r.numero_dni||'',
       cvUrl: r.cv_url||'',
+      portafolioRol: r.portafolio_rol||'',
+      portafolioProyecto: r.portafolio_proyecto||'',
       createdByOrgId: r.created_by_org_id||null,
       createdAt: r.created_at||'',
     };
@@ -3848,6 +3844,7 @@
       grid.innerHTML = activos.map(s => {
         const org = orgsCacheById[s.organization_id];
         return '<div class="card">' +
+          (s.foto_url ? '<img src="'+s.foto_url+'" style="width:100%;height:120px;object-fit:cover;border-radius:10px;margin-bottom:10px">' : '') +
           '<div style="font-weight:700;margin-bottom:4px">'+(s.titulo||'Módulo')+'</div>' +
           '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:8px;cursor:pointer" onclick="verOrganizacion(\''+(s.organization_id||'')+'\')">' +
             (org?.logo_url ? '<img src="'+org.logo_url+'" style="width:18px;height:18px;object-fit:cover;border-radius:5px">' : '🏢') +
@@ -3998,6 +3995,7 @@
     let protocolo = []; try { protocolo = JSON.parse(s.protocolo||'[]'); } catch(_) {}
     let docsRequeridos = []; try { docsRequeridos = JSON.parse(s.docs_requeridos||'[]'); } catch(_) {}
     openModal(s.titulo || 'Módulo', '', `
+      ${s.foto_url ? '<img src="'+s.foto_url+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:12px;margin-bottom:14px">' : ''}
       <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-bottom:14px;cursor:pointer" onclick="verOrganizacion('${s.organization_id||''}')">
         ${org?.logo_url ? '<img src="'+org.logo_url+'" style="width:22px;height:22px;object-fit:cover;border-radius:6px">' : '🏢'}
         <span style="text-decoration:underline">${org?.name||'Organización'}</span>
@@ -4548,6 +4546,7 @@
       docs_requeridos: JSON.stringify(s.docsRequeridos||[]),
       tipo_contrato: s.tipoContrato||'',
       doc_adjunto_url: s.docAdjuntoUrl||'',
+      foto_url: s.fotoUrl||'',
       estado: s.estado||'activo',
       visibilidad: s.visibilidad||'publico',
       factura_cuit: s.facturaCuit||'',
@@ -4575,6 +4574,7 @@
       docsRequeridos: (()=>{ try { return JSON.parse(r.docs_requeridos||'[]'); } catch(_){ return []; } })(),
       tipoContrato: r.tipo_contrato||'',
       docAdjuntoUrl: r.doc_adjunto_url||'',
+      fotoUrl: r.foto_url||'',
       estado: r.estado||'activo',
       visibilidad: r.visibilidad||'publico',
       facturaCuit: r.factura_cuit||'',
@@ -7728,7 +7728,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
               p.numeroCuil ? (p.cuilComprobanteUrl ? '<span class="badge green">🪪 CUIL '+p.numeroCuil+' <a href="javascript:void(0)" onclick="verDocumento(\''+p.cuilComprobanteUrl+'\',\'Constancia de CUIL\')" style="color:inherit">📎</a></span>' : '<span class="badge" style="background:#fffbeb;color:#92400e;border-color:#92400e">🪪 CUIL '+p.numeroCuil+' — ⚠️ falta constancia</span>') : (p.tieneCuil ? '<span class="badge green">✓ CUIL</span>' : '<span class="badge gray">✗ CUIL</span>'),
               p.tieneDni ? '<span class="badge green">✓ DNI'+(p.numeroDni?' '+p.numeroDni:'')+'</span>' : (p.numeroDni ? '<span class="badge" style="background:#fffbeb;color:#92400e;border-color:#92400e">🪪 DNI '+p.numeroDni+' — ⚠️ falta presentarlo</span>' : '<span class="badge gray">✗ DNI</span>'),
               (p.cbu||p.aliasCbu) ? '<span class="badge blue">💳 '+[p.cbu,p.aliasCbu].filter(Boolean).join(' · ')+(p.cbuComprobanteUrl?' <a href="javascript:void(0)" onclick="verDocumento(\''+p.cbuComprobanteUrl+'\',\'Constancia de CBU\')" style="color:inherit">📎</a>':'')+'</span>' : '',
-              p.cvUrl ? '<span class="badge blue">📄 <a href="javascript:void(0)" onclick="verDocumento(\''+p.cvUrl+'\',\'CV\')" style="color:inherit">Ver CV</a></span>' : '',
+              (p.portafolioRol||p.portafolioProyecto) ? '<span class="badge blue" title="'+[p.portafolioRol,p.portafolioProyecto].filter(Boolean).join(' — ').replace(/"/g,'&quot;')+'">💼 '+(p.portafolioRol||'Portafolio')+'</span>' : '',
+              p.cvUrl ? '<span class="badge blue">📎 <a href="javascript:void(0)" onclick="verDocumento(\''+p.cvUrl+'\',\'Documento de portafolio\')" style="color:inherit">Ver portafolio</a></span>' : '',
               p.concursoEmprendedores ? '<span class="badge blue">🏆 Concurso</span>' : '',
               p.tipoContrato ? '<span class="badge blue">📄 '+p.tipoContrato+'</span>' : '',
               p.contacto ? '<span class="challenge-meta-tag">📱 '+p.contacto+'</span>' : '',
@@ -9274,7 +9275,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       { label: 'CUIL', ok: !!(p.numeroCuil && p.cuilComprobanteUrl), warn: !!(p.numeroCuil && !p.cuilComprobanteUrl), warnLabel: 'cargó el número pero falta subir la constancia', value: p.numeroCuil, doc: p.cuilComprobanteUrl, docLabel: '📎 constancia', docTitle: 'Constancia de CUIL' },
       { label: 'CBU / Alias (para cobrar)', ok: !!(p.cbu||p.aliasCbu), value: [p.cbu,p.aliasCbu].filter(Boolean).join(' · '), doc: p.cbuComprobanteUrl, docLabel: '📎 constancia', docTitle: 'Constancia de CBU' },
       { label: 'Foto de perfil', ok: !!p.fotoUrl, value: '', doc: p.fotoUrl, docLabel: '🖼️ ver foto', docTitle: 'Foto de perfil' },
-      { label: 'CV (opcional)', ok: !!p.cvUrl, opcional: true, value: '', doc: p.cvUrl, docLabel: '📄 ver CV', docTitle: 'CV' },
+      { label: 'Portafolio (opcional)', ok: !!(p.portafolioRol||p.portafolioProyecto||p.cvUrl), opcional: true, value: [p.portafolioRol, p.portafolioProyecto].filter(Boolean).join(' — '), doc: p.cvUrl, docLabel: '📎 ver documento', docTitle: 'Documento de portafolio' },
     ];
     return '<div class="card" style="margin-bottom:18px">' +
       '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px">📋 Checklist de perfil</div>' +
@@ -10303,7 +10304,9 @@ ${renderBeforeAfterOwner(c, state.checkins)}
                 <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Fecha de nacimiento</div><div style="font-size:14px;font-weight:600">${prest.fechaNacimiento?new Date(prest.fechaNacimiento+'T00:00:00').toLocaleDateString('es-AR'):'—'}</div></div>
                 <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">CUIL</div><div style="font-size:14px;font-weight:600">${prest.numeroCuil || '<span style="color:#dc2626;font-weight:600">Sin cargar</span>'}${prest.cuilComprobanteUrl ? ' <a href="'+prest.cuilComprobanteUrl+'" target="_blank" style="font-size:12px">📎</a>' : ''}</div></div>
                 <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">CBU / Alias</div><div style="font-size:14px;font-weight:600">${(prest.cbu||prest.aliasCbu) ? [prest.cbu,prest.aliasCbu].filter(Boolean).join(' · ') : '<span style="color:#dc2626;font-weight:600">Sin cargar</span>'}${prest.cbuComprobanteUrl ? ' <a href="'+prest.cbuComprobanteUrl+'" target="_blank" style="font-size:12px">📎</a>' : ''}</div></div>
-                <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">CV</div><div style="font-size:14px;font-weight:600">${prest.cvUrl ? '<a href="'+prest.cvUrl+'" target="_blank" style="font-size:13px;color:#1a73e8">🔗 Ver CV</a>' : '<span style="color:var(--muted)">Sin cargar</span>'}</div></div>
+                <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Portafolio — rol</div><div style="font-size:14px;font-weight:600">${prest.portafolioRol || '<span style="color:var(--muted)">Sin cargar</span>'}</div></div>
+                <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Portafolio — proyecto</div><div style="font-size:14px;font-weight:600">${prest.portafolioProyecto || '<span style="color:var(--muted)">Sin cargar</span>'}</div></div>
+                <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase">Documento de portafolio</div><div style="font-size:14px;font-weight:600">${prest.cvUrl ? '<a href="'+prest.cvUrl+'" target="_blank" style="font-size:13px;color:#1a73e8">🔗 Ver documento</a>' : '<span style="color:var(--muted)">Sin cargar</span>'}</div></div>
               </div>
               </div>
             </div>
@@ -11709,6 +11712,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       const modulosArr = modulosDeServicio(s);
       const pagoMensual = horasTotalesServicio(s) * (s.precioHora||0) * (s.cantidadPorPeriodo||1);
       return '<div class="card">' +
+        (s.fotoUrl ? '<img src="'+s.fotoUrl+'" style="width:100%;height:120px;object-fit:cover;border-radius:10px;margin-bottom:10px">' : '') +
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">' +
           '<div><div style="font-weight:700;font-size:15px">'+s.titulo+(s.visibilidad==='privado'?' <span title="Privada — no aparece en la búsqueda pública">🔒</span>':'')+'</div>' +
           '<div style="font-size:12px;color:var(--muted)">'+FRECUENCIA_LABEL[s.frecuencia]+' × '+(s.cantidadPorPeriodo||1)+(s.deadline?' · vence '+s.deadline:'')+'</div></div>' +
@@ -11804,6 +11808,12 @@ ${renderBeforeAfterOwner(c, state.checkins)}
       '<form id="servicioForm" class="form-grid">' +
         '<div class="field full"><label>Título</label><input name="titulo" required value="'+(existing?.titulo||'')+'"></div>' +
         '<div class="field full"><label>Descripción</label><textarea name="descripcion">'+(existing?.descripcion||'')+'</textarea></div>' +
+        '<div class="field full">' +
+          '<label>🖼️ Foto ilustrativa del módulo (opcional)</label>' +
+          '<input type="file" name="fotoModulo" accept="image/*">' +
+          '<div style="font-size:11px;color:var(--muted);margin-top:3px">Una foto que muestre la actividad que se hace en este módulo — se ve en la home y en el detalle público.</div>' +
+          (existing?.fotoUrl ? '<div style="margin-top:6px"><img src="'+existing.fotoUrl+'" style="width:100%;max-width:240px;border-radius:10px;object-fit:cover"></div>' : '') +
+        '</div>' +
         '<div class="field full"><label>Visibilidad</label><select name="visibilidad">' +
           '<option value="publico"'+((existing?.visibilidad||'publico')==='publico'?' selected':'')+'>🌐 Pública — aparece en la home y para cualquier prestador</option>' +
           '<option value="privado"'+(existing?.visibilidad==='privado'?' selected':'')+'>🔒 Privada — solo asignación directa, no aparece en la búsqueda pública</option>' +
@@ -11961,6 +11971,16 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         if (submitBtn) submitBtn.textContent = existing ? 'Actualizar módulo' : 'Publicar módulo';
       }
 
+      let fotoUrl = existing?.fotoUrl || '';
+      const fotoFile = e.target.querySelector('[name="fotoModulo"]')?.files?.[0];
+      if (fotoFile) {
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Subiendo foto…'; }
+        const ext = (fotoFile.name.split('.').pop() || 'jpg').toLowerCase();
+        const uploaded = await sbUpload('modulo-docs', servicioId + '/foto_' + Date.now() + '.' + ext, fotoFile);
+        if (uploaded) fotoUrl = uploaded;
+        if (submitBtn) submitBtn.textContent = existing ? 'Actualizar módulo' : 'Publicar módulo';
+      }
+
       const fields = {
         titulo: data.titulo.trim(), descripcion: (data.descripcion||'').trim(),
         visibilidad: data.visibilidad === 'privado' ? 'privado' : 'publico',
@@ -11971,7 +11991,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         modulosHoras, horasModulo: modulosHoras[0], precioHora: Number(data.precioHora||0),
         horasVariables: !!data.horasVariables,
         docsRequeridos, protocolo: tempProtocolo,
-        tipoContrato: data.tipoContrato||'', docAdjuntoUrl,
+        tipoContrato: data.tipoContrato||'', docAdjuntoUrl, fotoUrl,
         facturaCuit: (data.facturaCuit||'').trim(), facturaRazonSocial: (data.facturaRazonSocial||'').trim(),
         facturaDomicilio: (data.facturaDomicilio||'').trim(), facturaCondicionIva: (data.facturaCondicionIva||'').trim(),
         facturaCondicionVenta: (data.facturaCondicionVenta||'Contado').trim(),
@@ -13208,10 +13228,16 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           <input type="file" name="cbuComprobante" accept="image/*,application/pdf">
           ${p.cbuComprobanteUrl ? '<div style="margin-top:6px"><a href="'+p.cbuComprobanteUrl+'" target="_blank" style="font-size:12px;color:#1a73e8">🔗 Ver constancia actual</a></div>' : ''}
         </div>
+        <div class="field full" style="margin-top:4px">
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">💼 Portafolio (opcional)</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Contanos qué sabés hacer, no solo dónde trabajaste: tu rol o especialidad y un proyecto concreto en el que lo pusiste en práctica.</div>
+        </div>
+        <div class="field full"><label>Rol o especialidad</label><input name="portafolioRol" value="${p.portafolioRol||''}" placeholder="Ej: Facilitadora comunitaria, Diseñador gráfico"></div>
+        <div class="field full"><label>Proyecto en el que trabajaste</label><textarea name="portafolioProyecto" placeholder="Contanos un proyecto concreto y qué hiciste en él">${p.portafolioProyecto||''}</textarea></div>
         <div class="field full">
-          <label>📄 CV (opcional)</label>
+          <label>📎 Documento del portafolio (opcional — ej: una muestra de trabajo, un certificado)</label>
           <input type="file" name="cv" accept="application/pdf,image/*,.doc,.docx">
-          ${p.cvUrl ? '<div style="margin-top:6px"><a href="'+p.cvUrl+'" target="_blank" style="font-size:12px;color:#1a73e8">🔗 Ver CV actual</a></div>' : ''}
+          ${p.cvUrl ? '<div style="margin-top:6px"><a href="'+p.cvUrl+'" target="_blank" style="font-size:12px;color:#1a73e8">🔗 Ver documento actual</a></div>' : ''}
         </div>
         <div class="field full"><label>🔗 Perfil en OportunAI</label><input type="url" name="oportunaiLink" value="${p.oportunaiLink||''}" placeholder="https://oportunai.com/…"></div>
         <div class="field full"><button class="btn primary" type="submit">Guardar</button></div>
@@ -13272,6 +13298,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         p.cbuComprobanteUrl = cbuComprobanteUrl;
         p.fotoUrl = fotoUrl;
         p.cvUrl = cvUrl;
+        p.portafolioRol = (data.portafolioRol||'').trim();
+        p.portafolioProyecto = (data.portafolioProyecto||'').trim();
         p.oportunaiLink = (data.oportunaiLink||'').trim();
         await saveOne(DB.prestadores, prestadorToRow(p));
         closeModal();
