@@ -2538,7 +2538,10 @@
               <option value="all">Todos los ecosistemas</option>
             </select>
           </div>
-          <div id="asignadosCupoInfo" style="font-size:13px;font-weight:700"></div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div id="asignadosCupoInfo" style="font-size:13px;font-weight:700"></div>
+            <button class="btn secondary small" onclick="cerrarCiclosFiltrados()" title="Cierra todos los ciclos en progreso que coincidan con el filtro de módulo/ecosistema/búsqueda de arriba, y genera sus remitos con lo certificado hasta ahora">🔒 Cerrar y liquidar todo lo filtrado</button>
+          </div>
         </div>
         <div id="modulosAsignadosListContent"></div>
       </div>
@@ -2649,6 +2652,7 @@
           <button class="btn secondary" id="exportOrdenesPagoBtn" onclick="exportarOrdenPago()">⬇ Descargar orden de pago (CSV)</button>
         </div>
         <div id="ordenesPagoContent"></div>
+        <div id="ordenesEnCursoContent" style="margin-top:28px"></div>
       </div>
     </section>
 
@@ -8274,6 +8278,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
     if (!filtradas.length) {
       el.innerHTML = '<div class="empty">No hay remitos aprobados pendientes de pago' + (periodoVal==='all'?'':' en ese período') + '.</div>';
+      renderOrdenesEnCurso();
       return;
     }
     const total = filtradas.reduce((s,f) => s + f.monto, 0);
@@ -8294,6 +8299,57 @@ ${renderBeforeAfterOwner(c, state.checkins)}
               <td style="font-size:12.5px">${f.ciclo.facturaUrl ? '<a href="javascript:void(0)" onclick="verDocumento(\''+f.ciclo.facturaUrl+'\',\'Factura\')">🧾 Ver</a>' : '<span style="color:var(--danger)">⚠️ Sin factura</span>'}</td>
               <td><strong>$${f.monto.toLocaleString()}</strong></td>
               <td><button class="btn secondary xs" data-action="marcar-pagado" data-id="${f.ciclo.id}">✓ Marcar pagado</button></td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>
+      </div>
+    `;
+    renderOrdenesEnCurso();
+  }
+
+  // Lo que va acumulando cada módulo este mes MIENTRAS el ciclo sigue
+  // en progreso (sin cerrar todavía) -- para que el admin pueda ver
+  // cuánto se va a deber antes de llegar a fin de mes, sin tener que
+  // cerrar nada para enterarse.
+  function filasEnCurso() {
+    return (state.moduloCiclos||[]).filter(c => c.estado === 'en_progreso').map(c => {
+      const m = moduloAsignadoById(c.moduloAsignadoId);
+      const s = m && servicioById(m.servicioId);
+      const prest = m && prestadorById(m.prestadorId);
+      const items = itemsByCiclo(c.id);
+      const aprobados = items.filter(it => it.estado === 'aprobado').length;
+      return { ciclo: c, modulo: m, servicio: s, prestador: prest, monto: montoCiclo(c), aprobados, total: items.length };
+    // Solo tiene sentido para módulos de "horas variables": ahí el
+    // monto se prorratea por lo certificado de verdad. Un módulo de
+    // monto fijo por mes completo (horas_variables=false) ya calcula
+    // el mismo monto esté o no terminado el mes, así que mostrarlo
+    // acá como "acumulado" sería engañoso.
+    }).filter(f => f.modulo && f.prestador && f.servicio?.horasVariables && f.monto > 0);
+  }
+
+  function renderOrdenesEnCurso() {
+    const el = document.getElementById('ordenesEnCursoContent');
+    if (!el) return;
+    const periodoVal = document.getElementById('ordenesPagoPeriodoFilter')?.value || 'all';
+    const filas = filasEnCurso().filter(f => periodoVal === 'all' || f.ciclo.periodo === periodoVal);
+    if (!filas.length) { el.innerHTML = ''; return; }
+    const total = filas.reduce((s,f) => s + f.monto, 0);
+    el.innerHTML = `
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px">📊 Acumulado de meses en curso (todavía sin cerrar)</div>
+      <div class="stats" style="margin-bottom:18px">
+        <div class="stat-card"><div class="stat-label">Módulos en curso</div><div class="stat-value">${filas.length}</div></div>
+        <div class="stat-card accent-top"><div class="stat-label">Acumulado estimado</div><div class="stat-value" style="font-size:26px">$${Math.round(total).toLocaleString()}</div></div>
+      </div>
+      <div class="card">
+        <div class="table-wrap"><table>
+          <thead><tr><th>Prestador</th><th>Módulo</th><th>Período</th><th>Certificado</th><th>Acumulado hasta ahora</th></tr></thead>
+          <tbody>
+            ${filas.map(f => `<tr>
+              <td><strong>${nombreCompleto(f.prestador)}</strong></td>
+              <td>${f.servicio?.titulo||'—'}</td>
+              <td style="text-transform:capitalize">${periodoLabel(f.ciclo.periodo)}</td>
+              <td>${f.aprobados}/${f.total}</td>
+              <td><strong>$${Math.round(f.monto).toLocaleString()}</strong></td>
             </tr>`).join('')}
           </tbody>
         </table></div>
@@ -12896,6 +12952,53 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     ciclo.estado = 'completado';
     await saveOne(DB.moduloCiclos, moduloCicloToRow(ciclo));
     await generarRemitoModuloAsignado(cicloId);
+  }
+
+  // Cierra un ciclo y aprueba su remito sin abrir el modal imprimible
+  // -- para el cierre masivo, donde no tiene sentido mostrar N
+  // remitos uno atrás del otro. Devuelve el monto aprobado.
+  async function cerrarCicloSinModal(cicloId) {
+    const ciclo = cicloById(cicloId);
+    if (!ciclo) return 0;
+    const monto = montoCiclo(ciclo);
+    const hoy = new Date();
+    ciclo.estado = 'aprobado';
+    ciclo.remitoNumero = hoy.getFullYear()+String(hoy.getMonth()+1).padStart(2,'0')+String(hoy.getDate()).padStart(2,'0')+'-'+ciclo.id.slice(0,4).toUpperCase();
+    ciclo.remitoFecha = nowISO();
+    await saveOne(DB.moduloCiclos, moduloCicloToRow(ciclo));
+    return monto;
+  }
+
+  // Cierra de una sola vez todos los ciclos en progreso (con al menos
+  // un día certificado) de los módulos que coinciden con el filtro
+  // activo de "Módulos asignados" -- para no tener que ir módulo por
+  // módulo cuando hay que liquidar a todo un servicio/ecosistema (ej:
+  // Umbral 0 a fin de mes).
+  async function cerrarCiclosFiltrados() {
+    const servicioVal = document.getElementById('asignadosServicioFilter')?.value || 'all';
+    const ecoVal = document.getElementById('asignadosEcosistemaFilter')?.value || 'all';
+    const q = (document.getElementById('asignadosPrestadorSearch')?.value||'').toLowerCase().trim();
+    let modulos = servicioVal === 'all' ? [...(state.modulosAsignados||[])] : (state.modulosAsignados||[]).filter(m => m.servicioId === servicioVal);
+    if (ecoVal !== 'all') modulos = modulos.filter(m => (servicioById(m.servicioId)?.ecosistemaIds||[]).includes(ecoVal));
+    if (q) modulos = modulos.filter(m => nombreCompleto(prestadorById(m.prestadorId)||{}).toLowerCase().includes(q));
+
+    const candidatos = [];
+    modulos.forEach(m => {
+      ciclosByModuloAsignado(m.id).forEach(c => {
+        if (c.estado !== 'en_progreso') return;
+        const items = itemsByCiclo(c.id);
+        const aprobados = items.filter(it => it.estado === 'aprobado').length;
+        if (items.length && aprobados > 0) candidatos.push(c);
+      });
+    });
+    if (!candidatos.length) { alert('No hay ciclos con algo certificado para cerrar con el filtro actual.'); return; }
+    const totalEstimado = candidatos.reduce((s,c) => s + montoCiclo(c), 0);
+    if (!confirm('Vas a cerrar '+candidatos.length+' ciclo'+(candidatos.length===1?'':'s')+' y generar sus remitos con lo certificado hasta ahora, por un total aproximado de $'+Math.round(totalEstimado).toLocaleString()+'. ¿Continuar?')) return;
+
+    let total = 0;
+    for (const c of candidatos) { total += await cerrarCicloSinModal(c.id); }
+    renderModulosAsignados();
+    alert('Se cerraron '+candidatos.length+' ciclo'+(candidatos.length===1?'':'s')+' por un total de $'+Math.round(total).toLocaleString()+'. Ya están disponibles en Liquidación → Órdenes de pago.');
   }
 
   // Para cuando la dupla factura con un solo comprobante en vez de uno
