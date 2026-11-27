@@ -6688,6 +6688,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='reject-modulo-item') await rejectModuloItem(id);
     else if (action==='generar-remito-asignado') await generarRemitoModuloAsignado(id);
     else if (action==='cerrar-ciclo-remito') await cerrarCicloYGenerarRemito(id);
+    else if (action==='previsualizar-remito') previsualizarRemitoAsignado(id);
     else if (action==='resync-ciclo-items') await resyncCicloItems(id);
     else if (action==='admin-cargar-evidencia') openAdminEvidenciaModal(id);
     else if (action==='set-codigo-externo') await setCodigoExternoModulo(id);
@@ -12870,7 +12871,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
               '</div>';
             }).join('') +
             (c.estado==='en_progreso' && !items.length ? '<div style="margin-top:6px"><div style="font-size:11px;color:#dc2626;margin-bottom:6px">⚠️ Este ciclo no tiene ítems (el módulo no tenía protocolo cargado cuando se abrió). Agregá ítems al módulo y después resincronizá.</div><button class="btn secondary xs" data-action="resync-ciclo-items" data-id="'+c.id+'">🔄 Resincronizar ítems del protocolo</button></div>' : '') +
-            (c.estado==='en_progreso' && items.length && aprobados < items.length ? '<div style="margin-top:10px"><button class="btn secondary xs" data-action="cerrar-ciclo-remito" data-id="'+c.id+'" title="Para cuando el mes termina sin llegar a los '+items.length+' días estimados (ausencias, mes empezado a mitad de camino, etc.)">🔒 Cerrar mes y generar remito con lo certificado ('+aprobados+'/'+items.length+')</button></div>' : '') +
+            (c.estado==='en_progreso' && items.length ? '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
+              '<button class="btn secondary xs" data-action="previsualizar-remito" data-id="'+c.id+'" title="Ver cómo quedaría el remito con lo certificado hasta ahora, sin cerrar el mes">👁️ Vista previa del remito</button>' +
+              (aprobados < items.length ? '<button class="btn secondary xs" data-action="cerrar-ciclo-remito" data-id="'+c.id+'" title="Para cuando el mes termina sin llegar a los '+items.length+' días estimados (ausencias, mes empezado a mitad de camino, etc.)">🔒 Cerrar mes y generar remito con lo certificado ('+aprobados+'/'+items.length+')</button>' : '') +
+            '</div>' : '') +
             (c.estado==='completado' ? '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
               '<button class="btn primary xs" data-action="generar-remito-asignado" data-id="'+c.id+'">📄 Generar remito de '+periodoLabel(c.periodo)+'</button>' +
               (m.duplaId ? '<button class="btn secondary xs" data-action="generar-remito-dupla" data-id="'+c.id+'">🤝 Generar remito combinado (dupla)</button>' : '') +
@@ -12938,16 +12942,20 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     renderModulosAsignados();
   }
 
-  async function generarRemitoModuloAsignado(cicloId) {
-    const ciclo = cicloById(cicloId);
-    if (!ciclo || ciclo.estado !== 'completado') return;
+  // Arma el HTML del remito de un módulo asignado y abre el modal
+  // imprimible -- sin tocar el estado del ciclo. Lo usan tanto la
+  // generación real (que después sí aprueba el ciclo) como la vista
+  // previa (que no cambia nada, para poder ver "cómo quedaría" sin
+  // cerrar el mes).
+  function renderRemitoAsignadoModal(ciclo, opts) {
+    opts = opts || {};
     const modulo = moduloAsignadoById(ciclo.moduloAsignadoId);
     const s = modulo && servicioById(modulo.servicioId);
     const prest = modulo && prestadorById(modulo.prestadorId);
-    const items = itemsByCiclo(cicloId);
-    const hoy = new Date();
-    const remitoNum = hoy.getFullYear()+String(hoy.getMonth()+1).padStart(2,'0')+String(hoy.getDate()).padStart(2,'0')+'-'+ciclo.id.slice(0,4).toUpperCase();
+    const items = itemsByCiclo(ciclo.id);
     const monto = montoCiclo(ciclo);
+    const hoy = new Date();
+    const remitoNum = opts.preview ? 'BORRADOR' : (ciclo.remitoNumero || (hoy.getFullYear()+String(hoy.getMonth()+1).padStart(2,'0')+String(hoy.getDate()).padStart(2,'0')+'-'+ciclo.id.slice(0,4).toUpperCase()));
 
     const rows = items.map(it =>
       '<tr class="'+(it.estado==='aprobado'?'cumplido':'no-cumplido')+'"><td>'+it.item+(it.descripcion?'<br><span style="font-weight:400;font-size:11px;color:#6b7280">'+it.descripcion+'</span>':'')+'</td>' +
@@ -12955,6 +12963,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     ).join('');
 
     document.getElementById('remitoContent').innerHTML =
+      (opts.preview ? '<div style="background:#fffbeb;color:#92400e;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;margin-bottom:14px;text-align:center">📝 VISTA PREVIA — el mes todavía no se cerró, esto puede seguir cambiando</div>' : '') +
       '<div class="remito-header">' +
         '<div><div class="remito-org"><img src="3.png" style="width:30px;height:30px;object-fit:cover;border-radius:8px"></div><div class="remito-org-sub">Remito de módulo — '+periodoLabel(ciclo.periodo)+'</div></div>' +
         '<div class="remito-num"><div class="remito-num-label">Remito</div><div class="remito-num-val">#'+remitoNum+'</div></div>' +
@@ -12964,12 +12973,28 @@ ${renderBeforeAfterOwner(c, state.checkins)}
         '<div><div class="remito-field-label">Módulo</div><div class="remito-field-val">'+(s?.titulo||'')+'</div></div>' +
       '</div>' +
       '<table class="remito-table"><thead><tr><th>Ítem</th><th style="text-align:center">Estado</th></tr></thead><tbody>'+rows+'</tbody>' +
-      '<tr class="remito-total-row"><td>Total a pagar</td><td style="text-align:center">$'+monto+'</td></tr></table>' +
+      '<tr class="remito-total-row"><td>Total a pagar</td><td style="text-align:center">$'+Math.round(monto).toLocaleString()+'</td></tr></table>' +
       '<div class="remito-footer"><div><div class="remito-footer-label">Firma prestador</div><div class="remito-sign-line">'+(prest?.nombre||'')+'</div></div>' +
       '<div><div class="remito-footer-label">Firma organización</div><div class="remito-sign-line">Administración</div></div></div>' +
       '<div class="remito-watermark">Generado por E-Mood</div>';
 
     document.getElementById('remitoModal').classList.add('open');
+    return remitoNum;
+  }
+
+  // Ver cómo quedaría el remito de un módulo con lo certificado hasta
+  // ahora, sin cerrar el ciclo ni generar nada de verdad -- para
+  // poder chequear la liquidación en cualquier momento del mes.
+  function previsualizarRemitoAsignado(cicloId) {
+    const ciclo = cicloById(cicloId);
+    if (!ciclo) return;
+    renderRemitoAsignadoModal(ciclo, { preview: true });
+  }
+
+  async function generarRemitoModuloAsignado(cicloId) {
+    const ciclo = cicloById(cicloId);
+    if (!ciclo || ciclo.estado !== 'completado') return;
+    const remitoNum = renderRemitoAsignadoModal(ciclo);
 
     ciclo.estado = 'aprobado';
     ciclo.remitoNumero = remitoNum;
