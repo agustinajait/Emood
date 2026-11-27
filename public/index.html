@@ -2649,6 +2649,9 @@
           <select id="ordenesPagoPeriodoFilter" onchange="renderOrdenesPago()">
             <option value="all">Todos los períodos pendientes</option>
           </select>
+          <select id="ordenesPagoEcosistemaFilter" onchange="renderOrdenesPago()">
+            <option value="all">Todos los ecosistemas</option>
+          </select>
           <button class="btn secondary" id="exportOrdenesPagoBtn" onclick="exportarOrdenPago()">⬇ Descargar orden de pago (CSV)</button>
         </div>
         <div id="ordenesPagoContent"></div>
@@ -8096,6 +8099,39 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     }).join('');
   }
 
+  // El checklist de "protocoloId" es del sistema viejo -- un
+  // prestador que solo tiene módulos del sistema nuevo (postulación →
+  // módulo asignado → ciclo) quedaba siempre en 0 ítems, 0% y $0 en
+  // Liquidación, aunque ya estuviera certificando días y generando
+  // pago en "Módulos asignados" / "Órdenes de pago". Se suma ese
+  // progreso, igual que ya se hace en la página de Seguimiento
+  // mensual.
+  function datosLiquidacionPrestador(prest, mes) {
+    const protocolo = protocoloById(prest.protocoloId);
+    const items = getItemsForProtocolo(prest.protocoloId);
+    const seg = state.seguimientos.find(s => s.prestadorId === prest.id && s.mes === mes) || { checks:{}, horas:{} };
+    const cumplidosLegacy = items.filter(it => seg.checks?.[it.id]).length;
+    const pagoLegacy = calcularPago(prest, seg);
+
+    const ciclosNuevos = (state.modulosAsignados||[]).filter(m => m.prestadorId === prest.id)
+      .map(m => ({ m, s: servicioById(m.servicioId), ciclo: ciclosByModuloAsignado(m.id).find(c => c.periodo === mes) }))
+      .filter(x => x.ciclo);
+    let cumplidosNuevo = 0, totalItemsNuevo = 0, pagoNuevo = 0;
+    ciclosNuevos.forEach(({ ciclo }) => {
+      const itemsC = itemsByCiclo(ciclo.id);
+      totalItemsNuevo += itemsC.length;
+      cumplidosNuevo += itemsC.filter(it => it.estado==='aprobado').length;
+      pagoNuevo += montoCiclo(ciclo);
+    });
+
+    return {
+      protocolo, seg, ciclosNuevos,
+      cumplidos: cumplidosLegacy + cumplidosNuevo,
+      totalItems: items.length + totalItemsNuevo,
+      pago: pagoLegacy + pagoNuevo,
+    };
+  }
+
   /* ─── RENDER LIQUIDACIÓN ─────────────────────────────── */
   function renderLiquidacion() {
     const mes = document.getElementById('liquidacionMesFilter')?.value;
@@ -8103,10 +8139,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     if (!el || !mes) return;
 
     const activos = state.prestadores.filter(p => p.activo !== false);
-    const totalMes = activos.reduce((sum, prest) => {
-      const seg = state.seguimientos.find(s => s.prestadorId === prest.id && s.mes === mes) || {};
-      return sum + calcularPago(prest, seg);
-    }, 0);
+    const datosDelPrestador = prest => datosLiquidacionPrestador(prest, mes);
+    const totalMes = activos.reduce((sum, prest) => sum + datosDelPrestador(prest).pago, 0);
 
     el.innerHTML = `
       <div class="stats" style="margin-bottom:18px">
@@ -8119,26 +8153,23 @@ ${renderBeforeAfterOwner(c, state.checkins)}
           <thead><tr><th>Prestador</th><th>Rol</th><th>Protocolo</th><th>Ítems cumplidos</th><th>% Cumplimiento</th><th>Total</th><th>Obs.</th><th></th></tr></thead>
           <tbody>
             ${activos.map(prest => {
-              const protocolo = protocoloById(prest.protocoloId);
-              const items = getItemsForProtocolo(prest.protocoloId);
-              const seg = state.seguimientos.find(s => s.prestadorId === prest.id && s.mes === mes) || { checks:{}, horas:{} };
-              const cumplidos = items.filter(it => seg.checks?.[it.id]).length;
-              const pct = items.length ? Math.round(cumplidos/items.length*100) : 0;
-              const pago = calcularPago(prest, seg);
+              const d = datosDelPrestador(prest);
+              const pct = d.totalItems ? Math.round(d.cumplidos/d.totalItems*100) : 0;
+              const protocoloLabel = d.protocolo?.nombre || (d.ciclosNuevos.length ? d.ciclosNuevos.map(x=>x.s?.titulo).filter(Boolean).join(', ') : '-');
               return `<tr>
                 <td><strong>${prest.nombre}</strong></td>
                 <td>${prest.rol||'-'}</td>
-                <td>${protocolo?.nombre||'-'}</td>
-                <td>${cumplidos} / ${items.length}</td>
+                <td>${protocoloLabel}</td>
+                <td>${d.cumplidos} / ${d.totalItems}</td>
                 <td>
                   <div style="display:flex;align-items:center;gap:8px">
                     <div class="pct-bar" style="width:70px"><div style="width:${pct}%"></div></div>
                     <span>${pct}%</span>
                   </div>
                 </td>
-                <td><strong style="color:var(--primary);font-size:15px">$${pago.toLocaleString()}</strong></td>
-                <td style="font-size:12px;max-width:150px;color:var(--muted)">${seg.observacion||'-'}</td>
-              <td><button class="btn secondary xs" onclick="generarRemito('${prest.id}','${mes}')">📄 Remito</button></td>
+                <td><strong style="color:var(--primary);font-size:15px">$${d.pago.toLocaleString()}</strong></td>
+                <td style="font-size:12px;max-width:150px;color:var(--muted)">${d.seg.observacion||'-'}</td>
+              <td>${d.protocolo ? '<button class="btn secondary xs" onclick="generarRemito(\''+prest.id+'\',\''+mes+'\')">📄 Remito</button>' : (d.ciclosNuevos.length ? '<span style="font-size:11px;color:var(--muted)">Remito en Módulos asignados</span>' : '')}</td>
               </tr>`;
             }).join('')}
             <tr style="background:#f0fdf4">
@@ -8218,13 +8249,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     if (!mes) return;
     const rows = [['Nombre','Rol','Protocolo','Items cumplidos','Total items','% Cumplimiento','Total ($)','Observaciones']];
     state.prestadores.filter(p => p.activo !== false).forEach(prest => {
-      const protocolo = protocoloById(prest.protocoloId);
-      const items = getItemsForProtocolo(prest.protocoloId);
-      const seg = state.seguimientos.find(s => s.prestadorId === prest.id && s.mes === mes) || { checks:{}, horas:{} };
-      const cumplidos = items.filter(it => seg.checks?.[it.id]).length;
-      const pct = items.length ? Math.round(cumplidos/items.length*100) : 0;
-      const pago = calcularPago(prest, seg);
-      rows.push([prest.nombre, prest.rol||'', protocolo?.nombre||'', cumplidos, items.length, pct+'%', pago, seg.observacion||'']);
+      const d = datosLiquidacionPrestador(prest, mes);
+      const pct = d.totalItems ? Math.round(d.cumplidos/d.totalItems*100) : 0;
+      const protocoloLabel = d.protocolo?.nombre || (d.ciclosNuevos.length ? d.ciclosNuevos.map(x=>x.s?.titulo).filter(Boolean).join(', ') : '');
+      rows.push([prest.nombre, prest.rol||'', protocoloLabel, d.cumplidos, d.totalItems, pct+'%', d.pago, d.seg.observacion||'']);
     });
     const csv = rows.map(r => r.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -8264,7 +8292,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const el = document.getElementById('ordenesPagoContent');
     updateOrdenesPagoBadge();
     if (!el) return;
-    const filas = filasOrdenPago();
+    const ecoFilter = document.getElementById('ordenesPagoEcosistemaFilter');
+    if (ecoFilter && ecoFilter.options.length <= 1) {
+      ecoFilter.innerHTML = '<option value="all">Todos los ecosistemas</option>' +
+        (state.ecosistemas||[]).map(e => '<option value="'+e.id+'">'+e.nombre+'</option>').join('');
+    }
+    const ecoVal = ecoFilter?.value || 'all';
+    const filasTodas = filasOrdenPago();
+    const filas = ecoVal === 'all' ? filasTodas : filasTodas.filter(f => (f.servicio?.ecosistemaIds||[]).includes(ecoVal));
     const periodoFilter = document.getElementById('ordenesPagoPeriodoFilter');
     if (periodoFilter) {
       const valPrevio = periodoFilter.value || 'all';
@@ -8331,7 +8366,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const el = document.getElementById('ordenesEnCursoContent');
     if (!el) return;
     const periodoVal = document.getElementById('ordenesPagoPeriodoFilter')?.value || 'all';
-    const filas = filasEnCurso().filter(f => periodoVal === 'all' || f.ciclo.periodo === periodoVal);
+    const ecoVal = document.getElementById('ordenesPagoEcosistemaFilter')?.value || 'all';
+    const filas = filasEnCurso()
+      .filter(f => periodoVal === 'all' || f.ciclo.periodo === periodoVal)
+      .filter(f => ecoVal === 'all' || (f.servicio?.ecosistemaIds||[]).includes(ecoVal));
     if (!filas.length) { el.innerHTML = ''; return; }
     const total = filas.reduce((s,f) => s + f.monto, 0);
     el.innerHTML = `
@@ -8359,7 +8397,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
   function exportarOrdenPago() {
     const periodoVal = document.getElementById('ordenesPagoPeriodoFilter')?.value || 'all';
-    const filas = filasOrdenPago().filter(f => periodoVal === 'all' || f.ciclo.periodo === periodoVal);
+    const ecoVal = document.getElementById('ordenesPagoEcosistemaFilter')?.value || 'all';
+    const filas = filasOrdenPago()
+      .filter(f => periodoVal === 'all' || f.ciclo.periodo === periodoVal)
+      .filter(f => ecoVal === 'all' || (f.servicio?.ecosistemaIds||[]).includes(ecoVal));
     if (!filas.length) { alert('No hay pagos pendientes para exportar.'); return; }
     const rows = [['Prestador','CBU','Alias','Monto','Concepto']];
     filas.forEach(f => {
