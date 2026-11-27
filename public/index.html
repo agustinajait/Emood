@@ -6680,6 +6680,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     else if (action==='approve-modulo-item') await approveModuloItem(id);
     else if (action==='reject-modulo-item') await rejectModuloItem(id);
     else if (action==='generar-remito-asignado') await generarRemitoModuloAsignado(id);
+    else if (action==='cerrar-ciclo-remito') await cerrarCicloYGenerarRemito(id);
     else if (action==='resync-ciclo-items') await resyncCicloItems(id);
     else if (action==='admin-cargar-evidencia') openAdminEvidenciaModal(id);
     else if (action==='set-codigo-externo') await setCodigoExternoModulo(id);
@@ -12772,6 +12773,7 @@ ${renderBeforeAfterOwner(c, state.checkins)}
               '</div>';
             }).join('') +
             (c.estado==='en_progreso' && !items.length ? '<div style="margin-top:6px"><div style="font-size:11px;color:#dc2626;margin-bottom:6px">⚠️ Este ciclo no tiene ítems (el módulo no tenía protocolo cargado cuando se abrió). Agregá ítems al módulo y después resincronizá.</div><button class="btn secondary xs" data-action="resync-ciclo-items" data-id="'+c.id+'">🔄 Resincronizar ítems del protocolo</button></div>' : '') +
+            (c.estado==='en_progreso' && items.length && aprobados < items.length ? '<div style="margin-top:10px"><button class="btn secondary xs" data-action="cerrar-ciclo-remito" data-id="'+c.id+'" title="Para cuando el mes termina sin llegar a los '+items.length+' días estimados (ausencias, mes empezado a mitad de camino, etc.)">🔒 Cerrar mes y generar remito con lo certificado ('+aprobados+'/'+items.length+')</button></div>' : '') +
             (c.estado==='completado' ? '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
               '<button class="btn primary xs" data-action="generar-remito-asignado" data-id="'+c.id+'">📄 Generar remito de '+periodoLabel(c.periodo)+'</button>' +
               (m.duplaId ? '<button class="btn secondary xs" data-action="generar-remito-dupla" data-id="'+c.id+'">🤝 Generar remito combinado (dupla)</button>' : '') +
@@ -12851,8 +12853,8 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const monto = montoCiclo(ciclo);
 
     const rows = items.map(it =>
-      '<tr class="cumplido"><td>'+it.item+(it.descripcion?'<br><span style="font-weight:400;font-size:11px;color:#6b7280">'+it.descripcion+'</span>':'')+'</td>' +
-      '<td style="text-align:center">✓ Aprobado</td></tr>'
+      '<tr class="'+(it.estado==='aprobado'?'cumplido':'no-cumplido')+'"><td>'+it.item+(it.descripcion?'<br><span style="font-weight:400;font-size:11px;color:#6b7280">'+it.descripcion+'</span>':'')+'</td>' +
+      '<td style="text-align:center">'+(it.estado==='aprobado'?'✓ Aprobado':'Sin certificar')+'</td></tr>'
     ).join('');
 
     document.getElementById('remitoContent').innerHTML =
@@ -12877,6 +12879,23 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     ciclo.remitoFecha = nowISO();
     await saveOne(DB.moduloCiclos, moduloCicloToRow(ciclo));
     renderModulosAsignados();
+  }
+
+  // Para roles medidos por presente diario (ej: Umbral 0) donde el
+  // mes puede terminar sin llegar a la cantidad de días estimada
+  // (ausencias, mes empezado a mitad de camino, etc.) -- el ciclo
+  // nunca pasaría solo a 'completado' porque eso requiere que TODOS
+  // los ítems estén aprobados. Esto lo fuerza a completado con lo
+  // que ya se certificó y genera el remito igual.
+  async function cerrarCicloYGenerarRemito(cicloId) {
+    const ciclo = cicloById(cicloId);
+    if (!ciclo || ciclo.estado !== 'en_progreso') return;
+    const items = itemsByCiclo(cicloId);
+    const aprobados = items.filter(it => it.estado === 'aprobado').length;
+    if (!confirm('Este ciclo tiene '+aprobados+'/'+items.length+' días certificados. ¿Cerrar el mes y generar el remito con lo certificado hasta ahora?')) return;
+    ciclo.estado = 'completado';
+    await saveOne(DB.moduloCiclos, moduloCicloToRow(ciclo));
+    await generarRemitoModuloAsignado(cicloId);
   }
 
   // Para cuando la dupla factura con un solo comprobante en vez de uno
