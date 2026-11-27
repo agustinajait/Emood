@@ -2649,6 +2649,9 @@
           <select id="ordenesPagoPeriodoFilter" onchange="renderOrdenesPago()">
             <option value="all">Todos los períodos pendientes</option>
           </select>
+          <select id="ordenesPagoEcosistemaFilter" onchange="renderOrdenesPago()">
+            <option value="all">Todos los ecosistemas</option>
+          </select>
           <button class="btn secondary" id="exportOrdenesPagoBtn" onclick="exportarOrdenPago()">⬇ Descargar orden de pago (CSV)</button>
         </div>
         <div id="ordenesPagoContent"></div>
@@ -8264,7 +8267,14 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const el = document.getElementById('ordenesPagoContent');
     updateOrdenesPagoBadge();
     if (!el) return;
-    const filas = filasOrdenPago();
+    const ecoFilter = document.getElementById('ordenesPagoEcosistemaFilter');
+    if (ecoFilter && ecoFilter.options.length <= 1) {
+      ecoFilter.innerHTML = '<option value="all">Todos los ecosistemas</option>' +
+        (state.ecosistemas||[]).map(e => '<option value="'+e.id+'">'+e.nombre+'</option>').join('');
+    }
+    const ecoVal = ecoFilter?.value || 'all';
+    const filasTodas = filasOrdenPago();
+    const filas = ecoVal === 'all' ? filasTodas : filasTodas.filter(f => (f.servicio?.ecosistemaIds||[]).includes(ecoVal));
     const periodoFilter = document.getElementById('ordenesPagoPeriodoFilter');
     if (periodoFilter) {
       const valPrevio = periodoFilter.value || 'all';
@@ -8331,7 +8341,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
     const el = document.getElementById('ordenesEnCursoContent');
     if (!el) return;
     const periodoVal = document.getElementById('ordenesPagoPeriodoFilter')?.value || 'all';
-    const filas = filasEnCurso().filter(f => periodoVal === 'all' || f.ciclo.periodo === periodoVal);
+    const ecoVal = document.getElementById('ordenesPagoEcosistemaFilter')?.value || 'all';
+    const filas = filasEnCurso()
+      .filter(f => periodoVal === 'all' || f.ciclo.periodo === periodoVal)
+      .filter(f => ecoVal === 'all' || (f.servicio?.ecosistemaIds||[]).includes(ecoVal));
     if (!filas.length) { el.innerHTML = ''; return; }
     const total = filas.reduce((s,f) => s + f.monto, 0);
     el.innerHTML = `
@@ -8359,7 +8372,10 @@ ${renderBeforeAfterOwner(c, state.checkins)}
 
   function exportarOrdenPago() {
     const periodoVal = document.getElementById('ordenesPagoPeriodoFilter')?.value || 'all';
-    const filas = filasOrdenPago().filter(f => periodoVal === 'all' || f.ciclo.periodo === periodoVal);
+    const ecoVal = document.getElementById('ordenesPagoEcosistemaFilter')?.value || 'all';
+    const filas = filasOrdenPago()
+      .filter(f => periodoVal === 'all' || f.ciclo.periodo === periodoVal)
+      .filter(f => ecoVal === 'all' || (f.servicio?.ecosistemaIds||[]).includes(ecoVal));
     if (!filas.length) { alert('No hay pagos pendientes para exportar.'); return; }
     const rows = [['Prestador','CBU','Alias','Monto','Concepto']];
     filas.forEach(f => {
